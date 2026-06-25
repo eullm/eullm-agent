@@ -9,6 +9,7 @@ mod config;
 mod llm;
 mod telegram;
 mod tools;
+mod wizard;
 
 use config::{Config, ProviderConfig};
 use llm::{
@@ -54,8 +55,13 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let config = Config::load(&cli.config)
-        .with_context(|| format!("Cannot load config from {:?}", cli.config))?;
+
+    let config = if cli.config.exists() {
+        Config::load(&cli.config)
+            .with_context(|| format!("Cannot load config from {:?}", cli.config))?
+    } else {
+        wizard::run(&cli.config)?
+    };
 
     let llm: Arc<dyn llm::LlmClient> = match &config.provider {
         ProviderConfig::Eullm { base_url, model } => {

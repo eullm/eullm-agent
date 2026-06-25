@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub provider: ProviderConfig,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub telegram: Option<TelegramConfig>,
     #[serde(default)]
     pub tools: ToolsConfig,
@@ -19,7 +19,7 @@ fn default_max_iterations() -> usize {
     20
 }
 
-fn default_system_prompt() -> String {
+pub fn default_system_prompt() -> String {
     "You are EULLM Agent, an autonomous task executor running on EU infrastructure. \
      Think step by step. Use the available tools to complete tasks accurately and efficiently. \
      When the task is complete, summarise the result clearly."
@@ -43,6 +43,7 @@ pub enum ProviderConfig {
         api_key: String,
         #[serde(default = "default_openai_model")]
         model: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         base_url: Option<String>,
     },
 }
@@ -60,7 +61,7 @@ fn default_openai_model() -> String {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TelegramConfig {
     pub token: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_users: Vec<i64>,
 }
 
