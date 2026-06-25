@@ -64,9 +64,8 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     }
 
     if text == "/status" {
-        let tool_names: Vec<&str> = state.tools.definitions().iter()
-            .map(|t| t.name.as_str())
-            .collect();
+        let defs = state.tools.definitions();
+        let tool_names: Vec<&str> = defs.iter().map(|t| t.name.as_str()).collect();
         bot.send_message(
             msg.chat.id,
             format!(

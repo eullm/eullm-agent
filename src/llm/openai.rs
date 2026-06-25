@@ -1,4 +1,3 @@
-//! OpenAI-compatible client (OpenAI, Mistral, OpenRouter, LiteLLM, ...).
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -6,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::debug;
 
-use super::{ChatResponse, LlmClient, Message, MessageContent, Role, ToolCall, ToolDefinition};
+use super::{ChatResponse, LlmClient, Message, Role, ToolCall, ToolDefinition};
 
 pub struct OpenAiClient {
     client: Client,
@@ -71,35 +70,31 @@ struct OpenAiFunction {
     arguments: String,
 }
 
-fn extract_text(c: &MessageContent) -> String {
-    match c {
-        MessageContent::Text(s) => s.clone(),
-        MessageContent::Parts(parts) => parts.iter().filter_map(|p| p.text.as_deref()).collect::<Vec<_>>().join(""),
-    }
-}
-
 fn to_openai_message(msg: &Message) -> Value {
     match msg.role {
-        Role::System => json!({ "role": "system", "content": extract_text(&msg.content) }),
-        Role::User => json!({ "role": "user", "content": extract_text(&msg.content) }),
+        Role::System => json!({ "role": "system", "content": msg.content }),
+        Role::User => json!({ "role": "user", "content": msg.content }),
         Role::Assistant => {
-            let text = extract_text(&msg.content);
             let tool_calls: Option<Vec<Value>> = msg.tool_calls.as_ref().map(|calls| {
                 calls.iter().map(|c| json!({
                     "id": c.id,
                     "type": "function",
-                    "function": { "name": c.name, "arguments": c.arguments.to_string() }
+                    "function": { "name": c.name, "arguments": c.arguments.to_string() },
                 })).collect()
             });
             let mut m = json!({ "role": "assistant" });
-            if !text.is_empty() { m["content"] = json!(text); }
-            if let Some(tc) = tool_calls { m["tool_calls"] = json!(tc); }
+            if !msg.content.is_empty() {
+                m["content"] = json!(msg.content);
+            }
+            if let Some(tc) = tool_calls {
+                m["tool_calls"] = json!(tc);
+            }
             m
         }
         Role::Tool => json!({
             "role": "tool",
             "tool_call_id": msg.tool_call_id.as_deref().unwrap_or(""),
-            "content": extract_text(&msg.content),
+            "content": msg.content,
         }),
     }
 }
@@ -109,7 +104,11 @@ impl LlmClient for OpenAiClient {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse> {
         let openai_tools: Vec<Value> = tools.iter().map(|t| json!({
             "type": "function",
-            "function": { "name": t.name, "description": t.description, "parameters": t.parameters }
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.parameters,
+            }
         })).collect();
 
         let req = OpenAiRequest {

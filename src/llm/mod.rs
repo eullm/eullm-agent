@@ -1,14 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod anthropic;
 pub mod eullm;
 pub mod openai;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Role {
     System,
     User,
@@ -16,44 +14,14 @@ pub enum Role {
     Tool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MessageContent {
-    Text(String),
-    Parts(Vec<ContentPart>),
-}
-
-impl MessageContent {
-    pub fn text(s: impl Into<String>) -> Self {
-        Self::Text(s.into())
-    }
-
-    pub fn as_text(&self) -> String {
-        match self {
-            Self::Text(s) => s.clone(),
-            Self::Parts(parts) => parts
-                .iter()
-                .filter_map(|p| p.text.as_deref())
-                .collect::<Vec<_>>()
-                .join(""),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContentPart {
-    pub r#type: String,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
@@ -63,30 +31,26 @@ pub struct ToolDefinition {
 #[derive(Debug, Clone)]
 pub struct Message {
     pub role: Role,
-    pub content: MessageContent,
+    pub content: String,
     pub tool_call_id: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl Message {
     pub fn system(content: impl Into<String>) -> Self {
-        Self { role: Role::System, content: MessageContent::text(content), tool_call_id: None, tool_calls: None }
+        Self { role: Role::System, content: content.into(), tool_call_id: None, tool_calls: None }
     }
 
     pub fn user(content: impl Into<String>) -> Self {
-        Self { role: Role::User, content: MessageContent::text(content), tool_call_id: None, tool_calls: None }
-    }
-
-    pub fn assistant(content: impl Into<String>) -> Self {
-        Self { role: Role::Assistant, content: MessageContent::text(content), tool_call_id: None, tool_calls: None }
+        Self { role: Role::User, content: content.into(), tool_call_id: None, tool_calls: None }
     }
 
     pub fn assistant_with_tools(content: impl Into<String>, tool_calls: Vec<ToolCall>) -> Self {
-        Self { role: Role::Assistant, content: MessageContent::text(content), tool_call_id: None, tool_calls: Some(tool_calls) }
+        Self { role: Role::Assistant, content: content.into(), tool_call_id: None, tool_calls: Some(tool_calls) }
     }
 
     pub fn tool_result(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: Role::Tool, content: MessageContent::text(content), tool_call_id: Some(tool_call_id.into()), tool_calls: None }
+        Self { role: Role::Tool, content: content.into(), tool_call_id: Some(tool_call_id.into()), tool_calls: None }
     }
 }
 
