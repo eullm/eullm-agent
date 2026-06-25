@@ -1,0 +1,64 @@
+# EULLM Agent configuration
+# Copy to config.yaml and fill in your values.
+
+# --- LLM Provider ---
+# Choose one: eullm | anthropic | openai
+#
+# eullm = local EULLM Engine (Ollama-compatible, zero external calls)
+provider:
+  type: eullm
+  base_url: "http://localhost:11434"
+  model: "llama3.2"
+
+# Anthropic Claude API
+# provider:
+#   type: anthropic
+#   api_key: "sk-ant-..."
+#   model: "claude-sonnet-4-6"
+
+# OpenAI-compatible: covers OpenAI, Mistral, OpenRouter, LiteLLM proxy
+# Use base_url to point at any OpenAI-compatible endpoint.
+# Tip: users with a Claude Max subscription can run LiteLLM locally
+# (litellm --model claude-3-5-sonnet) and point base_url at it.
+# provider:
+#   type: openai
+#   api_key: "sk-..."
+#   model: "gpt-4o"
+#   base_url: "https://api.openai.com/v1"  # optional, default
+#
+# OpenRouter (pay-as-you-go, 100+ models):
+# provider:
+#   type: openai
+#   api_key: "sk-or-..."
+#   model: "anthropic/claude-sonnet-4-6"
+#   base_url: "https://openrouter.ai/api/v1"
+#
+# Mistral API (European provider):
+# provider:
+#   type: openai
+#   api_key: "..."
+#   model: "mistral-large-latest"
+#   base_url: "https://api.mistral.ai/v1"
+
+# --- Telegram Bot ---
+# Get a token from @BotFather. allowed_users: leave empty to allow everyone.
+# telegram:
+#   token: "123456:ABC-DEF..."
+#   allowed_users: [123456789]
+
+# --- Tools ---
+tools:
+  shell:
+    enabled: true
+    allow_sudo: false
+    timeout_seconds: 30
+  filesystem:
+    enabled: true
+    allowed_paths: []  # empty = unrestricted; add paths to sandbox
+
+# --- Agent ---
+max_iterations: 20
+system_prompt: |
+  You are EULLM Agent, an autonomous task executor running on EU infrastructure.
+  Think step by step. Use the available tools to complete tasks accurately.
+  When done, summarize the result clearly.
