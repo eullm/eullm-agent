@@ -26,9 +26,11 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: eullm-agent-macos-arm64.tar.gz
-          - os: macos-13
-            target: x86_64-apple-darwin
-            archive: eullm-agent-macos-x64.tar.gz
+          # macOS Intel x64 disabled: macos-13 runners have very low availability
+          # and queue for 15-30+ min. Re-enable when runner availability improves.
+          # - os: macos-13
+          #   target: x86_64-apple-darwin
+          #   archive: eullm-agent-macos-x64.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: eullm-agent-windows-x64.zip
