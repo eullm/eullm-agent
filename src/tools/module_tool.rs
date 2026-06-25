@@ -1,11 +1,29 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::process::Output;
 use std::sync::{Arc, Mutex};
 
 use crate::llm::ToolDefinition;
 use crate::modules::{ModuleRegistry, ModuleToolSpec};
 use super::{Tool, ToolRegistry};
+
+/// Runs a shell command using the platform-appropriate shell.
+async fn run_shell(cmd: &str) -> Result<Output> {
+    #[cfg(target_os = "windows")]
+    let out = tokio::process::Command::new("cmd")
+        .arg("/C")
+        .arg(cmd)
+        .output()
+        .await?;
+    #[cfg(not(target_os = "windows"))]
+    let out = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .await?;
+    Ok(out)
+}
 
 /// Executes a single module-defined tool via shell command template substitution.
 pub struct ModuleTool {
@@ -41,12 +59,7 @@ impl Tool for ModuleTool {
             }
         }
 
-        let output = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
-            .output()
-            .await?;
-
+        let output = run_shell(&cmd).await?;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -162,18 +175,9 @@ impl Tool for InstallModuleTool {
             anyhow::anyhow!("Unknown module: '{}'. Use list_modules to see available modules.", name)
         })?;
 
-        #[cfg(target_os = "macos")]
-        let commands = &manifest.install_macos;
-        #[cfg(not(target_os = "macos"))]
-        let commands = &manifest.install_linux;
-
-        for cmd in commands {
+        for cmd in manifest.install_commands() {
             tracing::info!("module install: {cmd}");
-            let output = tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .output()
-                .await?;
+            let output = run_shell(cmd).await?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 return Err(anyhow::anyhow!(

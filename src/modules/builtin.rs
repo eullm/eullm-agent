@@ -12,6 +12,7 @@ fn ocr() -> ModuleManifest {
         version: "1.0",
         install_linux: vec!["sudo apt-get install -y tesseract-ocr".into()],
         install_macos: vec!["brew install tesseract".into()],
+        install_windows: vec!["choco install tesseract -y".into()],
         tools: vec![ModuleToolSpec {
             name: "ocr_image".into(),
             description: "Extract text from an image file using OCR.".into(),
@@ -41,6 +42,7 @@ fn pdf() -> ModuleManifest {
         version: "1.0",
         install_linux: vec!["sudo apt-get install -y poppler-utils".into()],
         install_macos: vec!["brew install poppler".into()],
+        install_windows: vec!["choco install poppler -y".into()],
         tools: vec![ModuleToolSpec {
             name: "pdf_to_text".into(),
             description: "Extract all text content from a PDF file".into(),

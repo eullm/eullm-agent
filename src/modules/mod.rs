@@ -19,10 +19,24 @@ pub struct ModuleManifest {
     pub name: String,
     pub description: String,
     pub version: &'static str,
+    #[allow(dead_code)]
     pub install_linux: Vec<String>,
     #[allow(dead_code)]
     pub install_macos: Vec<String>,
+    #[allow(dead_code)]
+    pub install_windows: Vec<String>,
     pub tools: Vec<ModuleToolSpec>,
+}
+
+impl ModuleManifest {
+    pub fn install_commands(&self) -> &[String] {
+        #[cfg(target_os = "macos")]
+        return &self.install_macos;
+        #[cfg(target_os = "windows")]
+        return &self.install_windows;
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        return &self.install_linux;
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
