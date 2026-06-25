@@ -1,7 +1,7 @@
 use anyhow::Result;
 use tracing::{debug, info, warn};
 
-use crate::llm::{LlmClient, Message, ToolCall};
+use crate::llm::{strip_think_blocks, LlmClient, Message, ToolCall};
 use crate::tools::ToolRegistry;
 
 pub struct Agent<'a> {
@@ -34,11 +34,11 @@ impl<'a> Agent<'a> {
 
             if response.tool_calls.is_empty() {
                 info!("done after {} iterations", iteration + 1);
-                return Ok(response.content);
+                return Ok(strip_think_blocks(&response.content));
             }
 
             messages.push(Message::assistant_with_tools(
-                response.content.clone(),
+                strip_think_blocks(&response.content),
                 response.tool_calls.clone(),
             ));
 

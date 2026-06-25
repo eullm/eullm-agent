@@ -65,3 +65,18 @@ pub trait LlmClient: Send + Sync {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse>;
     fn provider_name(&self) -> &str;
 }
+
+/// Remove <think>...</think> blocks emitted by reasoning models (e.g. Qwen3, DeepSeek).
+pub fn strip_think_blocks(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(start) = rest.find("<think>") {
+        out.push_str(&rest[..start]);
+        match rest.find("</think>") {
+            Some(end) => rest = &rest[end + "</think>".len()..],
+            None => break,
+        }
+    }
+    out.push_str(rest);
+    out.trim().to_string()
+}
