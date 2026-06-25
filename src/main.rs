@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod agent;
 mod config;
 mod llm;
+mod modules;
 mod telegram;
 mod tools;
 mod wizard;
@@ -17,9 +19,11 @@ use llm::{
     eullm::EullmClient,
     openai::OpenAiClient,
 };
+use modules::ModuleRegistry;
 use tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
     http::FetchUrlTool,
+    module_tool::{InstallModuleTool, ListModulesTool, ModuleTool},
     shell::ShellTool,
     ToolRegistry,
 };
@@ -56,12 +60,22 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let config = if cli.config.exists() {
+    let mut config = if cli.config.exists() {
         Config::load(&cli.config)
             .with_context(|| format!("Cannot load config from {:?}", cli.config))?
     } else {
         wizard::run(&cli.config)?
     };
+
+    let module_registry = Arc::new(Mutex::new(
+        ModuleRegistry::load(module_state_path())?
+    ));
+
+    // Augment system prompt with current module status
+    {
+        let reg = module_registry.lock().unwrap();
+        config.system_prompt.push_str(&reg.status_summary());
+    }
 
     let llm: Arc<dyn llm::LlmClient> = match &config.provider {
         ProviderConfig::Eullm { base_url, model } => {
@@ -79,7 +93,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let tools = build_tool_registry(&config);
+    let tools = build_tool_registry(&config, Arc::clone(&module_registry));
 
     match cli.command {
         Commands::Serve => {
@@ -88,7 +102,7 @@ async fn main() -> Result<()> {
         Commands::Run { task } => {
             let agent = agent::Agent::new(llm.as_ref(), &tools, config.max_iterations);
             let result = agent
-                .run(&config.system_prompt, &task, |s| println!("[•] {s}"))
+                .run(&config.system_prompt, &task, |s| println!("[\u{2022}] {s}"))
                 .await?;
             println!("{result}");
         }
@@ -97,27 +111,49 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_tool_registry(config: &Config) -> ToolRegistry {
-    let mut r = ToolRegistry::new();
+fn build_tool_registry(
+    config: &Config,
+    module_registry: Arc<Mutex<ModuleRegistry>>,
+) -> ToolRegistry {
+    let r = ToolRegistry::new();
     let tc = &config.tools;
 
     if tc.shell.enabled {
-        r.register(Box::new(ShellTool::new(
-            tc.shell.allow_sudo,
-            tc.shell.timeout_seconds,
-        )));
+        r.register(Arc::new(ShellTool::new(tc.shell.allow_sudo, tc.shell.timeout_seconds)));
     }
-
     if tc.filesystem.enabled {
         let paths = tc.filesystem.allowed_paths.clone();
-        r.register(Box::new(ReadFileTool::new(paths.clone())));
-        r.register(Box::new(WriteFileTool::new(paths)));
-        r.register(Box::new(ListDirTool));
+        r.register(Arc::new(ReadFileTool::new(paths.clone())));
+        r.register(Arc::new(WriteFileTool::new(paths)));
+        r.register(Arc::new(ListDirTool));
+    }
+    if tc.http.enabled {
+        r.register(Arc::new(FetchUrlTool::new(tc.http.timeout_seconds)));
     }
 
-    if tc.http.enabled {
-        r.register(Box::new(FetchUrlTool::new(tc.http.timeout_seconds)));
+    // Module management tools (always available)
+    r.register(Arc::new(ListModulesTool::new(Arc::clone(&module_registry))));
+    // InstallModuleTool gets a clone of r so it can register new tools at runtime
+    r.register(Arc::new(InstallModuleTool::new(Arc::clone(&module_registry), r.clone())));
+
+    // Register tools from already-installed modules
+    {
+        let reg = module_registry.lock().unwrap();
+        for manifest in &reg.manifests {
+            if reg.state.installed.contains(&manifest.name) {
+                for spec in &manifest.tools {
+                    r.register(Arc::new(ModuleTool::new(spec.clone())));
+                }
+            }
+        }
     }
 
     r
+}
+
+fn module_state_path() -> PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".eullm-agent").join("module-state.json")
 }

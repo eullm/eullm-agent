@@ -71,7 +71,7 @@ fn setup_openai() -> Result<ProviderConfig> {
 
 fn pick_telegram() -> Result<Option<TelegramConfig>> {
     println!();
-    let enable = prompt("Enable Telegram bot? [y/N]", "N")?;
+    let enable = prompt("Enable Telegram bot?", "N")?;
     let enable_lower = enable.to_lowercase();
     if !matches!(enable_lower.trim(), "y" | "yes") {
         return Ok(None);
@@ -110,6 +110,6 @@ fn prompt_required(label: &str) -> Result<String> {
         if !val.is_empty() {
             return Ok(val);
         }
-        println!("  (required — please enter a value)");
+        println!("  (required \u{2014} please enter a value)");
     }
 }
