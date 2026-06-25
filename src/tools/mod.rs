@@ -7,9 +7,6 @@ use crate::llm::ToolDefinition;
 pub mod filesystem;
 pub mod shell;
 
-#[cfg(feature = "browser")]
-pub mod browser;
-
 #[async_trait]
 pub trait Tool: Send + Sync {
     fn definition(&self) -> ToolDefinition;
