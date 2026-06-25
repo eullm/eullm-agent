@@ -20,6 +20,7 @@ pub struct ModuleManifest {
     pub description: String,
     pub version: &'static str,
     pub install_linux: Vec<String>,
+    #[allow(dead_code)]
     pub install_macos: Vec<String>,
     pub tools: Vec<ModuleToolSpec>,
 }
