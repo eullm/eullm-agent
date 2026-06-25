@@ -1,4 +1,3 @@
-//! Anthropic Messages API client.
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -6,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::debug;
 
-use super::{ChatResponse, LlmClient, Message, MessageContent, Role, ToolCall, ToolDefinition};
+use super::{ChatResponse, LlmClient, Message, Role, ToolCall, ToolDefinition};
 
 pub struct AnthropicClient {
     client: Client,
@@ -55,13 +54,6 @@ enum AnthropicBlock {
     ToolUse { id: String, name: String, input: Value },
 }
 
-fn extract_text(c: &MessageContent) -> String {
-    match c {
-        MessageContent::Text(s) => s.clone(),
-        MessageContent::Parts(parts) => parts.iter().filter_map(|p| p.text.as_deref()).collect::<Vec<_>>().join(""),
-    }
-}
-
 fn to_anthropic_messages(messages: &[Message]) -> (Option<String>, Vec<AnthropicMessage>) {
     let mut system = None;
     let mut out: Vec<AnthropicMessage> = Vec::new();
@@ -69,23 +61,27 @@ fn to_anthropic_messages(messages: &[Message]) -> (Option<String>, Vec<Anthropic
     for msg in messages {
         match msg.role {
             Role::System => {
-                system = Some(extract_text(&msg.content));
+                system = Some(msg.content.clone());
             }
             Role::User => {
                 out.push(AnthropicMessage {
                     role: "user".into(),
-                    content: Value::String(extract_text(&msg.content)),
+                    content: Value::String(msg.content.clone()),
                 });
             }
             Role::Assistant => {
-                let text = extract_text(&msg.content);
                 let mut parts: Vec<Value> = Vec::new();
-                if !text.is_empty() {
-                    parts.push(json!({ "type": "text", "text": text }));
+                if !msg.content.is_empty() {
+                    parts.push(json!({ "type": "text", "text": msg.content }));
                 }
                 if let Some(calls) = &msg.tool_calls {
                     for c in calls {
-                        parts.push(json!({ "type": "tool_use", "id": c.id, "name": c.name, "input": c.arguments }));
+                        parts.push(json!({
+                            "type": "tool_use",
+                            "id": c.id,
+                            "name": c.name,
+                            "input": c.arguments,
+                        }));
                     }
                 }
                 out.push(AnthropicMessage {
@@ -102,10 +98,9 @@ fn to_anthropic_messages(messages: &[Message]) -> (Option<String>, Vec<Anthropic
                 let new_part = json!({
                     "type": "tool_result",
                     "tool_use_id": tool_use_id,
-                    "content": extract_text(&msg.content),
+                    "content": msg.content,
                 });
 
-                // Merge consecutive tool results into a single user message.
                 let merged = out.last_mut()
                     .filter(|m| m.role == "user")
                     .and_then(|m| {

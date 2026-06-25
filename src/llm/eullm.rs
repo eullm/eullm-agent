@@ -1,4 +1,3 @@
-//! Ollama-compatible client for EULLM Engine.
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -6,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::debug;
 
-use super::{ChatResponse, LlmClient, Message, MessageContent, Role, ToolCall, ToolDefinition};
+use super::{ChatResponse, LlmClient, Message, Role, ToolCall, ToolDefinition};
 
 pub struct EullmClient {
     client: Client,
@@ -70,14 +69,7 @@ fn to_ollama(msg: &Message) -> OllamaMessage {
         Role::Tool => "tool",
     };
 
-    let content = match &msg.content {
-        MessageContent::Text(s) if !s.is_empty() => Some(s.clone()),
-        MessageContent::Parts(parts) => {
-            let t: String = parts.iter().filter_map(|p| p.text.as_deref()).collect();
-            if t.is_empty() { None } else { Some(t) }
-        }
-        _ => None,
-    };
+    let content = if msg.content.is_empty() { None } else { Some(msg.content.clone()) };
 
     let tool_calls = msg.tool_calls.as_ref().map(|calls| {
         calls.iter().map(|c| OllamaToolCall {
@@ -99,7 +91,11 @@ impl LlmClient for EullmClient {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse> {
         let ollama_tools: Vec<Value> = tools.iter().map(|t| json!({
             "type": "function",
-            "function": { "name": t.name, "description": t.description, "parameters": t.parameters }
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.parameters,
+            }
         })).collect();
 
         let req = OllamaRequest {
