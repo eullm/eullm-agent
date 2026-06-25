@@ -37,14 +37,5 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-[features]
-default = []
-browser = ["dep:chromiumoxide"]
-
-[dependencies.chromiumoxide]
-version = "0.5"
-features = ["chrome"]
-optional = true
-
 [dev-dependencies]
 tokio-test = "0.4"
