@@ -81,6 +81,20 @@ jobs:
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
 
+      - name: Notify Telegram on build failure
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then exit 0; fi
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="HTML" \
+            -d text="❌ <b>Release build failed</b>%0APlatform: <code>${{ matrix.target }}</code>%0ATag: <code>${{ github.ref_name }}</code>%0A${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -92,7 +106,34 @@ jobs:
           path: artifacts
 
       - uses: softprops/action-gh-release@v2
+        id: gh_release
         with:
           files: artifacts/**
           fail_on_unmatched_files: false
           generate_release_notes: true
+
+      - name: Notify Telegram on release published
+        if: success()
+        continue-on-error: true
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then exit 0; fi
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="HTML" \
+            -d text="✅ <b>Release published</b>: <code>${{ github.ref_name }}</code>%0A${{ steps.gh_release.outputs.url }}"
+
+      - name: Notify Telegram on release failure
+        if: failure()
+        continue-on-error: true
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then exit 0; fi
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="HTML" \
+            -d text="❌ <b>Release job failed</b> for tag <code>${{ github.ref_name }}</code>%0A${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
