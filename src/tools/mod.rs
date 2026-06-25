@@ -5,6 +5,7 @@ use serde_json::Value;
 use crate::llm::ToolDefinition;
 
 pub mod filesystem;
+pub mod http;
 pub mod shell;
 
 #[async_trait]

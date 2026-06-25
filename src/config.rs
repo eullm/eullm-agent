@@ -70,6 +70,8 @@ pub struct ToolsConfig {
     pub shell: ShellToolConfig,
     #[serde(default)]
     pub filesystem: FilesystemToolConfig,
+    #[serde(default)]
+    pub http: HttpToolConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -99,6 +101,20 @@ pub struct FilesystemToolConfig {
 impl Default for FilesystemToolConfig {
     fn default() -> Self {
         Self { enabled: true, allowed_paths: Vec::new() }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HttpToolConfig {
+    #[serde(default = "bool_true")]
+    pub enabled: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+impl Default for HttpToolConfig {
+    fn default() -> Self {
+        Self { enabled: true, timeout_seconds: 30 }
     }
 }
 
