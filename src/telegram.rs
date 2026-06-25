@@ -43,7 +43,7 @@ pub async fn serve(
 async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     let tg = state.config.telegram.as_ref().unwrap();
 
-    let uid = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
+    let uid = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
     if !tg.allowed_users.is_empty() && !tg.allowed_users.contains(&uid) {
         warn!("Rejected unauthorized user {uid}");
         return Ok(());
