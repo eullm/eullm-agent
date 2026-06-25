@@ -1,1 +1,2 @@
+# Cross.toml — no pre-build hooks needed: rustls is pure Rust, no system OpenSSL required.
 [target.aarch64-unknown-linux-gnu]
