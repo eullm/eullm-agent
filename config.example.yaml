@@ -1,64 +1,54 @@
-# EULLM Agent configuration
-# Copy to config.yaml and fill in your values.
+# EULLM Agent — example configuration
+# Copy this file to config.yaml and fill in your values.
 
-# --- LLM Provider ---
-# Choose one: eullm | anthropic | openai
-#
-# eullm = local EULLM Engine (Ollama-compatible, zero external calls)
+# ── LLM Provider ───────────────────────────────────────────────────────────────
+# Uncomment ONE provider block.
+
+# Option 1: Anthropic (Claude)
 provider:
-  type: eullm
-  base_url: "http://localhost:11434"
-  model: "llama3.2"
+  type: anthropic
+  api_key: "sk-ant-..."
+  model: claude-sonnet-4-6
 
-# Anthropic Claude API
+# Option 2: EULLM Engine (local, Ollama-compatible)
 # provider:
-#   type: anthropic
-#   api_key: "sk-ant-..."
-#   model: "claude-sonnet-4-6"
+#   type: eullm
+#   base_url: http://localhost:11434
+#   model: qwen3:14b
 
-# OpenAI-compatible: covers OpenAI, Mistral, OpenRouter, LiteLLM proxy
-# Use base_url to point at any OpenAI-compatible endpoint.
-# Tip: users with a Claude Max subscription can run LiteLLM locally
-# (litellm --model claude-3-5-sonnet) and point base_url at it.
+# Option 3: OpenAI or any compatible API
 # provider:
 #   type: openai
 #   api_key: "sk-..."
-#   model: "gpt-4o"
-#   base_url: "https://api.openai.com/v1"  # optional, default
-#
-# OpenRouter (pay-as-you-go, 100+ models):
-# provider:
-#   type: openai
-#   api_key: "sk-or-..."
-#   model: "anthropic/claude-sonnet-4-6"
-#   base_url: "https://openrouter.ai/api/v1"
-#
-# Mistral API (European provider):
-# provider:
-#   type: openai
-#   api_key: "..."
-#   model: "mistral-large-latest"
-#   base_url: "https://api.mistral.ai/v1"
+#   model: gpt-4o
+#   # base_url: https://api.openai.com/v1   # change for compatible providers
 
-# --- Telegram Bot ---
-# Get a token from @BotFather. allowed_users: leave empty to allow everyone.
+# ── Telegram Bot ───────────────────────────────────────────────────────────────
+# Required only for `eullm-agent serve`. Get a token from @BotFather.
+#
 # telegram:
-#   token: "123456:ABC-DEF..."
-#   allowed_users: [123456789]
+#   token: "123456789:ABC-DEFghijklmn..."
+#   allowed_users: []   # empty = allow anyone; add Telegram user IDs to restrict
 
-# --- Tools ---
+# ── Agent Settings ─────────────────────────────────────────────────────────────
+max_iterations: 20
+
+system_prompt: |
+  You are EULLM Agent, an autonomous task executor running on EU infrastructure.
+  Think step by step. Use the available tools to complete tasks accurately and efficiently.
+  When the task is complete, summarise the result clearly.
+
+# ── Tools ──────────────────────────────────────────────────────────────────────
 tools:
   shell:
     enabled: true
-    allow_sudo: false
+    allow_sudo: false       # set true to permit sudo commands
     timeout_seconds: 30
+
   filesystem:
     enabled: true
-    allowed_paths: []  # empty = unrestricted; add paths to sandbox
+    allowed_paths: []       # empty = no restriction; add absolute paths to sandbox the agent
 
-# --- Agent ---
-max_iterations: 20
-system_prompt: |
-  You are EULLM Agent, an autonomous task executor running on EU infrastructure.
-  Think step by step. Use the available tools to complete tasks accurately.
-  When done, summarize the result clearly.
+  http:
+    enabled: true
+    timeout_seconds: 30     # per-request timeout

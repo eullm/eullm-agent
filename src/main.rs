@@ -18,6 +18,7 @@ use llm::{
 };
 use tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
+    http::FetchUrlTool,
     shell::ShellTool,
     ToolRegistry,
 };
@@ -106,6 +107,10 @@ fn build_tool_registry(config: &Config) -> ToolRegistry {
         r.register(Box::new(ReadFileTool::new(paths.clone())));
         r.register(Box::new(WriteFileTool::new(paths)));
         r.register(Box::new(ListDirTool));
+    }
+
+    if tc.http.enabled {
+        r.register(Box::new(FetchUrlTool::new(tc.http.timeout_seconds)));
     }
 
     r
