@@ -1,6 +1,6 @@
 [package]
 name = "eullm-agent"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "EULLM Agent — autonomous ReAct agent with multi-provider LLM support"
@@ -36,6 +36,12 @@ async-trait = "0.1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Vendored OpenSSL: compiles from source, no system libssl required.
+# Required for cross-compilation to aarch64-unknown-linux-gnu (cross container
+# uses Ubuntu Xenial which only provides OpenSSL 1.0.2g, incompatible with
+# openssl-sys v0.9.x which requires >=1.1.0).
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

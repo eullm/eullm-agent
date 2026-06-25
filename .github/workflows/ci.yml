@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main, 'feat/**', 'fix/**']
   pull_request:
     branches: [main]
 
@@ -23,3 +23,19 @@ jobs:
 
       - name: test
         run: cargo test
+
+      - name: Notify Telegram on failure
+        if: failure()
+        continue-on-error: true
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not configured, skipping notification"
+            exit 0
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="HTML" \
+            -d text="❌ <b>CI failed</b> on <code>${{ github.ref_name }}</code>%0A${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
