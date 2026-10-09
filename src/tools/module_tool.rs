@@ -1,38 +1,67 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::process::Output;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use super::{Tool, ToolRegistry};
+use super::process::{format_output, run_program};
+use super::sandbox::Workspace;
+use super::Tool;
 use crate::llm::ToolDefinition;
-use crate::modules::{ModuleRegistry, ModuleToolSpec};
+use crate::modules::{ArgvToken, ModuleRegistry, ModuleToolSpec};
 
-/// Runs a shell command using the platform-appropriate shell.
-async fn run_shell(cmd: &str) -> Result<Output> {
-    #[cfg(target_os = "windows")]
-    let out = tokio::process::Command::new("cmd")
-        .arg("/C")
-        .arg(cmd)
-        .output()
-        .await?;
-    #[cfg(not(target_os = "windows"))]
-    let out = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .await?;
-    Ok(out)
-}
+const MAX_OUTPUT_BYTES: usize = 256 * 1024;
 
-/// Executes a single module-defined tool via shell command template substitution.
+/// Executes a module-defined tool: the template becomes an argv, each
+/// argument one element, run without a shell.
 pub struct ModuleTool {
     spec: ModuleToolSpec,
+    argv: Vec<ArgvToken>,
+    workspace: Workspace,
+    timeout: Duration,
 }
 
 impl ModuleTool {
-    pub fn new(spec: ModuleToolSpec) -> Self {
-        Self { spec }
+    pub fn new(spec: ModuleToolSpec, workspace: Workspace, timeout: Duration) -> Result<Self> {
+        let argv = spec.argv_template()?;
+        Ok(Self {
+            spec,
+            argv,
+            workspace,
+            timeout,
+        })
+    }
+
+    /// Build the argv for one call; exposed for tests.
+    pub fn build_argv(&self, arguments: &Value) -> Result<Vec<String>> {
+        let mut out = Vec::with_capacity(self.argv.len());
+        for tok in &self.argv {
+            match tok {
+                ArgvToken::Literal(s) => out.push(s.clone()),
+                ArgvToken::Param(name) => {
+                    let value = match &arguments[name.as_str()] {
+                        Value::String(s) => s.clone(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Null => bail!("Missing '{name}'"),
+                        _ => bail!("'{name}' must be a string"),
+                    };
+                    if value.is_empty() || value.contains('\0') {
+                        bail!("Invalid value for '{name}'");
+                    }
+                    // A leading '-' would be read as an option by the program.
+                    if value.starts_with('-') {
+                        bail!("'{name}' must not start with '-'");
+                    }
+                    if self.spec.path_params.iter().any(|p| p == name) {
+                        let path = self.workspace.resolve(&value)?;
+                        out.push(path.to_string_lossy().into_owned());
+                    } else {
+                        out.push(value);
+                    }
+                }
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -47,31 +76,23 @@ impl Tool for ModuleTool {
     }
 
     async fn execute(&self, arguments: &Value) -> Result<String> {
-        let mut cmd = self.spec.command.clone();
-        if let Some(obj) = arguments.as_object() {
-            for (key, val) in obj {
-                let placeholder = format!("{{{}}}", key);
-                let value = match val {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                cmd = cmd.replace(&placeholder, &value);
-            }
+        let argv = self.build_argv(arguments)?;
+        let out = run_program(
+            &argv[0],
+            &argv[1..],
+            self.workspace.root(),
+            self.timeout,
+            MAX_OUTPUT_BYTES,
+        )
+        .await?;
+        if !out.status.success() {
+            bail!("Command failed: {}", format_output(&out));
         }
-
-        let output = run_shell(&cmd).await?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-        if output.status.success() {
-            Ok(stdout)
-        } else {
-            Err(anyhow::anyhow!("Command failed: {}", stderr.trim()))
-        }
+        Ok(format_output(&out))
     }
 }
 
-/// Lists all modules and their installation status.
+/// Lists all modules and their installation status (read-only).
 pub struct ListModulesTool {
     registry: Arc<Mutex<ModuleRegistry>>,
 }
@@ -87,8 +108,8 @@ impl Tool for ListModulesTool {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: "list_modules".into(),
-            description: "List all available modules and their installation status. \
-                         Use install_module to install a missing one."
+            description: "List available modules and whether they are installed. Modules are \
+                          installed by an operator, not by the agent."
                 .into(),
             parameters: json!({ "type": "object", "properties": {} }),
         }
@@ -96,127 +117,6 @@ impl Tool for ListModulesTool {
 
     async fn execute(&self, _: &Value) -> Result<String> {
         let reg = self.registry.lock().unwrap();
-        let mut out = String::new();
-
-        out.push_str("=== Installed modules ===\n");
-        let mut any = false;
-        for m in &reg.manifests {
-            if reg.state.installed.contains(&m.name) {
-                any = true;
-                out.push_str(&format!(
-                    "  {} v{} — {}\n",
-                    m.name, m.version, m.description
-                ));
-                for t in &m.tools {
-                    out.push_str(&format!("    tool: {}\n", t.name));
-                }
-            }
-        }
-        if !any {
-            out.push_str("  (none)\n");
-        }
-
-        out.push_str("\n=== Available (not installed) ===\n");
-        let mut any = false;
-        for m in &reg.manifests {
-            if !reg.state.installed.contains(&m.name) {
-                any = true;
-                out.push_str(&format!("  {} — {}\n", m.name, m.description));
-            }
-        }
-        if !any {
-            out.push_str("  (all modules installed)\n");
-        }
-
-        Ok(out)
-    }
-}
-
-/// Installs a module and immediately registers its tools into the shared ToolRegistry.
-pub struct InstallModuleTool {
-    registry: Arc<Mutex<ModuleRegistry>>,
-    tool_registry: ToolRegistry,
-}
-
-impl InstallModuleTool {
-    pub fn new(registry: Arc<Mutex<ModuleRegistry>>, tool_registry: ToolRegistry) -> Self {
-        Self {
-            registry,
-            tool_registry,
-        }
-    }
-}
-
-#[async_trait]
-impl Tool for InstallModuleTool {
-    fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: "install_module".into(),
-            description: "Install a module to gain new tool capabilities. \
-                         Runs the platform install commands, then makes the new tools \
-                         immediately available in this session."
-                .into(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Module name (e.g. 'ocr', 'pdf'). Use list_modules to see available ones."
-                    }
-                },
-                "required": ["name"]
-            }),
-        }
-    }
-
-    async fn execute(&self, arguments: &Value) -> Result<String> {
-        let name = arguments["name"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("'name' argument required"))?
-            .to_string();
-
-        let manifest = {
-            let reg = self.registry.lock().unwrap();
-            if reg.state.installed.contains(&name) {
-                return Ok(format!("Module '{}' is already installed.", name));
-            }
-            reg.manifests.iter().find(|m| m.name == name).cloned()
-        };
-
-        let manifest = manifest.ok_or_else(|| {
-            anyhow::anyhow!(
-                "Unknown module: '{}'. Use list_modules to see available modules.",
-                name
-            )
-        })?;
-
-        for cmd in manifest.install_commands() {
-            tracing::info!("module install: {cmd}");
-            let output = run_shell(cmd).await?;
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(anyhow::anyhow!(
-                    "Install failed at '{cmd}': {}",
-                    stderr.trim()
-                ));
-            }
-        }
-
-        {
-            let mut reg = self.registry.lock().unwrap();
-            reg.state.installed.insert(name.clone());
-            reg.save_state()?;
-        }
-
-        let tool_names: Vec<String> = manifest.tools.iter().map(|t| t.name.clone()).collect();
-        for spec in manifest.tools {
-            self.tool_registry.register(Arc::new(ModuleTool::new(spec)));
-        }
-
-        Ok(format!(
-            "Module '{}' installed.\nNew tools available: {}",
-            name,
-            tool_names.join(", ")
-        ))
+        Ok(reg.listing())
     }
 }

@@ -31,6 +31,7 @@ fn ocr() -> ModuleManifest {
                 "required": ["image_path", "language"]
             }),
             command: "tesseract {image_path} stdout -l {language}".into(),
+            path_params: vec!["image_path".into()],
         }],
     }
 }
@@ -57,6 +58,7 @@ fn pdf() -> ModuleManifest {
                 "required": ["pdf_path"]
             }),
             command: "pdftotext {pdf_path} -".into(),
+            path_params: vec!["pdf_path".into()],
         }],
     }
 }
