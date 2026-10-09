@@ -133,3 +133,112 @@ pub fn http_response(status: &str, extra_headers: &str, body: &str) -> String {
         body.len()
     )
 }
+
+// --- scripted model and tools ------------------------------------------------
+
+use async_trait::async_trait;
+use eullm_agent::llm::{ChatResponse, LlmClient, Message, ToolCall, ToolDefinition, Usage};
+use eullm_agent::tools::Tool;
+use serde_json::{json, Value};
+
+/// Plays back scripted responses, then answers "done"; records requests.
+pub struct Scripted {
+    pub script: Mutex<Vec<ChatResponse>>,
+    pub seen: Mutex<Vec<Vec<Message>>>,
+}
+
+impl Scripted {
+    pub fn new(mut script: Vec<ChatResponse>) -> Self {
+        script.reverse();
+        Self {
+            script: Mutex::new(script),
+            seen: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub fn last_tool_result(&self) -> Option<String> {
+        let seen = self.seen.lock().unwrap();
+        seen.last()?
+            .iter()
+            .rev()
+            .find(|m| m.role == eullm_agent::llm::Role::Tool)
+            .map(|m| m.content.clone())
+    }
+}
+
+#[async_trait]
+impl LlmClient for Scripted {
+    async fn chat(
+        &self,
+        messages: &[Message],
+        _: &[ToolDefinition],
+    ) -> anyhow::Result<ChatResponse> {
+        self.seen.lock().unwrap().push(messages.to_vec());
+        let next = self.script.lock().unwrap().pop();
+        Ok(next.unwrap_or(ChatResponse {
+            content: "done".into(),
+            tool_calls: vec![],
+            usage: Some(Usage {
+                input_tokens: 10,
+                output_tokens: 2,
+            }),
+        }))
+    }
+    fn provider_name(&self) -> &str {
+        "scripted"
+    }
+    fn model(&self) -> &str {
+        "test"
+    }
+}
+
+pub fn tool_call(name: &str, arguments: Value) -> ChatResponse {
+    ChatResponse {
+        content: String::new(),
+        tool_calls: vec![ToolCall {
+            id: format!("call-{name}"),
+            name: name.into(),
+            arguments,
+        }],
+        usage: Some(Usage {
+            input_tokens: 100,
+            output_tokens: 20,
+        }),
+    }
+}
+
+/// A tool that counts its executions.
+pub struct CountingTool {
+    pub name: String,
+    pub output: String,
+    pub runs: Arc<Mutex<u32>>,
+}
+
+impl CountingTool {
+    pub fn new(name: &str, output: &str) -> (Arc<Self>, Arc<Mutex<u32>>) {
+        let runs = Arc::new(Mutex::new(0));
+        (
+            Arc::new(Self {
+                name: name.into(),
+                output: output.into(),
+                runs: Arc::clone(&runs),
+            }),
+            runs,
+        )
+    }
+}
+
+#[async_trait]
+impl Tool for CountingTool {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: self.name.clone(),
+            description: String::new(),
+            parameters: json!({"type": "object"}),
+        }
+    }
+    async fn execute(&self, _: &Value) -> anyhow::Result<String> {
+        *self.runs.lock().unwrap() += 1;
+        Ok(self.output.clone())
+    }
+}
