@@ -2,8 +2,10 @@
 
 ## 0.3.0
 
-The Core as a service (phase F1): other programs can start runs, make model
-calls and decide approvals over HTTP, with state and audit in PostgreSQL.
+The Core as a service: other programs can start runs, make model calls,
+decide approvals and fetch web pages over HTTP, with state and audit in
+PostgreSQL and limits per tenant. Applications such as Editor Mode are built
+on this API instead of calling providers or the web directly.
 
 ### Added
 
