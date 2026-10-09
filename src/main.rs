@@ -1,21 +1,15 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tracing::info;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
-use eullm_agent::config::{Config, ProviderConfig};
-use eullm_agent::llm::{anthropic::AnthropicClient, eullm::EullmClient, openai::OpenAiClient};
+use eullm_agent::audit::Audit;
+use eullm_agent::config::Config;
 use eullm_agent::modules::ModuleRegistry;
-use eullm_agent::tools::{
-    filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
-    http::FetchUrlTool,
-    module_tool::{InstallModuleTool, ListModulesTool, ModuleTool},
-    shell::ShellTool,
-    ToolRegistry,
-};
-use eullm_agent::{agent, llm, telegram, wizard};
+use eullm_agent::{agent, setup, telegram, wizard};
 
 #[derive(Parser)]
 #[command(name = "eullm-agent", version, about = "EULLM autonomous task agent")]
@@ -36,6 +30,24 @@ enum Commands {
         /// Task description
         task: String,
     },
+    /// List or install modules (operator only; the agent cannot install them)
+    Module {
+        #[command(subcommand)]
+        action: ModuleAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ModuleAction {
+    /// Show available and installed modules
+    List,
+    /// Run a module's install commands and enable its tools
+    Install {
+        name: String,
+        /// Do not ask for confirmation
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[tokio::main]
@@ -46,103 +58,85 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    let module_registry = Arc::new(Mutex::new(ModuleRegistry::load(module_state_path())?));
+
+    if let Commands::Module { action } = &cli.command {
+        return module_command(action, &module_registry);
+    }
+
     let mut config = if cli.config.exists() {
         Config::load(&cli.config)
             .with_context(|| format!("Cannot load config from {:?}", cli.config))?
     } else {
         wizard::run(&cli.config)?
     };
+    for w in config.deprecation_warnings() {
+        warn!("{w}");
+    }
 
-    let module_registry = Arc::new(Mutex::new(ModuleRegistry::load(module_state_path())?));
-
-    // Augment system prompt with current module status
-    {
+    if config.modules.enabled {
         let reg = module_registry.lock().unwrap();
         config.system_prompt.push_str(&reg.status_summary());
     }
 
-    let llm: Arc<dyn llm::LlmClient> = match &config.provider {
-        ProviderConfig::Eullm { base_url, model } => {
-            info!("provider=eullm base_url={base_url} model={model}");
-            Arc::new(EullmClient::new(base_url, model))
-        }
-        ProviderConfig::Anthropic { api_key, model } => {
-            info!("provider=anthropic model={model}");
-            Arc::new(AnthropicClient::new(api_key, model))
-        }
-        ProviderConfig::OpenAI {
-            api_key,
-            model,
-            base_url,
-        } => {
-            let base = base_url.as_deref().unwrap_or("https://api.openai.com/v1");
-            info!("provider=openai base_url={base} model={model}");
-            Arc::new(OpenAiClient::new(api_key, model, base_url.clone()))
-        }
+    let llm = setup::build_llm(&config)?;
+    let tools = setup::build_tools(&config, Arc::clone(&module_registry))?;
+    let audit = match &config.audit_log {
+        Some(path) => Some(Arc::new(Audit::open(path)?)),
+        None => None,
     };
-
-    let tools = build_tool_registry(&config, Arc::clone(&module_registry));
 
     match cli.command {
         Commands::Serve => {
-            telegram::serve(Arc::new(config), llm, Arc::new(tools)).await?;
+            config.validate_telegram()?;
+            telegram::serve(Arc::new(config), llm, Arc::new(tools), audit).await?;
         }
         Commands::Run { task } => {
-            let agent = agent::Agent::new(llm.as_ref(), &tools, config.max_iterations);
+            let agent = agent::Agent::new(llm.as_ref(), &tools, config.max_iterations)
+                .with_limits(&config.limits)
+                .with_audit(audit, "cli");
             let result = agent
                 .run(&config.system_prompt, &task, |s| println!("[\u{2022}] {s}"))
                 .await?;
             println!("{result}");
         }
+        Commands::Module { .. } => unreachable!(),
     }
 
     Ok(())
 }
 
-fn build_tool_registry(
-    config: &Config,
-    module_registry: Arc<Mutex<ModuleRegistry>>,
-) -> ToolRegistry {
-    let r = ToolRegistry::new();
-    let tc = &config.tools;
-
-    if tc.shell.enabled {
-        r.register(Arc::new(ShellTool::new(
-            tc.shell.allow_sudo,
-            tc.shell.timeout_seconds,
-        )));
-    }
-    if tc.filesystem.enabled {
-        let paths = tc.filesystem.allowed_paths.clone();
-        r.register(Arc::new(ReadFileTool::new(paths.clone())));
-        r.register(Arc::new(WriteFileTool::new(paths)));
-        r.register(Arc::new(ListDirTool));
-    }
-    if tc.http.enabled {
-        r.register(Arc::new(FetchUrlTool::new(tc.http.timeout_seconds)));
-    }
-
-    // Module management tools (always available)
-    r.register(Arc::new(ListModulesTool::new(Arc::clone(&module_registry))));
-    // InstallModuleTool gets a clone of r so it can register new tools at runtime
-    r.register(Arc::new(InstallModuleTool::new(
-        Arc::clone(&module_registry),
-        r.clone(),
-    )));
-
-    // Register tools from already-installed modules
-    {
-        let reg = module_registry.lock().unwrap();
-        for manifest in &reg.manifests {
-            if reg.state.installed.contains(&manifest.name) {
-                for spec in &manifest.tools {
-                    r.register(Arc::new(ModuleTool::new(spec.clone())));
+fn module_command(action: &ModuleAction, registry: &Arc<Mutex<ModuleRegistry>>) -> Result<()> {
+    let mut reg = registry.lock().unwrap();
+    match action {
+        ModuleAction::List => print!("{}", reg.listing()),
+        ModuleAction::Install { name, yes } => {
+            let manifest = reg
+                .manifests
+                .iter()
+                .find(|m| &m.name == name)
+                .with_context(|| format!("Unknown module '{name}'"))?;
+            println!("Module '{name}' will run these commands on this machine:");
+            for cmd in manifest.install_commands() {
+                println!("  {cmd}");
+            }
+            if !yes {
+                print!("Continue? [y/N]: ");
+                io::stdout().flush()?;
+                let mut buf = String::new();
+                io::stdin().read_line(&mut buf)?;
+                if !matches!(buf.trim().to_lowercase().as_str(), "y" | "yes") {
+                    println!("Aborted.");
+                    return Ok(());
                 }
             }
+            reg.install(name)?;
+            println!(
+                "Module '{name}' installed. Set `modules.enabled: true` in the config to use it."
+            );
         }
     }
-
-    r
+    Ok(())
 }
 
 fn module_state_path() -> PathBuf {

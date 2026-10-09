@@ -1,6 +1,6 @@
 [package]
 name = "eullm-agent"
-version = "0.1.7"
+version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 description = "EULLM Agent — autonomous ReAct agent with multi-provider LLM support"
@@ -36,6 +36,10 @@ async-trait = "0.1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Process groups and O_NOFOLLOW for the sandboxed tools
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.190"
 
 [dev-dependencies]
 tokio-test = "0.4"
