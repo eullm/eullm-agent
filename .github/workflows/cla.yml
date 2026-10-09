@@ -1,0 +1,33 @@
+name: CLA
+
+# Fails every pull request whose description lacks the CLA agreement line.
+# Reads only the event payload: no checkout, no third-party actions, read-only
+# token, so it is safe on pull requests from forks.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the CLA line in the pull request description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          required='I have read and agree to the Contributor Licence Agreement in CLA.md.'
+          # Compare line by line, ignoring surrounding whitespace and CRLF.
+          if printf '%s\n' "$PR_BODY" | tr -d '\r' \
+              | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+              | grep -Fxq -- "$required"; then
+            echo "CLA agreed by @${PR_AUTHOR}."
+            exit 0
+          fi
+          echo "::error title=CLA missing::Add this line to the pull request description, then save it to re-run the check: $required"
+          echo "See CLA.md for what it grants and why it is needed."
+          exit 1
