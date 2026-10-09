@@ -59,6 +59,47 @@ agent's own user rights, so allowlisting an interpreter (`sh`, `python`, ...)
 gives the model full control of that user. Run the agent as an unprivileged
 user, ideally in a container.
 
+## Core service (API)
+
+`eullm-agent api` runs the agent as a service for other programs (for
+example Editorial Intelligence). The contract is
+[docs/openapi.json](docs/openapi.json).
+
+| Endpoint | What it does |
+|---|---|
+| `POST /v1/runs` | Start a run with a profile and an input; returns its id at once |
+| `GET /v1/runs`, `GET /v1/runs/{id}` | Runs of the caller's tenant, with every model and tool call |
+| `POST /v1/llm/chat` | One model call through the Model Router, recorded with tokens and cost |
+| `GET /v1/approvals`, `POST /v1/approvals/{id}` | Actions waiting for a person; approve or deny |
+
+- **Tokens:** `eullm-agent token new` prints a token and its SHA-256; only the
+  hash goes in `api.tokens`. Each token belongs to a tenant and can be limited
+  to some profiles. Data is always scoped to the token's tenant.
+- **State and audit:** with `database` configured, runs, model calls, tool
+  calls, policy decisions and approvals are stored in the `core` schema of
+  PostgreSQL (migrations run at start). `core.audit_events` is append-only:
+  updates and deletes are refused by the database. Without a database the
+  state is kept in memory.
+- **Model Router and profiles:** `models` adds named models with fallback and
+  pricing; `profiles` choose a model, the tools a run may use and its budget
+  (`max_tokens`, `max_cost`, `max_iterations`, `max_run_seconds`).
+- **Policy:** `policy_file` (see [policy.example.yaml](policy.example.yaml))
+  decides `allow`, `deny` or `require_approval` per tool and profile. A run
+  that has read external content is *tainted*, and from then on tools with
+  side effects need approval: the model proposes, the policy authorises, the
+  worker executes and the system records.
+- **Approvals:** a run stops at the action and waits for a decision through
+  the API, Telegram (`/approve <id>`, `/deny <id> [note]`, sent to the chat
+  that started the task) or the terminal for `eullm-agent run`. No decision
+  within `api.approval_timeout_seconds` counts as a refusal.
+
+```bash
+eullm-agent token new                          # put token_sha256 in api.tokens
+DATABASE_URL=postgres://... eullm-agent api
+curl -s -X POST localhost:8088/v1/runs -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' -d '{"input":"List the workspace"}'
+```
+
 ## Using it with EuLLM Engine
 
 1. Start the Engine and note its address (default `http://localhost:11434`)
@@ -92,6 +133,8 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test                 # unit, provider, agent and security regression tests
 cargo test --test security # security regressions only
+# PostgreSQL tests run when DATABASE_URL points at a disposable database:
+DATABASE_URL=postgres://postgres@localhost/eullm_test cargo test --test pg_store
 ```
 
 ## License
