@@ -4,6 +4,21 @@ Autonomous ReAct agent with multi-provider LLM support (EuLLM Engine, Ollama,
 OpenAI-compatible APIs, Anthropic), a small set of sandboxed tools, optional
 modules and a Telegram interface.
 
+**New in 0.3.0: the agent becomes a platform.** `eullm-agent api` turns it
+into a multi-tenant Core that other applications build on:
+
+- **The model proposes, the policy decides, a person approves.** Every
+  sensitive action stops in an approval queue (API, Telegram or terminal).
+- **Everything is on record.** Runs, model calls, tools and fetches land in
+  PostgreSQL with an append-only audit trail.
+- **Safe web access for apps.** `POST /v1/fetch` crawls with SSRF checks on
+  every redirect, size limits and a per-host pace.
+- **Costs under control.** Model router with fallback and pricing, budgets
+  per run, and monthly and daily limits per tenant (`429` when reached).
+
+Editor Mode, the first vertical built on the Core, uses it to run editorial
+work for any domain.
+
 ## Quick start
 
 ```bash
@@ -62,7 +77,7 @@ user, ideally in a container.
 ## Core service (API)
 
 `eullm-agent api` runs the agent as a service for other programs (for
-example Editorial Intelligence). The contract is
+example Editor Mode). The contract is
 [docs/openapi.json](docs/openapi.json).
 
 | Endpoint | What it does |
