@@ -5,24 +5,17 @@ use std::sync::{Arc, Mutex};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-mod agent;
-mod config;
-mod llm;
-mod modules;
-mod telegram;
-mod tools;
-mod wizard;
-
-use config::{Config, ProviderConfig};
-use llm::{anthropic::AnthropicClient, eullm::EullmClient, openai::OpenAiClient};
-use modules::ModuleRegistry;
-use tools::{
+use eullm_agent::config::{Config, ProviderConfig};
+use eullm_agent::llm::{anthropic::AnthropicClient, eullm::EullmClient, openai::OpenAiClient};
+use eullm_agent::modules::ModuleRegistry;
+use eullm_agent::tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
     http::FetchUrlTool,
     module_tool::{InstallModuleTool, ListModulesTool, ModuleTool},
     shell::ShellTool,
     ToolRegistry,
 };
+use eullm_agent::{agent, llm, telegram, wizard};
 
 #[derive(Parser)]
 #[command(name = "eullm-agent", version, about = "EULLM autonomous task agent")]
