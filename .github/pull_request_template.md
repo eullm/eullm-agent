@@ -8,5 +8,5 @@
 
 ## Contributor Licence Agreement
 
-<!-- Required: the CLA check fails until you write, on its own line below this comment, the sentence "I have read and agree to the Contributor Licence Agreement in CLA.md." Read CLA.md first. -->
+<!-- Required for external contributors (members of the eullm organisation are exempt): the CLA check fails until you write, on its own line below this comment, the sentence "I have read and agree to the Contributor Licence Agreement in CLA.md." Read CLA.md first. -->
 
