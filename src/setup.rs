@@ -8,10 +8,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::{info, warn};
 
+use crate::audit::{Audit, Recorder};
 use crate::config::{resolve_secret, Config, ProviderConfig};
 use crate::llm::LlmClient;
 use crate::llm::{anthropic::AnthropicClient, eullm, ollama::OllamaClient, openai::OpenAiClient};
 use crate::modules::ModuleRegistry;
+use crate::policy::Policy;
+use crate::router::ModelRouter;
+use crate::service::Core;
+use crate::store::{MemoryStore, PgStore, Store};
 use crate::tools::{
     exec::ExecTool,
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
@@ -22,8 +27,15 @@ use crate::tools::{
 };
 
 pub fn build_llm(config: &Config) -> Result<Arc<dyn LlmClient>> {
-    let timeout = Duration::from_secs(config.limits.llm_timeout_seconds);
-    Ok(match &config.provider {
+    build_client(
+        &config.provider,
+        Duration::from_secs(config.limits.llm_timeout_seconds),
+    )
+}
+
+/// A client for one provider block.
+pub fn build_client(provider: &ProviderConfig, timeout: Duration) -> Result<Arc<dyn LlmClient>> {
+    Ok(match provider {
         ProviderConfig::Eullm {
             base_url,
             model,
@@ -141,4 +153,56 @@ fn register_http(r: &ToolRegistry, config: &Config) {
     if config.tools.http.enabled {
         r.register(Arc::new(FetchUrlTool::new(&config.tools.http)));
     }
+}
+
+pub fn load_policy(config: &Config) -> Result<Arc<Policy>> {
+    Ok(Arc::new(match &config.policy_file {
+        Some(path) => Policy::load(path)?,
+        None => Policy::default(),
+    }))
+}
+
+/// PostgreSQL when `database` is configured, otherwise memory (state is
+/// lost on restart, fine for `run` and quick local use).
+pub async fn build_store(config: &Config) -> Result<Arc<dyn Store>> {
+    match &config.database {
+        Some(db) => {
+            let url = resolve_secret(&db.url, &db.url_env)?
+                .context("database.url or database.url_env is required")?;
+            info!("store=postgresql");
+            Ok(Arc::new(PgStore::connect(&url, db.max_connections).await?))
+        }
+        None => {
+            warn!("no database configured: run state and approvals are kept in memory only");
+            Ok(Arc::new(MemoryStore::new()))
+        }
+    }
+}
+
+pub async fn build_core(
+    config: Arc<Config>,
+    module_registry: Arc<Mutex<ModuleRegistry>>,
+) -> Result<Arc<Core>> {
+    let router = ModelRouter::from_config(&config)?;
+    let tools = build_tools(&config, module_registry)?;
+    let policy = load_policy(&config)?;
+    let store = build_store(&config).await?;
+    let extra: Option<Arc<dyn Recorder>> = match &config.audit_log {
+        Some(path) => Some(Arc::new(Audit::open(path)?)),
+        None => None,
+    };
+    let (timeout, slots) = match &config.api {
+        Some(api) => (api.approval_timeout_seconds, api.max_concurrent_runs),
+        None => (3600, 4),
+    };
+    Ok(Core::new(
+        Arc::clone(&config),
+        router,
+        tools,
+        policy,
+        store,
+        Duration::from_secs(timeout.max(1)),
+        slots,
+        extra,
+    ))
 }

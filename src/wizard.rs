@@ -23,6 +23,11 @@ pub fn run(config_path: &std::path::Path) -> Result<Config> {
         audit_log: Some("eullm-agent-audit.jsonl".into()),
         max_iterations: 20,
         system_prompt: default_system_prompt(),
+        models: Default::default(),
+        profiles: Default::default(),
+        policy_file: None,
+        database: None,
+        api: None,
     };
 
     let yaml = serde_yaml::to_string(&config)?;
@@ -129,6 +134,7 @@ fn pick_telegram() -> Result<Option<TelegramConfig>> {
         token,
         token_env,
         allowed_users,
+        profile: "default".into(),
     }))
 }
 

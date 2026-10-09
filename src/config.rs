@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -23,6 +24,124 @@ pub struct Config {
     pub max_iterations: usize,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
+    /// Extra named models for the Model Router; `default` is `provider`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub models: BTreeMap<String, ModelConfig>,
+    /// Named run profiles (model, tools, budget); `default` is built from
+    /// the top-level settings when not given.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub profiles: BTreeMap<String, ProfileConfig>,
+    /// YAML file with tool policy rules; built-in rules apply without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_file: Option<PathBuf>,
+    /// PostgreSQL connection for run state and audit (`eullm-agent api`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database: Option<DatabaseConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api: Option<ApiConfig>,
+}
+
+/// A model reachable through the Model Router.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelConfig {
+    pub provider: ProviderConfig,
+    /// Model tried when this one fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing: Option<Pricing>,
+}
+
+/// Price per million tokens, used to estimate run cost.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq)]
+pub struct Pricing {
+    pub input_per_mtok: f64,
+    pub output_per_mtok: f64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ProfileConfig {
+    /// Model name from `models` (or `default`).
+    #[serde(default = "default_model_name")]
+    pub model: String,
+    /// Tools this profile may use; empty means every registered tool.
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_iterations: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_run_seconds: Option<u64>,
+    /// Token budget for one run (input + output).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u64>,
+    /// Cost budget for one run, in the currency of `pricing`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_cost: Option<f64>,
+}
+
+pub fn default_model_name() -> String {
+    "default".into()
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DatabaseConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url_env: Option<String>,
+    #[serde(default = "default_db_connections")]
+    pub max_connections: u32,
+}
+
+fn default_db_connections() -> u32 {
+    5
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ApiConfig {
+    #[serde(default = "default_listen")]
+    pub listen: String,
+    #[serde(default)]
+    pub tokens: Vec<ApiTokenConfig>,
+    /// How long a run waits for a human decision before the action is denied.
+    #[serde(default = "default_approval_timeout")]
+    pub approval_timeout_seconds: u64,
+    /// Runs executing at the same time; more are queued.
+    #[serde(default = "default_max_concurrent_runs")]
+    pub max_concurrent_runs: usize,
+}
+
+fn default_listen() -> String {
+    "127.0.0.1:8088".into()
+}
+fn default_approval_timeout() -> u64 {
+    3600
+}
+fn default_max_concurrent_runs() -> usize {
+    4
+}
+
+/// A client allowed to call the API. Only the SHA-256 of the token is
+/// stored (`eullm-agent token new` prints both).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ApiTokenConfig {
+    pub name: String,
+    #[serde(default = "default_tenant")]
+    pub tenant: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_sha256: Option<String>,
+    /// Environment variable holding the token itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_env: Option<String>,
+    /// Profiles this client may run; empty means all.
+    #[serde(default)]
+    pub profiles: Vec<String>,
+}
+
+pub fn default_tenant() -> String {
+    "default".into()
 }
 
 fn default_max_iterations() -> usize {
@@ -124,6 +243,9 @@ pub struct TelegramConfig {
     /// refuses to start.
     #[serde(default)]
     pub allowed_users: Vec<i64>,
+    /// Profile used for tasks sent from Telegram.
+    #[serde(default = "default_model_name")]
+    pub profile: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -320,7 +442,64 @@ impl Config {
         if self.limits.max_run_seconds == 0 || self.limits.llm_timeout_seconds == 0 {
             bail!("limits must be greater than zero");
         }
+        if self.models.contains_key("default") {
+            bail!("models.default is reserved: it is the top-level provider");
+        }
+        for (name, m) in &self.models {
+            if let Some(f) = &m.fallback {
+                if f != "default" && !self.models.contains_key(f) {
+                    bail!("models.{name}.fallback refers to unknown model '{f}'");
+                }
+            }
+        }
+        for (name, p) in &self.profiles {
+            if p.model != "default" && !self.models.contains_key(&p.model) {
+                bail!(
+                    "profiles.{name}.model refers to unknown model '{}'",
+                    p.model
+                );
+            }
+        }
+        if let Some(tg) = &self.telegram {
+            if self.profile(&tg.profile).is_none() {
+                bail!(
+                    "telegram.profile refers to unknown profile '{}'",
+                    tg.profile
+                );
+            }
+        }
+        if let Some(api) = &self.api {
+            for t in &api.tokens {
+                if t.token_sha256.is_none() == t.token_env.is_none() {
+                    bail!(
+                        "api token '{}' needs exactly one of token_sha256 or token_env",
+                        t.name
+                    );
+                }
+                if let Some(h) = &t.token_sha256 {
+                    if h.len() != 64 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+                        bail!(
+                            "api token '{}': token_sha256 must be 64 hex characters",
+                            t.name
+                        );
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// The named profile; `default` is built from top-level settings when
+    /// the config does not define it.
+    pub fn profile(&self, name: &str) -> Option<ProfileConfig> {
+        match self.profiles.get(name) {
+            Some(p) => Some(p.clone()),
+            None if name == "default" => Some(ProfileConfig {
+                model: default_model_name(),
+                ..Default::default()
+            }),
+            None => None,
+        }
     }
 
     /// Extra checks for `serve`: the bot must not answer strangers.
