@@ -87,7 +87,11 @@ pub struct ShellToolConfig {
 
 impl Default for ShellToolConfig {
     fn default() -> Self {
-        Self { enabled: true, allow_sudo: false, timeout_seconds: 30 }
+        Self {
+            enabled: true,
+            allow_sudo: false,
+            timeout_seconds: 30,
+        }
     }
 }
 
@@ -101,7 +105,10 @@ pub struct FilesystemToolConfig {
 
 impl Default for FilesystemToolConfig {
     fn default() -> Self {
-        Self { enabled: true, allowed_paths: Vec::new() }
+        Self {
+            enabled: true,
+            allowed_paths: Vec::new(),
+        }
     }
 }
 
@@ -115,7 +122,10 @@ pub struct HttpToolConfig {
 
 impl Default for HttpToolConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_seconds: 30 }
+        Self {
+            enabled: true,
+            timeout_seconds: 30,
+        }
     }
 }
 
@@ -130,7 +140,6 @@ impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("Cannot read {}", path.display()))?;
-        serde_yaml::from_str(&text)
-            .with_context(|| format!("Invalid YAML in {}", path.display()))
+        serde_yaml::from_str(&text).with_context(|| format!("Invalid YAML in {}", path.display()))
     }
 }

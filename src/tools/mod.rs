@@ -26,7 +26,9 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self { tools: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            tools: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn register(&self, tool: Arc<dyn Tool>) {
@@ -34,13 +36,21 @@ impl ToolRegistry {
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.lock().unwrap().iter().map(|t| t.definition()).collect()
+        self.tools
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|t| t.definition())
+            .collect()
     }
 
     pub async fn execute(&self, name: &str, arguments: &Value) -> Result<String> {
         let tool = {
             let tools = self.tools.lock().unwrap();
-            tools.iter().find(|t| t.definition().name == name).map(Arc::clone)
+            tools
+                .iter()
+                .find(|t| t.definition().name == name)
+                .map(Arc::clone)
         };
         match tool {
             Some(t) => t.execute(arguments).await,

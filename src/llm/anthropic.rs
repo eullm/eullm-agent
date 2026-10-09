@@ -50,8 +50,14 @@ struct AnthropicResponse {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum AnthropicBlock {
-    Text { text: String },
-    ToolUse { id: String, name: String, input: Value },
+    Text {
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+        input: Value,
+    },
 }
 
 fn to_anthropic_messages(messages: &[Message]) -> (Option<String>, Vec<AnthropicMessage>) {
@@ -101,16 +107,14 @@ fn to_anthropic_messages(messages: &[Message]) -> (Option<String>, Vec<Anthropic
                     "content": msg.content,
                 });
 
-                let merged = out.last_mut()
-                    .filter(|m| m.role == "user")
-                    .and_then(|m| {
-                        if let Value::Array(arr) = &mut m.content {
-                            arr.push(new_part.clone());
-                            Some(())
-                        } else {
-                            None
-                        }
-                    });
+                let merged = out.last_mut().filter(|m| m.role == "user").and_then(|m| {
+                    if let Value::Array(arr) = &mut m.content {
+                        arr.push(new_part.clone());
+                        Some(())
+                    } else {
+                        None
+                    }
+                });
 
                 if merged.is_none() {
                     out.push(AnthropicMessage {
@@ -130,11 +134,16 @@ impl LlmClient for AnthropicClient {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse> {
         let (system, anthropic_messages) = to_anthropic_messages(messages);
 
-        let anthropic_tools: Vec<Value> = tools.iter().map(|t| json!({
-            "name": t.name,
-            "description": t.description,
-            "input_schema": t.parameters,
-        })).collect();
+        let anthropic_tools: Vec<Value> = tools
+            .iter()
+            .map(|t| {
+                json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.parameters,
+                })
+            })
+            .collect();
 
         let req = AnthropicRequest {
             model: self.model.clone(),
@@ -146,14 +155,20 @@ impl LlmClient for AnthropicClient {
 
         debug!("POST https://api.anthropic.com/v1/messages");
 
-        let resp: AnthropicResponse = self.client
+        let resp: AnthropicResponse = self
+            .client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&req)
-            .send().await.context("Anthropic request failed")?
-            .error_for_status().context("Anthropic error status")?
-            .json().await.context("Anthropic parse error")?;
+            .send()
+            .await
+            .context("Anthropic request failed")?
+            .error_for_status()
+            .context("Anthropic error status")?
+            .json()
+            .await
+            .context("Anthropic parse error")?;
 
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -162,12 +177,19 @@ impl LlmClient for AnthropicClient {
             match block {
                 AnthropicBlock::Text { text } => content.push_str(&text),
                 AnthropicBlock::ToolUse { id, name, input } => {
-                    tool_calls.push(ToolCall { id, name, arguments: input });
+                    tool_calls.push(ToolCall {
+                        id,
+                        name,
+                        arguments: input,
+                    });
                 }
             }
         }
 
-        Ok(ChatResponse { content, tool_calls })
+        Ok(ChatResponse {
+            content,
+            tool_calls,
+        })
     }
 
     fn provider_name(&self) -> &str {

@@ -75,13 +75,14 @@ fn to_openai_message(msg: &Message) -> Value {
         Role::System => json!({ "role": "system", "content": msg.content }),
         Role::User => json!({ "role": "user", "content": msg.content }),
         Role::Assistant => {
-            let tool_calls: Option<Vec<Value>> = msg.tool_calls.as_ref().map(|calls| {
-                calls.iter().map(|c| json!({
+            let tool_calls: Option<Vec<Value>> =
+                msg.tool_calls.as_ref().map(|calls| {
+                    calls.iter().map(|c| json!({
                     "id": c.id,
                     "type": "function",
                     "function": { "name": c.name, "arguments": c.arguments.to_string() },
                 })).collect()
-            });
+                });
             let mut m = json!({ "role": "assistant" });
             if !msg.content.is_empty() {
                 m["content"] = json!(msg.content);
@@ -102,14 +103,19 @@ fn to_openai_message(msg: &Message) -> Value {
 #[async_trait]
 impl LlmClient for OpenAiClient {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse> {
-        let openai_tools: Vec<Value> = tools.iter().map(|t| json!({
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description,
-                "parameters": t.parameters,
-            }
-        })).collect();
+        let openai_tools: Vec<Value> = tools
+            .iter()
+            .map(|t| {
+                json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
+                    }
+                })
+            })
+            .collect();
 
         let req = OpenAiRequest {
             model: self.model.clone(),
@@ -120,27 +126,46 @@ impl LlmClient for OpenAiClient {
         let url = format!("{}/chat/completions", self.base_url);
         debug!("POST {url}");
 
-        let resp: OpenAiResponse = self.client
+        let resp: OpenAiResponse = self
+            .client
             .post(&url)
             .bearer_auth(&self.api_key)
             .json(&req)
-            .send().await.context("OpenAI request failed")?
-            .error_for_status().context("OpenAI error status")?
-            .json().await.context("OpenAI parse error")?;
+            .send()
+            .await
+            .context("OpenAI request failed")?
+            .error_for_status()
+            .context("OpenAI error status")?
+            .json()
+            .await
+            .context("OpenAI parse error")?;
 
-        let msg = resp.choices.into_iter().next().context("empty choices")?.message;
+        let msg = resp
+            .choices
+            .into_iter()
+            .next()
+            .context("empty choices")?
+            .message;
         let content = msg.content.unwrap_or_default();
-        let tool_calls = msg.tool_calls
+        let tool_calls = msg
+            .tool_calls
             .unwrap_or_default()
             .into_iter()
             .map(|tc| {
                 let arguments = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(Value::Object(Default::default()));
-                ToolCall { id: tc.id, name: tc.function.name, arguments }
+                ToolCall {
+                    id: tc.id,
+                    name: tc.function.name,
+                    arguments,
+                }
             })
             .collect();
 
-        Ok(ChatResponse { content, tool_calls })
+        Ok(ChatResponse {
+            content,
+            tool_calls,
+        })
     }
 
     fn provider_name(&self) -> &str {

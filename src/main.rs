@@ -14,11 +14,7 @@ mod tools;
 mod wizard;
 
 use config::{Config, ProviderConfig};
-use llm::{
-    anthropic::AnthropicClient,
-    eullm::EullmClient,
-    openai::OpenAiClient,
-};
+use llm::{anthropic::AnthropicClient, eullm::EullmClient, openai::OpenAiClient};
 use modules::ModuleRegistry;
 use tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
@@ -52,10 +48,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive("eullm_agent=info".parse()?),
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive("eullm_agent=info".parse()?))
         .init();
 
     let cli = Cli::parse();
@@ -67,9 +60,7 @@ async fn main() -> Result<()> {
         wizard::run(&cli.config)?
     };
 
-    let module_registry = Arc::new(Mutex::new(
-        ModuleRegistry::load(module_state_path())?
-    ));
+    let module_registry = Arc::new(Mutex::new(ModuleRegistry::load(module_state_path())?));
 
     // Augment system prompt with current module status
     {
@@ -86,7 +77,11 @@ async fn main() -> Result<()> {
             info!("provider=anthropic model={model}");
             Arc::new(AnthropicClient::new(api_key, model))
         }
-        ProviderConfig::OpenAI { api_key, model, base_url } => {
+        ProviderConfig::OpenAI {
+            api_key,
+            model,
+            base_url,
+        } => {
             let base = base_url.as_deref().unwrap_or("https://api.openai.com/v1");
             info!("provider=openai base_url={base} model={model}");
             Arc::new(OpenAiClient::new(api_key, model, base_url.clone()))
@@ -119,7 +114,10 @@ fn build_tool_registry(
     let tc = &config.tools;
 
     if tc.shell.enabled {
-        r.register(Arc::new(ShellTool::new(tc.shell.allow_sudo, tc.shell.timeout_seconds)));
+        r.register(Arc::new(ShellTool::new(
+            tc.shell.allow_sudo,
+            tc.shell.timeout_seconds,
+        )));
     }
     if tc.filesystem.enabled {
         let paths = tc.filesystem.allowed_paths.clone();
@@ -134,7 +132,10 @@ fn build_tool_registry(
     // Module management tools (always available)
     r.register(Arc::new(ListModulesTool::new(Arc::clone(&module_registry))));
     // InstallModuleTool gets a clone of r so it can register new tools at runtime
-    r.register(Arc::new(InstallModuleTool::new(Arc::clone(&module_registry), r.clone())));
+    r.register(Arc::new(InstallModuleTool::new(
+        Arc::clone(&module_registry),
+        r.clone(),
+    )));
 
     // Register tools from already-installed modules
     {
@@ -155,5 +156,7 @@ fn module_state_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".eullm-agent").join("module-state.json")
+    PathBuf::from(home)
+        .join(".eullm-agent")
+        .join("module-state.json")
 }

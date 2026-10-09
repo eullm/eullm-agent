@@ -4,8 +4,8 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::{process::Command, time::timeout};
 
-use crate::llm::ToolDefinition;
 use super::Tool;
+use crate::llm::ToolDefinition;
 
 pub struct ShellTool {
     allow_sudo: bool,
@@ -14,7 +14,10 @@ pub struct ShellTool {
 
 impl ShellTool {
     pub fn new(allow_sudo: bool, timeout_secs: u64) -> Self {
-        Self { allow_sudo, timeout_secs: timeout_secs.max(5) }
+        Self {
+            allow_sudo,
+            timeout_secs: timeout_secs.max(5),
+        }
     }
 }
 
@@ -25,7 +28,8 @@ impl Tool for ShellTool {
             name: "shell".into(),
             description: "Execute a shell command and return stdout + stderr. \
                           Use for reading output of programs, inspecting files, \
-                          running scripts, or any system operation.".into(),
+                          running scripts, or any system operation."
+                .into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -65,7 +69,9 @@ impl Tool for ShellTool {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.is_empty() {
-            if !result.is_empty() { result.push('\n'); }
+            if !result.is_empty() {
+                result.push('\n');
+            }
             result.push_str("[stderr] ");
             result.push_str(&stderr);
         }

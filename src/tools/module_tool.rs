@@ -4,9 +4,9 @@ use serde_json::{json, Value};
 use std::process::Output;
 use std::sync::{Arc, Mutex};
 
+use super::{Tool, ToolRegistry};
 use crate::llm::ToolDefinition;
 use crate::modules::{ModuleRegistry, ModuleToolSpec};
-use super::{Tool, ToolRegistry};
 
 /// Runs a shell command using the platform-appropriate shell.
 async fn run_shell(cmd: &str) -> Result<Output> {
@@ -88,7 +88,8 @@ impl Tool for ListModulesTool {
         ToolDefinition {
             name: "list_modules".into(),
             description: "List all available modules and their installation status. \
-                         Use install_module to install a missing one.".into(),
+                         Use install_module to install a missing one."
+                .into(),
             parameters: json!({ "type": "object", "properties": {} }),
         }
     }
@@ -102,13 +103,18 @@ impl Tool for ListModulesTool {
         for m in &reg.manifests {
             if reg.state.installed.contains(&m.name) {
                 any = true;
-                out.push_str(&format!("  {} v{} — {}\n", m.name, m.version, m.description));
+                out.push_str(&format!(
+                    "  {} v{} — {}\n",
+                    m.name, m.version, m.description
+                ));
                 for t in &m.tools {
                     out.push_str(&format!("    tool: {}\n", t.name));
                 }
             }
         }
-        if !any { out.push_str("  (none)\n"); }
+        if !any {
+            out.push_str("  (none)\n");
+        }
 
         out.push_str("\n=== Available (not installed) ===\n");
         let mut any = false;
@@ -118,7 +124,9 @@ impl Tool for ListModulesTool {
                 out.push_str(&format!("  {} — {}\n", m.name, m.description));
             }
         }
-        if !any { out.push_str("  (all modules installed)\n"); }
+        if !any {
+            out.push_str("  (all modules installed)\n");
+        }
 
         Ok(out)
     }
@@ -132,7 +140,10 @@ pub struct InstallModuleTool {
 
 impl InstallModuleTool {
     pub fn new(registry: Arc<Mutex<ModuleRegistry>>, tool_registry: ToolRegistry) -> Self {
-        Self { registry, tool_registry }
+        Self {
+            registry,
+            tool_registry,
+        }
     }
 }
 
@@ -143,7 +154,8 @@ impl Tool for InstallModuleTool {
             name: "install_module".into(),
             description: "Install a module to gain new tool capabilities. \
                          Runs the platform install commands, then makes the new tools \
-                         immediately available in this session.".into(),
+                         immediately available in this session."
+                .into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -172,7 +184,10 @@ impl Tool for InstallModuleTool {
         };
 
         let manifest = manifest.ok_or_else(|| {
-            anyhow::anyhow!("Unknown module: '{}'. Use list_modules to see available modules.", name)
+            anyhow::anyhow!(
+                "Unknown module: '{}'. Use list_modules to see available modules.",
+                name
+            )
         })?;
 
         for cmd in manifest.install_commands() {
@@ -181,7 +196,8 @@ impl Tool for InstallModuleTool {
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 return Err(anyhow::anyhow!(
-                    "Install failed at '{cmd}': {}", stderr.trim()
+                    "Install failed at '{cmd}': {}",
+                    stderr.trim()
                 ));
             }
         }

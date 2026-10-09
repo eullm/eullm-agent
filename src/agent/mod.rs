@@ -12,7 +12,11 @@ pub struct Agent<'a> {
 
 impl<'a> Agent<'a> {
     pub fn new(llm: &'a dyn LlmClient, tools: &'a ToolRegistry, max_iterations: usize) -> Self {
-        Self { llm, tools, max_iterations }
+        Self {
+            llm,
+            tools,
+            max_iterations,
+        }
     }
 
     pub async fn run(
@@ -22,10 +26,7 @@ impl<'a> Agent<'a> {
         progress: impl Fn(&str),
     ) -> Result<String> {
         let tool_defs = self.tools.definitions();
-        let mut messages = vec![
-            Message::system(system_prompt),
-            Message::user(task),
-        ];
+        let mut messages = vec![Message::system(system_prompt), Message::user(task)];
 
         for iteration in 0..self.max_iterations {
             debug!("iteration {}", iteration + 1);

@@ -69,13 +69,23 @@ fn to_ollama(msg: &Message) -> OllamaMessage {
         Role::Tool => "tool",
     };
 
-    let content = if msg.content.is_empty() { None } else { Some(msg.content.clone()) };
+    let content = if msg.content.is_empty() {
+        None
+    } else {
+        Some(msg.content.clone())
+    };
 
     let tool_calls = msg.tool_calls.as_ref().map(|calls| {
-        calls.iter().map(|c| OllamaToolCall {
-            id: Some(c.id.clone()),
-            function: OllamaFunction { name: c.name.clone(), arguments: c.arguments.clone() },
-        }).collect()
+        calls
+            .iter()
+            .map(|c| OllamaToolCall {
+                id: Some(c.id.clone()),
+                function: OllamaFunction {
+                    name: c.name.clone(),
+                    arguments: c.arguments.clone(),
+                },
+            })
+            .collect()
     });
 
     OllamaMessage {
@@ -89,14 +99,19 @@ fn to_ollama(msg: &Message) -> OllamaMessage {
 #[async_trait]
 impl LlmClient for EullmClient {
     async fn chat(&self, messages: &[Message], tools: &[ToolDefinition]) -> Result<ChatResponse> {
-        let ollama_tools: Vec<Value> = tools.iter().map(|t| json!({
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description,
-                "parameters": t.parameters,
-            }
-        })).collect();
+        let ollama_tools: Vec<Value> = tools
+            .iter()
+            .map(|t| {
+                json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
+                    }
+                })
+            })
+            .collect();
 
         let req = OllamaRequest {
             model: self.model.clone(),
@@ -108,15 +123,23 @@ impl LlmClient for EullmClient {
         let url = format!("{}/api/chat", self.base_url);
         debug!("POST {url}");
 
-        let resp: OllamaResponse = self.client
+        let resp: OllamaResponse = self
+            .client
             .post(&url)
             .json(&req)
-            .send().await.context("EULLM request failed")?
-            .error_for_status().context("EULLM error status")?
-            .json().await.context("EULLM parse error")?;
+            .send()
+            .await
+            .context("EULLM request failed")?
+            .error_for_status()
+            .context("EULLM error status")?
+            .json()
+            .await
+            .context("EULLM parse error")?;
 
         let content = resp.message.content.unwrap_or_default();
-        let tool_calls = resp.message.tool_calls
+        let tool_calls = resp
+            .message
+            .tool_calls
             .unwrap_or_default()
             .into_iter()
             .enumerate()
@@ -127,7 +150,10 @@ impl LlmClient for EullmClient {
             })
             .collect();
 
-        Ok(ChatResponse { content, tool_calls })
+        Ok(ChatResponse {
+            content,
+            tool_calls,
+        })
     }
 
     fn provider_name(&self) -> &str {

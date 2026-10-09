@@ -4,8 +4,8 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-use crate::llm::ToolDefinition;
 use super::Tool;
+use crate::llm::ToolDefinition;
 
 fn is_allowed(path: &Path, allowed: &[PathBuf]) -> bool {
     if allowed.is_empty() {
@@ -44,14 +44,17 @@ impl Tool for ReadFileTool {
     }
 
     async fn execute(&self, arguments: &Value) -> Result<String> {
-        let path: PathBuf = arguments["path"].as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'path'"))?.into();
+        let path: PathBuf = arguments["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'path'"))?
+            .into();
 
         if !is_allowed(&path, &self.allowed_paths) {
             bail!("Access denied: path outside allowed_paths");
         }
 
-        fs::read_to_string(&path).await
+        fs::read_to_string(&path)
+            .await
             .map_err(|e| anyhow::anyhow!("read_file {}: {e}", path.display()))
     }
 }
@@ -86,9 +89,12 @@ impl Tool for WriteFileTool {
     }
 
     async fn execute(&self, arguments: &Value) -> Result<String> {
-        let path: PathBuf = arguments["path"].as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'path'"))?.into();
-        let content = arguments["content"].as_str()
+        let path: PathBuf = arguments["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'path'"))?
+            .into();
+        let content = arguments["content"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing 'content'"))?;
 
         if let Some(parent) = path.parent() {
@@ -98,10 +104,15 @@ impl Tool for WriteFileTool {
             fs::create_dir_all(parent).await?;
         }
 
-        fs::write(&path, content).await
+        fs::write(&path, content)
+            .await
             .map_err(|e| anyhow::anyhow!("write_file {}: {e}", path.display()))?;
 
-        Ok(format!("Written {} bytes to {}", content.len(), path.display()))
+        Ok(format!(
+            "Written {} bytes to {}",
+            content.len(),
+            path.display()
+        ))
     }
 }
 
@@ -126,7 +137,8 @@ impl Tool for ListDirTool {
 
     async fn execute(&self, arguments: &Value) -> Result<String> {
         let path = arguments["path"].as_str().unwrap_or(".");
-        let mut entries = fs::read_dir(path).await
+        let mut entries = fs::read_dir(path)
+            .await
             .map_err(|e| anyhow::anyhow!("list_dir {path}: {e}"))?;
 
         let mut names = Vec::new();
@@ -136,6 +148,10 @@ impl Tool for ListDirTool {
             names.push(if is_dir { format!("{name}/") } else { name });
         }
         names.sort();
-        Ok(if names.is_empty() { "(empty)".into() } else { names.join("\n") })
+        Ok(if names.is_empty() {
+            "(empty)".into()
+        } else {
+            names.join("\n")
+        })
     }
 }

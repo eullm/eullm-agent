@@ -20,7 +20,10 @@ pub fn run(config_path: &std::path::Path) -> Result<Config> {
 
     let yaml = serde_yaml::to_string(&config)?;
     std::fs::write(config_path, &yaml)?;
-    println!("\nConfig saved to '{}'. Starting...\n", config_path.display());
+    println!(
+        "\nConfig saved to '{}'. Starting...\n",
+        config_path.display()
+    );
 
     Ok(config)
 }
@@ -65,7 +68,11 @@ fn setup_openai() -> Result<ProviderConfig> {
     Ok(ProviderConfig::OpenAI {
         api_key,
         model,
-        base_url: if base_url_raw.is_empty() { None } else { Some(base_url_raw) },
+        base_url: if base_url_raw.is_empty() {
+            None
+        } else {
+            Some(base_url_raw)
+        },
     })
 }
 
@@ -84,7 +91,10 @@ fn pick_telegram() -> Result<Option<TelegramConfig>> {
         .filter(|s| !s.is_empty())
         .filter_map(|s| s.parse::<i64>().ok())
         .collect();
-    Ok(Some(TelegramConfig { token, allowed_users }))
+    Ok(Some(TelegramConfig {
+        token,
+        allowed_users,
+    }))
 }
 
 fn prompt(label: &str, default: &str) -> Result<String> {
@@ -97,7 +107,11 @@ fn prompt(label: &str, default: &str) -> Result<String> {
     let mut buf = String::new();
     io::stdin().read_line(&mut buf)?;
     let val = buf.trim().to_string();
-    Ok(if val.is_empty() { default.to_string() } else { val })
+    Ok(if val.is_empty() {
+        default.to_string()
+    } else {
+        val
+    })
 }
 
 fn prompt_required(label: &str) -> Result<String> {

@@ -4,8 +4,8 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-use crate::llm::ToolDefinition;
 use super::Tool;
+use crate::llm::ToolDefinition;
 
 pub struct FetchUrlTool {
     client: Client,
@@ -29,7 +29,8 @@ impl Tool for FetchUrlTool {
             name: "fetch_url".into(),
             description: "Perform an HTTP request (GET/POST/PUT/DELETE) and return the response \
                           body as text. Use for REST APIs, fetching web content, or any HTTP \
-                          endpoint. JSON responses are returned as-is.".into(),
+                          endpoint. JSON responses are returned as-is."
+                .into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -106,7 +107,11 @@ impl Tool for FetchUrlTool {
             while !text.is_char_boundary(end) {
                 end -= 1;
             }
-            format!("{}…\n[truncated — {} bytes total]", &text[..end], text.len())
+            format!(
+                "{}…\n[truncated — {} bytes total]",
+                &text[..end],
+                text.len()
+            )
         } else {
             text
         };

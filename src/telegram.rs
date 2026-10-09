@@ -81,7 +81,8 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     if let Some(task) = text.strip_prefix("/run ") {
         let task = task.trim().to_string();
         if task.is_empty() {
-            bot.send_message(msg.chat.id, "Usage: /run <task description>").await?;
+            bot.send_message(msg.chat.id, "Usage: /run <task description>")
+                .await?;
             return Ok(());
         }
 
@@ -100,7 +101,12 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
         let max_iter = state.config.max_iterations;
         let agent = Agent::new(state.llm.as_ref(), &state.tools, max_iter);
 
-        match agent.run(&system, &task, move |s| { let _ = tx.try_send(s.to_string()); }).await {
+        match agent
+            .run(&system, &task, move |s| {
+                let _ = tx.try_send(s.to_string());
+            })
+            .await
+        {
             Ok(answer) => {
                 let reply = if answer.len() > 4000 {
                     format!("{}…\n[truncated]", &answer[..4000])

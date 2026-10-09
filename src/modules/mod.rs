@@ -75,11 +75,15 @@ impl ModuleRegistry {
 
     /// Short text injected into the system prompt so the LLM knows what it has.
     pub fn status_summary(&self) -> String {
-        let installed: Vec<&str> = self.manifests.iter()
+        let installed: Vec<&str> = self
+            .manifests
+            .iter()
             .filter(|m| self.state.installed.contains(&m.name))
             .map(|m| m.name.as_str())
             .collect();
-        let not_installed: Vec<&str> = self.manifests.iter()
+        let not_installed: Vec<&str> = self
+            .manifests
+            .iter()
             .filter(|m| !self.state.installed.contains(&m.name))
             .map(|m| m.name.as_str())
             .collect();
