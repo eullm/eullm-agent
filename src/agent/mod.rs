@@ -1,24 +1,46 @@
 use anyhow::{bail, Result};
 use serde_json::Value;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
-use crate::audit::Audit;
-use crate::config::LimitsConfig;
-use crate::llm::{strip_think_blocks, LlmClient, Message, ToolCall};
+use crate::approvals::{ApprovalRequest, Approver, DenyAll, Outcome};
+use crate::audit::{Audit, Recorder, RunInfo};
+use crate::config::{LimitsConfig, Pricing, ProfileConfig};
+use crate::llm::{strip_think_blocks, LlmClient, Message, ToolCall, ToolDefinition, Usage};
+use crate::policy::{Decision, Policy};
+use crate::store::{LlmCallRecord, RunEnd, ToolCallRecord};
 use crate::tools::ToolRegistry;
 use crate::util::truncate_utf8;
 
+/// One ReAct loop: the model proposes, the policy decides, the tool runs
+/// and the recorder writes it down.
 pub struct Agent<'a> {
     llm: &'a dyn LlmClient,
     tools: &'a ToolRegistry,
     max_iterations: usize,
     max_run: Duration,
     max_tool_output_bytes: usize,
-    audit: Option<Arc<Audit>>,
-    source: &'static str,
+    max_tokens: Option<u64>,
+    max_cost: Option<f64>,
+    pricing: Option<Pricing>,
+    allowed_tools: Vec<String>,
+    policy: Arc<Policy>,
+    approver: Arc<dyn Approver>,
+    recorder: Option<Arc<dyn Recorder>>,
+    tenant: String,
+    profile: String,
+    source: String,
+}
+
+/// Running totals for one run.
+#[derive(Default)]
+struct RunState {
+    iterations: usize,
+    input_tokens: u64,
+    output_tokens: u64,
+    cost: Option<f64>,
+    tainted: bool,
 }
 
 impl<'a> Agent<'a> {
@@ -30,8 +52,16 @@ impl<'a> Agent<'a> {
             max_iterations,
             max_run: Duration::from_secs(limits.max_run_seconds),
             max_tool_output_bytes: limits.max_tool_output_bytes,
-            audit: None,
-            source: "cli",
+            max_tokens: None,
+            max_cost: None,
+            pricing: None,
+            allowed_tools: Vec::new(),
+            policy: Arc::new(Policy::default()),
+            approver: Arc::new(DenyAll),
+            recorder: None,
+            tenant: "default".into(),
+            profile: "default".into(),
+            source: "cli".into(),
         }
     }
 
@@ -41,9 +71,51 @@ impl<'a> Agent<'a> {
         self
     }
 
-    pub fn with_audit(mut self, audit: Option<Arc<Audit>>, source: &'static str) -> Self {
-        self.audit = audit;
-        self.source = source;
+    /// Apply a profile: tool subset, budgets and limits it sets.
+    pub fn with_profile(mut self, name: &str, p: &ProfileConfig) -> Self {
+        self.profile = name.to_string();
+        self.allowed_tools = p.tools.clone();
+        if let Some(n) = p.max_iterations {
+            self.max_iterations = n.max(1);
+        }
+        if let Some(s) = p.max_run_seconds {
+            self.max_run = Duration::from_secs(s.max(1));
+        }
+        self.max_tokens = p.max_tokens;
+        self.max_cost = p.max_cost;
+        self
+    }
+
+    pub fn with_pricing(mut self, pricing: Option<Pricing>) -> Self {
+        self.pricing = pricing;
+        self
+    }
+
+    pub fn with_policy(mut self, policy: Arc<Policy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    pub fn with_approver(mut self, approver: Arc<dyn Approver>) -> Self {
+        self.approver = approver;
+        self
+    }
+
+    pub fn with_recorder(mut self, recorder: Option<Arc<dyn Recorder>>) -> Self {
+        self.recorder = recorder;
+        self
+    }
+
+    /// Shorthand for a JSONL audit file as the only recorder.
+    pub fn with_audit(mut self, audit: Option<Arc<Audit>>, source: &str) -> Self {
+        self.recorder = audit.map(|a| a as Arc<dyn Recorder>);
+        self.source = source.to_string();
+        self
+    }
+
+    pub fn with_identity(mut self, tenant: &str, source: &str) -> Self {
+        self.tenant = tenant.to_string();
+        self.source = source.to_string();
         self
     }
 
@@ -53,48 +125,103 @@ impl<'a> Agent<'a> {
         task: &str,
         progress: impl Fn(&str),
     ) -> Result<String> {
-        let run_id = new_run_id();
-        if let Some(a) = &self.audit {
-            a.run_start(
-                &run_id,
-                self.source,
-                self.llm.provider_name(),
-                self.llm.model(),
-            );
-        }
-        let deadline = Instant::now() + self.max_run;
-        let mut iterations = 0;
-        let result = self
-            .run_loop(
-                &run_id,
-                system_prompt,
-                task,
-                deadline,
-                &mut iterations,
-                &progress,
-            )
-            .await;
-        if let Some(a) = &self.audit {
-            let err = result.as_ref().err().map(|e| e.to_string());
-            a.run_end(&run_id, iterations, err.as_deref().map_or(Ok(()), Err));
-        }
-        result
+        let id = uuid::Uuid::new_v4().to_string();
+        self.run_with_id(&id, system_prompt, task, progress).await
     }
 
-    async fn run_loop(
+    /// Run with an id chosen by the caller (the API creates the run row
+    /// first, so clients can poll it).
+    pub async fn run_with_id(
         &self,
         run_id: &str,
         system_prompt: &str,
         task: &str,
+        progress: impl Fn(&str),
+    ) -> Result<String> {
+        let info = RunInfo {
+            id: run_id.to_string(),
+            tenant: self.tenant.clone(),
+            profile: self.profile.clone(),
+            source: self.source.clone(),
+            provider: self.llm.provider_name().to_string(),
+            model: self.llm.model().to_string(),
+        };
+        if let Some(r) = &self.recorder {
+            r.run_start(&info).await;
+        }
+        let deadline = Instant::now() + self.max_run;
+        let mut state = RunState::default();
+        let result = self
+            .run_loop(&info, system_prompt, task, deadline, &mut state, &progress)
+            .await;
+        if let Some(r) = &self.recorder {
+            let end = RunEnd {
+                iterations: state.iterations,
+                input_tokens: state.input_tokens,
+                output_tokens: state.output_tokens,
+                cost: state.cost,
+                tainted: state.tainted,
+                output: result.as_ref().ok().cloned(),
+                error: result.as_ref().err().map(|e| e.to_string()),
+            };
+            r.run_end(&info, &end).await;
+        }
+        result
+    }
+
+    fn tool_definitions(&self) -> Vec<ToolDefinition> {
+        self.tools
+            .definitions()
+            .into_iter()
+            .filter(|d| self.tool_allowed(&d.name))
+            .collect()
+    }
+
+    fn tool_allowed(&self, name: &str) -> bool {
+        self.allowed_tools.is_empty() || self.allowed_tools.iter().any(|t| t == name)
+    }
+
+    fn account(&self, state: &mut RunState, usage: Option<Usage>) -> Option<f64> {
+        let u = usage?;
+        state.input_tokens += u.input_tokens;
+        state.output_tokens += u.output_tokens;
+        let p = self.pricing?;
+        let cost = (u.input_tokens as f64 * p.input_per_mtok
+            + u.output_tokens as f64 * p.output_per_mtok)
+            / 1_000_000.0;
+        state.cost = Some(state.cost.unwrap_or(0.0) + cost);
+        Some(cost)
+    }
+
+    fn check_budget(&self, state: &RunState) -> Result<()> {
+        if let Some(max) = self.max_tokens {
+            let used = state.input_tokens + state.output_tokens;
+            if used > max {
+                bail!("token budget exceeded ({used} of {max})");
+            }
+        }
+        if let (Some(max), Some(cost)) = (self.max_cost, state.cost) {
+            if cost > max {
+                bail!("cost budget exceeded ({cost:.4} of {max})");
+            }
+        }
+        Ok(())
+    }
+
+    async fn run_loop(
+        &self,
+        info: &RunInfo,
+        system_prompt: &str,
+        task: &str,
         deadline: Instant,
-        iterations: &mut usize,
+        state: &mut RunState,
         progress: &impl Fn(&str),
     ) -> Result<String> {
-        let tool_defs = self.tools.definitions();
+        let tool_defs = self.tool_definitions();
         let mut messages = vec![Message::system(system_prompt), Message::user(task)];
 
         for iteration in 0..self.max_iterations {
-            *iterations = iteration + 1;
+            state.iterations = iteration + 1;
             debug!("iteration {}", iteration + 1);
 
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -110,16 +237,25 @@ impl<'a> Agent<'a> {
                         self.max_run.as_secs()
                     )),
                 };
-            if let Some(a) = &self.audit {
-                let err = response.as_ref().err().map(|e| e.to_string());
-                a.llm_call(
-                    run_id,
-                    started.elapsed(),
-                    response.as_ref().ok().and_then(|r| r.usage),
-                    err.as_deref(),
-                );
+            let usage = response.as_ref().ok().and_then(|r| r.usage);
+            let cost = self.account(state, usage);
+            if let Some(r) = &self.recorder {
+                r.llm_call(
+                    info,
+                    &LlmCallRecord {
+                        provider: info.provider.clone(),
+                        model: info.model.clone(),
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        input_tokens: usage.map(|u| u.input_tokens),
+                        output_tokens: usage.map(|u| u.output_tokens),
+                        cost,
+                        error: response.as_ref().err().map(|e| e.to_string()),
+                    },
+                )
+                .await;
             }
             let response = response?;
+            self.check_budget(state)?;
 
             if response.tool_calls.is_empty() {
                 info!("done after {} iterations", iteration + 1);
@@ -135,35 +271,114 @@ impl<'a> Agent<'a> {
                 let label = format!("tool:{}", tc.name);
                 progress(&label);
                 info!("{label}");
-
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                let started = Instant::now();
-                let result = match tokio::time::timeout(remaining, self.execute_tool(tc)).await {
-                    Ok(r) => r,
-                    Err(_) => Err(anyhow::anyhow!("stopped: run time limit reached")),
-                };
-                let result_text = match &result {
-                    Ok(out) => self.cap_output(out),
-                    Err(e) => {
-                        warn!("tool {} error: {e}", tc.name);
-                        format!("Error: {e}")
-                    }
-                };
-                if let Some(a) = &self.audit {
-                    let err = result.as_ref().err().map(|e| e.to_string());
-                    let outcome = match (&result, err.as_deref()) {
-                        (Ok(out), _) => Ok(out.len()),
-                        (Err(_), Some(e)) => Err(e),
-                        (Err(_), None) => Err("error"),
-                    };
-                    a.tool_call(run_id, &tc.name, &tc.arguments, started.elapsed(), outcome);
-                }
-
+                let result_text = self.handle_tool_call(info, tc, deadline, state).await;
                 messages.push(Message::tool_result(&tc.id, result_text));
             }
         }
 
         bail!("exceeded max_iterations ({})", self.max_iterations)
+    }
+
+    /// Policy check, optional approval, execution and recording of one
+    /// call. Returns what the model sees.
+    async fn handle_tool_call(
+        &self,
+        info: &RunInfo,
+        tc: &ToolCall,
+        deadline: Instant,
+        state: &mut RunState,
+    ) -> String {
+        let started = Instant::now();
+        let mut record = ToolCallRecord {
+            tool: tc.name.clone(),
+            argument_keys: tc
+                .arguments
+                .as_object()
+                .map(|o| o.keys().cloned().collect())
+                .unwrap_or_default(),
+            decision: "allow".into(),
+            decision_reason: None,
+            approval_id: None,
+            duration_ms: 0,
+            output_bytes: None,
+            error: None,
+        };
+
+        let decision = if self.tool_allowed(&tc.name) {
+            self.policy.evaluate(&tc.name, &self.profile, state.tainted)
+        } else {
+            Decision::Deny(format!("tool not available in profile '{}'", self.profile))
+        };
+        record.decision = decision.label().into();
+        record.decision_reason = decision.reason().map(str::to_string);
+
+        let gate: Result<(), String> = match &decision {
+            Decision::Allow => Ok(()),
+            Decision::Deny(reason) => Err(format!("denied by policy: {reason}")),
+            Decision::RequireApproval(reason) => {
+                let req = ApprovalRequest {
+                    tenant: self.tenant.clone(),
+                    run_id: info.id.clone(),
+                    tool: tc.name.clone(),
+                    arguments: tc.arguments.clone(),
+                    reason: reason.clone(),
+                };
+                match self.approver.request(req).await {
+                    Ok((id, outcome)) => {
+                        record.approval_id = id;
+                        match outcome {
+                            Outcome::Approved { by } => {
+                                record.decision_reason =
+                                    Some(format!("{reason}; approved by {by}"));
+                                Ok(())
+                            }
+                            Outcome::Denied { by, note } => Err(format!(
+                                "a person ({by}) refused this action{}",
+                                note.map(|n| format!(": {n}")).unwrap_or_default()
+                            )),
+                            Outcome::Expired => {
+                                Err("nobody approved this action in time".to_string())
+                            }
+                        }
+                    }
+                    Err(e) => Err(format!("approval could not be requested: {e}")),
+                }
+            }
+        };
+
+        let result = match gate {
+            Err(msg) => Err(anyhow::anyhow!(msg)),
+            Ok(()) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                let r = match tokio::time::timeout(remaining, self.execute_tool(tc)).await {
+                    Ok(r) => r,
+                    Err(_) => Err(anyhow::anyhow!("stopped: run time limit reached")),
+                };
+                // Whatever the tool returned may carry instructions written
+                // by a third party.
+                if self.policy.taints(&tc.name) {
+                    state.tainted = true;
+                }
+                r
+            }
+        };
+
+        let text = match &result {
+            Ok(out) => {
+                record.output_bytes = Some(out.len() as u64);
+                self.cap_output(out)
+            }
+            Err(e) => {
+                warn!("tool {} error: {e}", tc.name);
+                record.error = Some(e.to_string());
+                format!("Error: {e}")
+            }
+        };
+        record.duration_ms = started.elapsed().as_millis() as u64;
+        if let Some(r) = &self.recorder {
+            r.tool_call(info, &record).await;
+        }
+        text
     }
 
     async fn execute_tool(&self, tc: &ToolCall) -> Result<String> {
@@ -196,17 +411,4 @@ impl<'a> Agent<'a> {
             out.len()
         )
     }
-}
-
-fn new_run_id() -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    format!(
-        "{ms:x}-{:x}-{:x}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    )
 }
