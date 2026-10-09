@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0
+
+The Core as a service (phase F1): other programs can start runs, make model
+calls and decide approvals over HTTP, with state and audit in PostgreSQL.
+
+### Added
+
+- `eullm-agent api`: HTTP API (`/v1/runs`, `/v1/llm/chat`, `/v1/approvals`,
+  `/v1/health`) with bearer tokens per tenant, documented in
+  `docs/openapi.json` and checked by contract tests.
+- `eullm-agent token new` to create API tokens (only the SHA-256 is stored).
+- PostgreSQL store (`database`): schema `core` with runs, model calls, tool
+  calls, approvals and an append-only `audit_events` table; migrations run
+  at start. Without a database the state is kept in memory.
+- Model Router (`models`): named models with fallback chains and pricing.
+- Profiles (`profiles`): model, allowed tools, iteration and time limits,
+  token and cost budgets per run.
+- Policy engine (`policy_file`): allow / deny / require_approval per tool and
+  profile; runs that read external content are tainted and their side
+  effects need approval.
+- Approval queue: runs wait for a decision from the API, from Telegram
+  (`/approve`, `/deny`) or from the terminal; no answer in time is a refusal.
+- Telegram tasks run in the background so approvals can be answered, and use
+  `telegram.profile`.
+
+### Changed
+
+- The audit log records the policy decision of every tool call and the
+  token totals, cost and taint of every run.
+
 ## 0.2.0
 
 Security hardening release (Sprint F0). Configurations from 0.1.x still load,

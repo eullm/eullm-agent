@@ -1,0 +1,35 @@
+# EuLLM Agent — example tool policy (set `policy_file: policy.yaml`).
+#
+# For every tool call the model asks for, the first matching rule decides:
+#   allow             the tool runs
+#   deny              the model is told the call was refused
+#   require_approval  the run waits for a person (API, Telegram or terminal)
+# A rule can be limited to some profiles, and to tainted or clean runs.
+# Tools not matched by any rule get `default`.
+
+default: deny
+
+rules:
+  - tool: read_file
+    effect: allow
+  - tool: list_dir
+    effect: allow
+  - tool: list_modules
+    effect: allow
+  - tool: fetch_url
+    effect: allow
+  - tool: write_file
+    effect: require_approval
+    reason: writing files needs a person
+  - tool: run_program
+    profiles: [maintenance]
+    effect: require_approval
+    reason: running programs needs a person
+
+# A run that has read external content (web pages, files, documents) is
+# "tainted": the content may try to steer the model. From then on, tools
+# with side effects get `on_effect` even if a rule allowed them.
+taint:
+  sources: [fetch_url, read_file, ocr_image, pdf_to_text]
+  effects: [write_file, run_program]
+  on_effect: require_approval

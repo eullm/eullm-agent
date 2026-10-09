@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
+use eullm_agent::approvals::TerminalApprover;
 use eullm_agent::audit::Audit;
 use eullm_agent::config::Config;
 use eullm_agent::modules::ModuleRegistry;
-use eullm_agent::{agent, setup, telegram, wizard};
+use eullm_agent::{agent, api, setup, telegram, wizard};
 
 #[derive(Parser)]
 #[command(name = "eullm-agent", version, about = "EULLM autonomous task agent")]
@@ -30,11 +31,28 @@ enum Commands {
         /// Task description
         task: String,
     },
+    /// Start the Core HTTP API (runs, model calls, approvals)
+    Api {
+        /// Address to listen on (overrides api.listen)
+        #[arg(long)]
+        listen: Option<String>,
+    },
     /// List or install modules (operator only; the agent cannot install them)
     Module {
         #[command(subcommand)]
         action: ModuleAction,
     },
+    /// Manage API tokens
+    Token {
+        #[command(subcommand)]
+        action: TokenAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum TokenAction {
+    /// Print a new random token and the SHA-256 to put in api.tokens
+    New,
 }
 
 #[derive(Subcommand)]
@@ -63,6 +81,16 @@ async fn main() -> Result<()> {
     if let Commands::Module { action } = &cli.command {
         return module_command(action, &module_registry);
     }
+    if let Commands::Token {
+        action: TokenAction::New,
+    } = &cli.command
+    {
+        let token = api::new_token();
+        println!("token:        {token}");
+        println!("token_sha256: {}", api::sha256_hex(&token));
+        println!("\nGive the token to the client; put only token_sha256 in api.tokens.");
+        return Ok(());
+    }
 
     let mut config = if cli.config.exists() {
         Config::load(&cli.config)
@@ -79,28 +107,56 @@ async fn main() -> Result<()> {
         config.system_prompt.push_str(&reg.status_summary());
     }
 
-    let llm = setup::build_llm(&config)?;
-    let tools = setup::build_tools(&config, Arc::clone(&module_registry))?;
-    let audit = match &config.audit_log {
-        Some(path) => Some(Arc::new(Audit::open(path)?)),
-        None => None,
-    };
-
     match cli.command {
         Commands::Serve => {
             config.validate_telegram()?;
-            telegram::serve(Arc::new(config), llm, Arc::new(tools), audit).await?;
+            let core = setup::build_core(Arc::new(config), Arc::clone(&module_registry)).await?;
+            telegram::serve(core).await?;
+        }
+        Commands::Api { listen } => {
+            let api_cfg = config
+                .api
+                .clone()
+                .context("missing api section in the config")?;
+            let tokens = api_cfg
+                .tokens
+                .iter()
+                .map(api::ApiToken::resolve)
+                .collect::<Result<Vec<_>>>()?;
+            let listen = listen.unwrap_or(api_cfg.listen);
+            let core = setup::build_core(Arc::new(config), Arc::clone(&module_registry)).await?;
+            api::serve(core, &listen, tokens).await?;
         }
         Commands::Run { task } => {
-            let agent = agent::Agent::new(llm.as_ref(), &tools, config.max_iterations)
+            let router = eullm_agent::router::ModelRouter::from_config(&config)?;
+            let profile = config.profile("default").unwrap_or_default();
+            let model = router
+                .get(&profile.model)
+                .context("the default profile uses an unknown model")?
+                .clone();
+            let tools = setup::build_tools(&config, Arc::clone(&module_registry))?;
+            let policy = setup::load_policy(&config)?;
+            let audit = match &config.audit_log {
+                Some(path) => Some(Arc::new(Audit::open(path)?)),
+                None => None,
+            };
+            let system_prompt = profile
+                .system_prompt
+                .clone()
+                .unwrap_or_else(|| config.system_prompt.clone());
+            let agent = agent::Agent::new(model.client.as_ref(), &tools, config.max_iterations)
                 .with_limits(&config.limits)
+                .with_profile("default", &profile)
+                .with_pricing(model.pricing)
+                .with_policy(policy)
+                .with_approver(Arc::new(TerminalApprover))
                 .with_audit(audit, "cli");
             let result = agent
-                .run(&config.system_prompt, &task, |s| println!("[\u{2022}] {s}"))
+                .run(&system_prompt, &task, |s| println!("[\u{2022}] {s}"))
                 .await?;
             println!("{result}");
         }
-        Commands::Module { .. } => unreachable!(),
+        Commands::Module { .. } | Commands::Token { .. } => unreachable!(),
     }
 
     Ok(())

@@ -4,11 +4,17 @@
 //! tests in `tests/` use the same modules.
 
 pub mod agent;
+pub mod api;
+pub mod approvals;
 pub mod audit;
 pub mod config;
 pub mod llm;
 pub mod modules;
+pub mod policy;
+pub mod router;
+pub mod service;
 pub mod setup;
+pub mod store;
 pub mod telegram;
 pub mod tools;
 pub mod util;

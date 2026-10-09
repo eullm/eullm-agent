@@ -3,28 +3,19 @@ use std::sync::Arc;
 use teloxide::prelude::*;
 use tracing::{info, warn};
 
-use crate::{
-    agent::Agent, audit::Audit, config::resolve_secret, config::Config, llm::LlmClient,
-    tools::ToolRegistry, util::truncate_utf8,
-};
-
-struct BotState {
-    llm: Arc<dyn LlmClient>,
-    tools: Arc<ToolRegistry>,
-    config: Arc<Config>,
-    audit: Option<Arc<Audit>>,
-}
+use crate::approvals::Notify;
+use crate::config::resolve_secret;
+use crate::service::{Core, StartRun};
+use crate::store::{Approval, ApprovalStatus};
+use crate::util::truncate_utf8;
 
 /// Longest answer sent in one Telegram message (the API limit is 4096).
 const MAX_REPLY_BYTES: usize = 4000;
+/// Tenant of runs started from Telegram.
+const TENANT: &str = "default";
 
-pub async fn serve(
-    config: Arc<Config>,
-    llm: Arc<dyn LlmClient>,
-    tools: Arc<ToolRegistry>,
-    audit: Option<Arc<Audit>>,
-) -> Result<()> {
-    let tg = config.validate_telegram()?;
+pub async fn serve(core: Arc<Core>) -> Result<()> {
+    let tg = core.config.validate_telegram()?;
     let token = resolve_secret(&tg.token, &tg.token_env)?
         .ok_or_else(|| anyhow::anyhow!("telegram.token or telegram.token_env is required"))?;
 
@@ -34,17 +25,10 @@ pub async fn serve(
         tg.allowed_users.len()
     );
 
-    let state = Arc::new(BotState {
-        llm,
-        tools,
-        config,
-        audit,
-    });
-
     teloxide::repl(bot, move |bot: Bot, msg: Message| {
-        let state = Arc::clone(&state);
+        let core = Arc::clone(&core);
         async move {
-            if let Err(e) = dispatch(bot, msg, state).await {
+            if let Err(e) = dispatch(bot, msg, core).await {
                 warn!("dispatch error: {e}");
             }
             respond(())
@@ -55,8 +39,32 @@ pub async fn serve(
     Ok(())
 }
 
-async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
-    let Some(tg) = state.config.telegram.as_ref() else {
+fn approval_message(a: &Approval) -> String {
+    let args = serde_json::to_string_pretty(&a.arguments).unwrap_or_default();
+    let short = &a.id[..8];
+    format!(
+        "⚠ Approval needed\nTool: {}\nReason: {}\nArguments:\n{}\n\n/approve {short}\n/deny {short}",
+        a.tool,
+        a.reason,
+        truncate_utf8(&args, 2500)
+    )
+}
+
+/// Find a pending approval by full id or unique prefix.
+async fn find_pending(core: &Core, id: &str) -> Result<Option<String>> {
+    let pending = core
+        .store
+        .list_approvals(TENANT, Some(ApprovalStatus::Pending))
+        .await?;
+    let matches: Vec<&Approval> = pending.iter().filter(|a| a.id.starts_with(id)).collect();
+    Ok(match matches.as_slice() {
+        [one] => Some(one.id.clone()),
+        _ => None,
+    })
+}
+
+async fn dispatch(bot: Bot, msg: Message, core: Arc<Core>) -> Result<()> {
+    let Some(tg) = core.config.telegram.as_ref() else {
         return Ok(());
     };
     // Channel posts and anonymous admins have no sender: never authorised.
@@ -77,25 +85,56 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     if text == "/help" || text.starts_with("/help ") {
         bot.send_message(
             msg.chat.id,
-            "/run <task> — execute a task\n/status — show provider & tools\n/help — this message",
+            "/run <task> — execute a task\n/approve <id> — allow a pending action\n\
+             /deny <id> [note] — refuse a pending action\n/status — show models & tools\n\
+             /help — this message",
         )
         .await?;
         return Ok(());
     }
 
     if text == "/status" {
-        let defs = state.tools.definitions();
+        let defs = core.tools.definitions();
         let tool_names: Vec<&str> = defs.iter().map(|t| t.name.as_str()).collect();
         bot.send_message(
             msg.chat.id,
             format!(
-                "Provider: {}\nTools: {}",
-                state.llm.provider_name(),
+                "Models: {}\nTools: {}",
+                core.router.names().join(", "),
                 tool_names.join(", "),
             ),
         )
         .await?;
         return Ok(());
+    }
+
+    for (cmd, approve) in [("/approve ", true), ("/deny ", false)] {
+        if let Some(rest) = text.strip_prefix(cmd) {
+            let mut parts = rest.trim().splitn(2, ' ');
+            let id = parts.next().unwrap_or_default();
+            let note = parts.next().map(str::trim).filter(|s| !s.is_empty());
+            let reply = match find_pending(&core, id).await? {
+                None => "No pending approval with that id.".to_string(),
+                Some(full) => {
+                    let by = format!("telegram:{uid}");
+                    match core
+                        .approvals
+                        .decide(TENANT, &full, approve, &by, note)
+                        .await?
+                    {
+                        Some(a) => format!(
+                            "{} {}: {}",
+                            if approve { "✅" } else { "⛔" },
+                            a.status.as_str(),
+                            a.tool
+                        ),
+                        None => "That approval was already decided.".to_string(),
+                    }
+                }
+            };
+            bot.send_message(msg.chat.id, reply).await?;
+            return Ok(());
+        }
     }
 
     if let Some(task) = text.strip_prefix("/run ") {
@@ -107,40 +146,38 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
         }
 
         bot.send_message(msg.chat.id, format!("▶ {task}")).await?;
-
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(16);
-        let bot_p = bot.clone();
         let chat_id = msg.chat.id;
-        tokio::spawn(async move {
-            while let Some(m) = rx.recv().await {
-                let _ = bot_p.send_message(chat_id, m).await;
-            }
+        let notify_bot = bot.clone();
+        let notify: Notify = Arc::new(move |a: &Approval| {
+            let bot = notify_bot.clone();
+            let text = approval_message(a);
+            tokio::spawn(async move {
+                let _ = bot.send_message(chat_id, text).await;
+            });
         });
-
-        let system = state.config.system_prompt.clone();
-        let max_iter = state.config.max_iterations;
-        let agent = Agent::new(state.llm.as_ref(), &state.tools, max_iter)
-            .with_limits(&state.config.limits)
-            .with_audit(state.audit.clone(), "telegram");
-
-        match agent
-            .run(&system, &task, move |s| {
-                let _ = tx.try_send(s.to_string());
-            })
-            .await
-        {
-            Ok(answer) => {
-                let reply = if answer.len() > MAX_REPLY_BYTES {
-                    format!("{}…\n[truncated]", truncate_utf8(&answer, MAX_REPLY_BYTES))
-                } else {
-                    answer
-                };
-                bot.send_message(chat_id, reply).await?;
-            }
-            Err(e) => {
-                bot.send_message(chat_id, format!("❌ {e}")).await?;
-            }
-        }
+        let profile = tg.profile.clone();
+        // Run in the background: updates from one chat are handled in
+        // order, and /approve must get through while the run waits.
+        tokio::spawn(async move {
+            let req = StartRun {
+                tenant: TENANT.into(),
+                profile,
+                input: task,
+                source: format!("telegram:{uid}"),
+                notify: Some(notify),
+            };
+            let reply = match core.run_now(req).await {
+                Ok((_, Ok(answer))) => {
+                    if answer.len() > MAX_REPLY_BYTES {
+                        format!("{}…\n[truncated]", truncate_utf8(&answer, MAX_REPLY_BYTES))
+                    } else {
+                        answer
+                    }
+                }
+                Ok((_, Err(e))) | Err(e) => format!("❌ {e}"),
+            };
+            let _ = bot.send_message(chat_id, reply).await;
+        });
         return Ok(());
     }
 

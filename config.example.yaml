@@ -36,6 +36,49 @@ provider:
 #   model: gpt-4o
 #   # base_url: https://api.openai.com/v1
 
+# ── Model Router and profiles ─────────────────────────────────────────────────
+# `default` is the provider above. Add more models by name, with an optional
+# fallback and price per million tokens (used for run cost and budgets).
+#
+# models:
+#   claude:
+#     provider:
+#       type: anthropic
+#       api_key_env: ANTHROPIC_API_KEY
+#     fallback: default
+#     pricing: { input_per_mtok: 3.0, output_per_mtok: 15.0 }
+#
+# Profiles choose a model, the tools a run may use, and its budget. The
+# `default` profile is used when a run names none.
+#
+# profiles:
+#   planner:
+#     model: default
+#     tools: [fetch_url]
+#     max_iterations: 8
+#     max_run_seconds: 300
+#     max_tokens: 200000
+#     max_cost: 0.50
+
+# Tool policy (allow / deny / require_approval); see policy.example.yaml.
+# Without it every registered tool is allowed and side effects after reading
+# external content need approval.
+# policy_file: policy.yaml
+
+# ── Core API and database (eullm-agent api) ───────────────────────────────────
+# database:
+#   url_env: DATABASE_URL        # postgres://user:pass@host/db
+#
+# api:
+#   listen: 127.0.0.1:8088
+#   approval_timeout_seconds: 3600
+#   max_concurrent_runs: 4
+#   tokens:                       # create with: eullm-agent token new
+#     - name: editorial
+#       tenant: default
+#       token_sha256: "<64 hex characters>"
+#       profiles: [planner]       # empty = all profiles
+
 # ── Telegram bot ──────────────────────────────────────────────────────────────
 # Needed only for `eullm-agent serve`. Get a token from @BotFather.
 # `allowed_users` is required: the bot refuses to start with an empty list.
@@ -43,6 +86,7 @@ provider:
 # telegram:
 #   token_env: TELEGRAM_BOT_TOKEN
 #   allowed_users: [123456789]
+#   profile: default              # profile for tasks sent from Telegram
 
 # ── Agent ─────────────────────────────────────────────────────────────────────
 max_iterations: 20
