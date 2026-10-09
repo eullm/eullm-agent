@@ -5,10 +5,13 @@ use std::sync::{Arc, Mutex};
 
 use crate::llm::ToolDefinition;
 
+pub mod exec;
 pub mod filesystem;
 pub mod http;
 pub mod module_tool;
-pub mod shell;
+pub mod net_guard;
+pub mod process;
+pub mod sandbox;
 
 #[async_trait]
 pub trait Tool: Send + Sync {
@@ -17,8 +20,7 @@ pub trait Tool: Send + Sync {
 }
 
 /// Shared, cloneable tool registry with interior mutability.
-/// Clones share the same underlying tool list — modules installed at runtime
-/// become immediately visible to all clones (including ones held by InstallModuleTool).
+/// Clones share the same underlying tool list.
 #[derive(Clone)]
 pub struct ToolRegistry {
     tools: Arc<Mutex<Vec<Arc<dyn Tool>>>>,
@@ -26,21 +28,40 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self { tools: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            tools: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
-    pub fn register(&self, tool: Arc<dyn Tool>) {
-        self.tools.lock().unwrap().push(tool);
+    /// Add a tool. A second tool with the same name is refused, so a module
+    /// cannot shadow a built-in tool.
+    pub fn register(&self, tool: Arc<dyn Tool>) -> bool {
+        let name = tool.definition().name;
+        let mut tools = self.tools.lock().unwrap();
+        if tools.iter().any(|t| t.definition().name == name) {
+            tracing::warn!("tool '{name}' already registered, ignoring the duplicate");
+            return false;
+        }
+        tools.push(tool);
+        true
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.lock().unwrap().iter().map(|t| t.definition()).collect()
+        self.tools
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|t| t.definition())
+            .collect()
     }
 
     pub async fn execute(&self, name: &str, arguments: &Value) -> Result<String> {
         let tool = {
             let tools = self.tools.lock().unwrap();
-            tools.iter().find(|t| t.definition().name == name).map(Arc::clone)
+            tools
+                .iter()
+                .find(|t| t.definition().name == name)
+                .map(Arc::clone)
         };
         match tool {
             Some(t) => t.execute(arguments).await,

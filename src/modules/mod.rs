@@ -10,8 +10,46 @@ pub struct ModuleToolSpec {
     pub name: String,
     pub description: String,
     pub parameters: serde_json::Value,
-    /// Shell command template; use {arg_name} for argument substitution.
+    /// Program and arguments, split on whitespace. A token that is exactly
+    /// `{arg_name}` is replaced by that argument as a single argv element;
+    /// nothing is ever passed to a shell.
     pub command: String,
+    /// Arguments that name files: resolved inside the workspace.
+    pub path_params: Vec<String>,
+}
+
+/// One token of a parsed command template.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArgvToken {
+    Literal(String),
+    Param(String),
+}
+
+impl ModuleToolSpec {
+    /// Split the template into argv tokens. A placeholder must be a whole
+    /// token: `--file={path}` is rejected because it cannot be passed safely.
+    pub fn argv_template(&self) -> anyhow::Result<Vec<ArgvToken>> {
+        let mut out = Vec::new();
+        for tok in self.command.split_whitespace() {
+            if let Some(name) = tok.strip_prefix('{').and_then(|t| t.strip_suffix('}')) {
+                if name.is_empty() || name.contains(['{', '}']) {
+                    anyhow::bail!("invalid placeholder '{tok}' in module {}", self.name);
+                }
+                out.push(ArgvToken::Param(name.to_string()));
+            } else if tok.contains(['{', '}']) {
+                anyhow::bail!(
+                    "placeholder inside a larger token '{tok}' in module {}",
+                    self.name
+                );
+            } else {
+                out.push(ArgvToken::Literal(tok.to_string()));
+            }
+        }
+        match out.first() {
+            Some(ArgvToken::Literal(_)) => Ok(out),
+            _ => anyhow::bail!("module {} must start with a program name", self.name),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -19,11 +57,8 @@ pub struct ModuleManifest {
     pub name: String,
     pub description: String,
     pub version: &'static str,
-    #[allow(dead_code)]
     pub install_linux: Vec<String>,
-    #[allow(dead_code)]
     pub install_macos: Vec<String>,
-    #[allow(dead_code)]
     pub install_windows: Vec<String>,
     pub tools: Vec<ModuleToolSpec>,
 }
@@ -75,11 +110,15 @@ impl ModuleRegistry {
 
     /// Short text injected into the system prompt so the LLM knows what it has.
     pub fn status_summary(&self) -> String {
-        let installed: Vec<&str> = self.manifests.iter()
+        let installed: Vec<&str> = self
+            .manifests
+            .iter()
             .filter(|m| self.state.installed.contains(&m.name))
             .map(|m| m.name.as_str())
             .collect();
-        let not_installed: Vec<&str> = self.manifests.iter()
+        let not_installed: Vec<&str> = self
+            .manifests
+            .iter()
             .filter(|m| !self.state.installed.contains(&m.name))
             .map(|m| m.name.as_str())
             .collect();
@@ -93,8 +132,96 @@ impl ModuleRegistry {
                 "\nAvailable modules (not installed): {}",
                 not_installed.join(", ")
             ));
-            s.push_str("\nUse list_modules to inspect them and install_module to install one.");
+            s.push_str("\nAn operator can install them with `eullm-agent module install <name>`.");
         }
         s
+    }
+
+    /// Human-readable list of modules, installed first.
+    pub fn listing(&self) -> String {
+        let mut out = String::from("=== Installed modules ===\n");
+        let mut any = false;
+        for m in &self.manifests {
+            if self.state.installed.contains(&m.name) {
+                any = true;
+                out.push_str(&format!(
+                    "  {} v{} — {}\n",
+                    m.name, m.version, m.description
+                ));
+                for t in &m.tools {
+                    out.push_str(&format!("    tool: {}\n", t.name));
+                }
+            }
+        }
+        if !any {
+            out.push_str("  (none)\n");
+        }
+        out.push_str("\n=== Available (not installed) ===\n");
+        let mut any = false;
+        for m in &self.manifests {
+            if !self.state.installed.contains(&m.name) {
+                any = true;
+                out.push_str(&format!("  {} — {}\n", m.name, m.description));
+            }
+        }
+        if !any {
+            out.push_str("  (all modules installed)\n");
+        }
+        out
+    }
+
+    /// Run a module's install commands and record it as installed. Called
+    /// only from the operator's CLI, never by the agent.
+    pub fn install(&mut self, name: &str) -> Result<()> {
+        let manifest = self
+            .manifests
+            .iter()
+            .find(|m| m.name == name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Unknown module '{name}'"))?;
+        for cmd in manifest.install_commands() {
+            println!("$ {cmd}");
+            #[cfg(target_os = "windows")]
+            let status = std::process::Command::new("cmd")
+                .arg("/C")
+                .arg(cmd)
+                .status()?;
+            #[cfg(not(target_os = "windows"))]
+            let status = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(cmd)
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("install failed at '{cmd}'");
+            }
+        }
+        self.state.installed.insert(name.to_string());
+        self.save_state()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_templates_parse() {
+        for m in builtin::all_modules() {
+            for t in &m.tools {
+                t.argv_template().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn placeholders_inside_tokens_are_rejected() {
+        let spec = ModuleToolSpec {
+            name: "x".into(),
+            description: String::new(),
+            parameters: serde_json::json!({}),
+            command: "prog --file={path}".into(),
+            path_params: vec![],
+        };
+        assert!(spec.argv_template().is_err());
     }
 }

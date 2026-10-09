@@ -3,28 +3,43 @@ use std::sync::Arc;
 use teloxide::prelude::*;
 use tracing::{info, warn};
 
-use crate::{agent::Agent, config::Config, llm::LlmClient, tools::ToolRegistry};
+use crate::{
+    agent::Agent, audit::Audit, config::resolve_secret, config::Config, llm::LlmClient,
+    tools::ToolRegistry, util::truncate_utf8,
+};
 
 struct BotState {
     llm: Arc<dyn LlmClient>,
     tools: Arc<ToolRegistry>,
     config: Arc<Config>,
+    audit: Option<Arc<Audit>>,
 }
+
+/// Longest answer sent in one Telegram message (the API limit is 4096).
+const MAX_REPLY_BYTES: usize = 4000;
 
 pub async fn serve(
     config: Arc<Config>,
     llm: Arc<dyn LlmClient>,
     tools: Arc<ToolRegistry>,
+    audit: Option<Arc<Audit>>,
 ) -> Result<()> {
-    let tg = config
-        .telegram
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Missing [telegram] section in config.yaml"))?;
+    let tg = config.validate_telegram()?;
+    let token = resolve_secret(&tg.token, &tg.token_env)?
+        .ok_or_else(|| anyhow::anyhow!("telegram.token or telegram.token_env is required"))?;
 
-    let bot = Bot::new(&tg.token);
-    info!("Telegram bot started");
+    let bot = Bot::new(token);
+    info!(
+        "Telegram bot started, {} allowed user(s)",
+        tg.allowed_users.len()
+    );
 
-    let state = Arc::new(BotState { llm, tools, config });
+    let state = Arc::new(BotState {
+        llm,
+        tools,
+        config,
+        audit,
+    });
 
     teloxide::repl(bot, move |bot: Bot, msg: Message| {
         let state = Arc::clone(&state);
@@ -41,10 +56,15 @@ pub async fn serve(
 }
 
 async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
-    let tg = state.config.telegram.as_ref().unwrap();
-
-    let uid = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
-    if !tg.allowed_users.is_empty() && !tg.allowed_users.contains(&uid) {
+    let Some(tg) = state.config.telegram.as_ref() else {
+        return Ok(());
+    };
+    // Channel posts and anonymous admins have no sender: never authorised.
+    let Some(uid) = msg.from().map(|u| u.id.0 as i64) else {
+        warn!("Rejected message without a sender");
+        return Ok(());
+    };
+    if !is_allowed(&tg.allowed_users, uid) {
         warn!("Rejected unauthorized user {uid}");
         return Ok(());
     }
@@ -81,7 +101,8 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     if let Some(task) = text.strip_prefix("/run ") {
         let task = task.trim().to_string();
         if task.is_empty() {
-            bot.send_message(msg.chat.id, "Usage: /run <task description>").await?;
+            bot.send_message(msg.chat.id, "Usage: /run <task description>")
+                .await?;
             return Ok(());
         }
 
@@ -98,12 +119,19 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
 
         let system = state.config.system_prompt.clone();
         let max_iter = state.config.max_iterations;
-        let agent = Agent::new(state.llm.as_ref(), &state.tools, max_iter);
+        let agent = Agent::new(state.llm.as_ref(), &state.tools, max_iter)
+            .with_limits(&state.config.limits)
+            .with_audit(state.audit.clone(), "telegram");
 
-        match agent.run(&system, &task, move |s| { let _ = tx.try_send(s.to_string()); }).await {
+        match agent
+            .run(&system, &task, move |s| {
+                let _ = tx.try_send(s.to_string());
+            })
+            .await
+        {
             Ok(answer) => {
-                let reply = if answer.len() > 4000 {
-                    format!("{}…\n[truncated]", &answer[..4000])
+                let reply = if answer.len() > MAX_REPLY_BYTES {
+                    format!("{}…\n[truncated]", truncate_utf8(&answer, MAX_REPLY_BYTES))
                 } else {
                     answer
                 };
@@ -117,4 +145,9 @@ async fn dispatch(bot: Bot, msg: Message, state: Arc<BotState>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Only listed users may send tasks; an empty list allows nobody.
+pub fn is_allowed(allowed_users: &[i64], uid: i64) -> bool {
+    allowed_users.contains(&uid)
 }
