@@ -3,7 +3,7 @@
   "info": {
     "title": "EuLLM Agent Core API",
     "version": "0.3.0",
-    "description": "Runs, single model calls, approvals and checked HTTP fetches. Every endpoint except health and this document needs `Authorization: Bearer <token>`. Data is scoped to the tenant of the token."
+    "description": "Runs, single model calls, approvals and checked HTTP fetches, usage per tenant. Every endpoint except health and this document needs `Authorization: Bearer <token>`. Data is scoped to the tenant of the token."
   },
   "servers": [
     {
@@ -592,6 +592,87 @@
             "type": "integer"
           }
         }
+      },
+      "UsagePeriod": {
+        "type": "object",
+        "required": [
+          "runs",
+          "llm_calls",
+          "input_tokens",
+          "output_tokens",
+          "cost",
+          "fetches"
+        ],
+        "properties": {
+          "runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "llm_calls": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Model calls, inside runs and through /v1/llm/chat"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cost": {
+            "type": "number",
+            "description": "Sum of known costs; calls to models without pricing count as zero"
+          },
+          "fetches": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "TenantLimits": {
+        "type": "object",
+        "properties": {
+          "max_cost_per_month": {
+            "type": "number"
+          },
+          "max_tokens_per_month": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_runs_per_day": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_fetches_per_day": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "TenantUsage": {
+        "type": "object",
+        "required": [
+          "tenant",
+          "day",
+          "month",
+          "limits"
+        ],
+        "properties": {
+          "tenant": {
+            "type": "string"
+          },
+          "day": {
+            "$ref": "#/components/schemas/UsagePeriod"
+          },
+          "month": {
+            "$ref": "#/components/schemas/UsagePeriod"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/TenantLimits"
+          }
+        }
       }
     }
   },
@@ -676,6 +757,16 @@
           },
           "403": {
             "description": "Profile not allowed for this token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The tenant reached its daily runs or monthly cost or token limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -828,6 +919,16 @@
           },
           "502": {
             "description": "The provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The tenant reached its monthly cost or token limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -1017,6 +1118,43 @@
           },
           "502": {
             "description": "The request failed (DNS, connection, timeout, too many redirects)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The tenant used up its fetches for today (UTC)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "summary": "Usage of the caller's tenant in the current UTC day and month, with its limits (a limit that is absent does not apply)",
+        "responses": {
+          "200": {
+            "description": "Usage and limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantUsage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
             "content": {
               "application/json": {
                 "schema": {

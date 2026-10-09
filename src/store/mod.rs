@@ -102,6 +102,17 @@ pub struct FetchRecord {
     pub error: Option<String>,
 }
 
+/// What a tenant used since a moment: the basis for limits and billing.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct Usage {
+    pub runs: u64,
+    pub llm_calls: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cost: f64,
+    pub fetches: u64,
+}
+
 /// One step of a run, as returned by the API.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -212,6 +223,8 @@ pub trait Store: Send + Sync {
         call: &ToolCallRecord,
     ) -> Result<()>;
     async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()>;
+    /// Runs, model calls (inside runs or not) and fetches since `since_ms`.
+    async fn usage(&self, tenant: &str, since_ms: i64) -> Result<Usage>;
     async fn create_approval(&self, approval: &Approval) -> Result<()>;
     /// Decide a pending approval; `None` when it does not exist for this
     /// tenant or was already decided.

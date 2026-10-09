@@ -84,6 +84,12 @@ provider:
 #     max_redirects: 5
 #     allow_http: false
 #     min_host_interval_ms: 1000  # pace per host, shared by all callers
+#   tenants:                      # limits per tenant (UTC days and months);
+#     editor-acme:                # over a limit the API answers 429.
+#       max_cost_per_month: 50.0  # model calls and runs
+#       max_tokens_per_month: 20000000
+#       max_runs_per_day: 200
+#       max_fetches_per_day: 20000
 
 # ── Telegram bot ──────────────────────────────────────────────────────────────
 # Needed only for `eullm-agent serve`. Get a token from @BotFather.

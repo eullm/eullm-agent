@@ -28,6 +28,9 @@ calls and decide approvals over HTTP, with state and audit in PostgreSQL.
   (crawling, feeds) with the same address checks as `fetch_url`, every
   redirect re-checked, a size limit and a per-host pace shared by all
   callers; each request is recorded in `core.fetches` and the audit.
+- Limits per tenant (`api.tenants`): monthly cost and tokens, runs and
+  fetches per day, in UTC calendar periods; a request over a limit gets 429
+  with the reason. `GET /v1/usage` reports the tenant's usage and limits.
 
 ### Changed
 

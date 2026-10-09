@@ -338,3 +338,56 @@ async fn fetches_are_recorded_with_an_audit_event() {
             .unwrap();
     assert_eq!(events, ["fetch"]);
 }
+
+#[tokio::test]
+async fn usage_counts_one_tenant_since_a_time() {
+    let Some(s) = store().await else { return };
+    let (t, other) = (tenant("usage"), tenant("usage-other"));
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        - 60_000;
+    let run = new_run(&t);
+    s.create_run(&run).await.unwrap();
+    s.create_run(&new_run(&other)).await.unwrap();
+    let call = LlmCallRecord {
+        provider: "eullm".into(),
+        model: "m".into(),
+        duration_ms: 1,
+        input_tokens: Some(100),
+        output_tokens: Some(20),
+        cost: Some(0.5),
+        error: None,
+    };
+    s.record_llm_call(&t, Some(&run.id), &call).await.unwrap();
+    s.record_llm_call(&t, None, &call).await.unwrap();
+    s.record_llm_call(&other, None, &call).await.unwrap();
+    s.record_fetch(
+        &t,
+        &FetchRecord {
+            url: "https://example.com/".into(),
+            status: Some(200),
+            bytes: 1,
+            duration_ms: 1,
+            error: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let u = s.usage(&t, since).await.unwrap();
+    assert_eq!(
+        u,
+        Usage {
+            runs: 1,
+            llm_calls: 2,
+            input_tokens: 200,
+            output_tokens: 40,
+            cost: 1.0,
+            fetches: 1,
+        }
+    );
+    let later = since + 3_600_000;
+    assert_eq!(s.usage(&t, later).await.unwrap(), Usage::default());
+}

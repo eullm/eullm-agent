@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::config::ApiTokenConfig;
 use crate::llm::{Message, Role, ToolDefinition};
-use crate::service::{Core, FetchError, StartRun};
+use crate::service::{Core, FetchError, LimitReached, StartRun};
 use crate::store::ApprovalStatus;
 
 pub const OPENAPI: &str = include_str!("../docs/openapi.json");
@@ -32,6 +32,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("get", "/v1/approvals"),
     ("post", "/v1/approvals/{id}"),
     ("post", "/v1/fetch"),
+    ("get", "/v1/usage"),
 ];
 
 const MAX_INPUT_BYTES: usize = 100 * 1024;
@@ -115,6 +116,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/approvals", get(list_approvals))
         .route("/v1/approvals/{id}", post(decide_approval))
         .route("/v1/fetch", post(fetch))
+        .route("/v1/usage", get(usage))
         .with_state(state)
 }
 
@@ -127,7 +129,12 @@ impl IntoResponse for ApiError {
 }
 
 impl From<anyhow::Error> for ApiError {
+    // A tenant at its limit gets 429 with the reason; anything else is
+    // logged and hidden.
     fn from(e: anyhow::Error) -> Self {
+        if let Some(l) = e.downcast_ref::<LimitReached>() {
+            return ApiError(StatusCode::TOO_MANY_REQUESTS, l.0.clone());
+        }
         tracing::warn!("api error: {e:#}");
         ApiError(StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
     }
@@ -334,7 +341,13 @@ async fn chat(
         .core
         .chat(&caller.tenant, &body.model, &messages, &tools)
         .await
-        .map_err(|e| ApiError(StatusCode::BAD_GATEWAY, format!("model call failed: {e}")))?;
+        .map_err(|e| {
+            if e.is::<LimitReached>() {
+                ApiError::from(e)
+            } else {
+                ApiError(StatusCode::BAD_GATEWAY, format!("model call failed: {e}"))
+            }
+        })?;
     Ok(Json(json!({
         "content": resp.content,
         "tool_calls": resp.tool_calls.iter().map(|c| json!({
@@ -378,7 +391,21 @@ async fn fetch(
         )),
         Err(FetchError::Refused(m)) => Err(ApiError(StatusCode::FORBIDDEN, m)),
         Err(FetchError::Failed(m)) => Err(ApiError(StatusCode::BAD_GATEWAY, m)),
+        Err(FetchError::Limited(m)) => Err(ApiError(StatusCode::TOO_MANY_REQUESTS, m)),
     }
+}
+
+async fn usage(
+    State(st): State<AppState>,
+    Caller(caller): Caller,
+) -> Result<Json<Value>, ApiError> {
+    let u = st.core.usage(&caller.tenant).await?;
+    Ok(Json(json!({
+        "tenant": caller.tenant,
+        "day": u.day,
+        "month": u.month,
+        "limits": u.limits,
+    })))
 }
 
 #[derive(Deserialize)]

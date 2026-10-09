@@ -810,3 +810,129 @@ async fn fetch_follows_checked_redirects_records_and_paces() {
     );
     assert_eq!(recorded[1].0, "tenant-b");
 }
+
+// --- limits per tenant --------------------------------------------------------------
+
+#[test]
+fn periods_are_utc_calendar_day_and_month() {
+    use eullm_agent::service::period_starts;
+    let noon = 12 * 3_600_000;
+    assert_eq!(
+        period_starts(1_710_460_800_000 + noon),
+        (1_710_460_800_000, 1_709_251_200_000)
+    );
+    // Leap day, and the first and last day of a month.
+    assert_eq!(period_starts(1_709_164_800_000 + noon).1, 1_706_745_600_000);
+    assert_eq!(
+        period_starts(1_767_225_600_000),
+        (1_767_225_600_000, 1_767_225_600_000)
+    );
+    assert_eq!(period_starts(1_769_817_600_000 + noon).1, 1_767_225_600_000);
+}
+
+#[tokio::test]
+async fn model_calls_stop_at_the_monthly_token_limit() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  tenants:\n    tenant-a:\n      max_tokens_per_month: 1\n",
+        vec![],
+    );
+    let chat = json!({"messages": [{"role": "user", "content": "hi"}]});
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/llm/chat",
+        Some(TOKEN_A),
+        Some(chat.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/llm/chat",
+        Some(TOKEN_A),
+        Some(chat.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("token limit"));
+    // Runs use the model too.
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/runs",
+        Some(TOKEN_A),
+        Some(json!({"input": "go"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
+    // Another tenant is not affected.
+    let (s, _) = call(&h.app, "POST", "/v1/llm/chat", Some(TOKEN_B), Some(chat)).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(h.store.loose_llm_calls().len(), 2);
+}
+
+#[tokio::test]
+async fn runs_and_fetches_stop_at_the_daily_limit() {
+    let base = local_site().await;
+    let config = format!(
+        "{FETCH_CONFIG}  tenants:\n    tenant-a:\n      max_runs_per_day: 1\n      max_fetches_per_day: 1\n"
+    );
+    let h = harness_with(&config, vec![]);
+    let run = json!({"input": "go"});
+    let (s, v) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_A), Some(run.clone())).await;
+    assert_eq!(s, StatusCode::ACCEPTED, "{v}");
+    let (s, v) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_A), Some(run.clone())).await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("daily runs"));
+    let (s, _) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_B), Some(run)).await;
+    assert_eq!(s, StatusCode::ACCEPTED);
+
+    let page = json!({"url": format!("{base}/page")});
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(page.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, v) = call(&h.app, "POST", "/v1/fetch", Some(TOKEN_A), Some(page)).await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert_eq!(
+        h.store.fetches().len(),
+        1,
+        "a refused fetch makes no request"
+    );
+}
+
+#[tokio::test]
+async fn usage_reports_the_day_the_month_and_the_limits() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  tenants:\n    tenant-a:\n      max_cost_per_month: 25.0\n",
+        vec![],
+    );
+    let chat = json!({"messages": [{"role": "user", "content": "hi"}]});
+    let (s, _) = call(&h.app, "POST", "/v1/llm/chat", Some(TOKEN_A), Some(chat)).await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, v) = call(&h.app, "GET", "/v1/usage", Some(TOKEN_A), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let spec = spec();
+    conforms(
+        &spec,
+        response_schema(&spec, "get", "/v1/usage", s),
+        &v,
+        "usage",
+    );
+    assert_eq!(v["tenant"], "tenant-a");
+    assert_eq!(v["day"]["llm_calls"], 1);
+    assert_eq!(v["month"]["input_tokens"], 10);
+    assert_eq!(v["limits"]["max_cost_per_month"], 25.0);
+
+    let (_, v) = call(&h.app, "GET", "/v1/usage", Some(TOKEN_B), None).await;
+    assert_eq!(v["month"]["llm_calls"], 0);
+    assert_eq!(v["limits"], json!({}));
+    let (s, _) = call(&h.app, "GET", "/v1/usage", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+}

@@ -116,6 +116,22 @@ pub struct ApiConfig {
     /// unless this section is present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fetch: Option<FetchApiConfig>,
+    /// Limits per tenant; a tenant without an entry has none. Days and
+    /// months are calendar periods in UTC.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tenants: BTreeMap<String, TenantLimits>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct TenantLimits {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_cost_per_month: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens_per_month: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_runs_per_day: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_fetches_per_day: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

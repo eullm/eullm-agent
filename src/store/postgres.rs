@@ -342,6 +342,32 @@ impl Store for PgStore {
         Ok(())
     }
 
+    async fn usage(&self, tenant: &str, since_ms: i64) -> Result<Usage> {
+        let since = "to_timestamp($2::double precision / 1000)";
+        let q = format!(
+            "SELECT \
+               (SELECT count(*) FROM core.runs WHERE tenant = $1 AND created_at >= {since}) AS runs, \
+               (SELECT count(*) FROM core.llm_calls WHERE tenant = $1 AND created_at >= {since}) AS llm_calls, \
+               (SELECT coalesce(sum(input_tokens), 0)::bigint FROM core.llm_calls WHERE tenant = $1 AND created_at >= {since}) AS input_tokens, \
+               (SELECT coalesce(sum(output_tokens), 0)::bigint FROM core.llm_calls WHERE tenant = $1 AND created_at >= {since}) AS output_tokens, \
+               (SELECT coalesce(sum(cost), 0)::double precision FROM core.llm_calls WHERE tenant = $1 AND created_at >= {since}) AS cost, \
+               (SELECT count(*) FROM core.fetches WHERE tenant = $1 AND created_at >= {since}) AS fetches"
+        );
+        let r = sqlx::query(sqlx::AssertSqlSafe(q))
+            .bind(tenant)
+            .bind(since_ms as f64)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(Usage {
+            runs: r.try_get::<i64, _>("runs")? as u64,
+            llm_calls: r.try_get::<i64, _>("llm_calls")? as u64,
+            input_tokens: r.try_get::<i64, _>("input_tokens")? as u64,
+            output_tokens: r.try_get::<i64, _>("output_tokens")? as u64,
+            cost: r.try_get("cost")?,
+            fetches: r.try_get::<i64, _>("fetches")? as u64,
+        })
+    }
+
     async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
