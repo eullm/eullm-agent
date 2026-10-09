@@ -3,7 +3,7 @@
   "info": {
     "title": "EuLLM Agent Core API",
     "version": "0.3.0",
-    "description": "Runs, single model calls and approvals. Every endpoint except health and this document needs `Authorization: Bearer <token>`. Data is scoped to the tenant of the token."
+    "description": "Runs, single model calls, approvals and checked HTTP fetches. Every endpoint except health and this document needs `Authorization: Bearer <token>`. Data is scoped to the tenant of the token."
   },
   "servers": [
     {
@@ -526,6 +526,72 @@
             "type": "string"
           }
         }
+      },
+      "FetchRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "https URL (http only when allowed)"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Only accept, accept-language, if-none-match, if-modified-since"
+          }
+        }
+      },
+      "FetchResponse": {
+        "type": "object",
+        "required": [
+          "url",
+          "status",
+          "body_base64",
+          "truncated",
+          "redirects"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Final URL after redirects"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "content_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body_base64": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "The body stopped at the size limit"
+          },
+          "redirects": {
+            "type": "integer"
+          }
+        }
       }
     }
   },
@@ -884,6 +950,73 @@
           },
           "409": {
             "description": "Not found or already decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/fetch": {
+      "post": {
+        "summary": "HTTP GET on behalf of an application, with the same address checks as the fetch_url tool (no private addresses, every redirect re-checked, size limit, per-host pace); recorded",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The response, whatever its HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FetchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: address, scheme or header not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Fetch is not enabled in this Core",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The request failed (DNS, connection, timeout, too many redirects)",
             "content": {
               "application/json": {
                 "schema": {

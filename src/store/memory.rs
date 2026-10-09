@@ -19,6 +19,7 @@ struct Inner {
     approval_order: Vec<String>,
     /// Single LLM calls outside a run, kept for completeness.
     loose_llm_calls: Vec<(String, LlmCallRecord)>,
+    fetches: Vec<(String, FetchRecord)>,
 }
 
 impl MemoryStore {
@@ -29,6 +30,11 @@ impl MemoryStore {
     /// Calls made through `/v1/llm/chat`, for tests.
     pub fn loose_llm_calls(&self) -> Vec<(String, LlmCallRecord)> {
         self.inner.lock().unwrap().loose_llm_calls.clone()
+    }
+
+    /// Requests made through `/v1/fetch`, for tests.
+    pub fn fetches(&self) -> Vec<(String, FetchRecord)> {
+        self.inner.lock().unwrap().fetches.clone()
     }
 }
 
@@ -126,6 +132,15 @@ impl Store for MemoryStore {
             }),
             None => g.loose_llm_calls.push((tenant.to_string(), call.clone())),
         }
+        Ok(())
+    }
+
+    async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .fetches
+            .push((tenant.to_string(), fetch.clone()));
         Ok(())
     }
 

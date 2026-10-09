@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::config::ApiTokenConfig;
 use crate::llm::{Message, Role, ToolDefinition};
-use crate::service::{Core, StartRun};
+use crate::service::{Core, FetchError, StartRun};
 use crate::store::ApprovalStatus;
 
 pub const OPENAPI: &str = include_str!("../docs/openapi.json");
@@ -31,6 +31,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("post", "/v1/llm/chat"),
     ("get", "/v1/approvals"),
     ("post", "/v1/approvals/{id}"),
+    ("post", "/v1/fetch"),
 ];
 
 const MAX_INPUT_BYTES: usize = 100 * 1024;
@@ -113,6 +114,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/llm/chat", post(chat))
         .route("/v1/approvals", get(list_approvals))
         .route("/v1/approvals/{id}", post(decide_approval))
+        .route("/v1/fetch", post(fetch))
         .with_state(state)
 }
 
@@ -343,6 +345,40 @@ async fn chat(
         })),
         "cost": cost,
     })))
+}
+
+#[derive(Deserialize)]
+struct FetchRequest {
+    url: String,
+    #[serde(default)]
+    headers: std::collections::BTreeMap<String, String>,
+}
+
+async fn fetch(
+    State(st): State<AppState>,
+    Caller(caller): Caller,
+    Json(body): Json<FetchRequest>,
+) -> Result<Json<Value>, ApiError> {
+    use base64::Engine;
+    let headers: Vec<(String, String)> = body.headers.into_iter().collect();
+    match st.core.fetch(&caller.tenant, &body.url, &headers).await {
+        Ok(f) => Ok(Json(json!({
+            "url": f.url.as_str(),
+            "status": f.status,
+            "content_type": f.content_type,
+            "etag": f.etag,
+            "last_modified": f.last_modified,
+            "body_base64": base64::engine::general_purpose::STANDARD.encode(&f.body),
+            "truncated": f.truncated,
+            "redirects": f.redirects,
+        }))),
+        Err(FetchError::Disabled) => Err(ApiError(
+            StatusCode::NOT_FOUND,
+            "fetch is not enabled (api.fetch)".into(),
+        )),
+        Err(FetchError::Refused(m)) => Err(ApiError(StatusCode::FORBIDDEN, m)),
+        Err(FetchError::Failed(m)) => Err(ApiError(StatusCode::BAD_GATEWAY, m)),
+    }
 }
 
 #[derive(Deserialize)]

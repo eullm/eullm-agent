@@ -91,6 +91,17 @@ pub struct ToolCallRecord {
     pub error: Option<String>,
 }
 
+/// One request made through `POST /v1/fetch`. The query string is left out
+/// of the stored URL: it can carry keys.
+#[derive(Debug, Clone, Serialize)]
+pub struct FetchRecord {
+    pub url: String,
+    pub status: Option<u16>,
+    pub bytes: u64,
+    pub duration_ms: u64,
+    pub error: Option<String>,
+}
+
 /// One step of a run, as returned by the API.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -200,6 +211,7 @@ pub trait Store: Send + Sync {
         run_id: &str,
         call: &ToolCallRecord,
     ) -> Result<()>;
+    async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()>;
     async fn create_approval(&self, approval: &Approval) -> Result<()>;
     /// Decide a pending approval; `None` when it does not exist for this
     /// tenant or was already decided.

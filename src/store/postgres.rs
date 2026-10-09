@@ -342,6 +342,26 @@ impl Store for PgStore {
         Ok(())
     }
 
+    async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO core.fetches (tenant, url, status, bytes, duration_ms, error) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(tenant)
+        .bind(&fetch.url)
+        .bind(fetch.status.map(i32::from))
+        .bind(fetch.bytes as i64)
+        .bind(fetch.duration_ms as i64)
+        .bind(&fetch.error)
+        .execute(&mut *tx)
+        .await?;
+        self.audit(&mut tx, tenant, None, "fetch", serde_json::to_value(fetch)?)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn record_tool_call(
         &self,
         tenant: &str,

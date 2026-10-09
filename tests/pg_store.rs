@@ -302,3 +302,39 @@ async fn every_model_and_tool_call_of_a_run_has_a_row() {
         ]
     );
 }
+
+#[tokio::test]
+async fn fetches_are_recorded_with_an_audit_event() {
+    let Some(s) = store().await else { return };
+    let t = tenant("fetch");
+    s.record_fetch(
+        &t,
+        &FetchRecord {
+            url: "https://example.com/feed".into(),
+            status: Some(200),
+            bytes: 1234,
+            duration_ms: 50,
+            error: None,
+        },
+    )
+    .await
+    .unwrap();
+    let pool = s.pool();
+    let (url, status): (String, Option<i32>) =
+        sqlx::query_as("SELECT url, status FROM core.fetches WHERE tenant = $1")
+            .bind(&t)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        (url.as_str(), status),
+        ("https://example.com/feed", Some(200))
+    );
+    let events: Vec<String> =
+        sqlx::query_scalar("SELECT event FROM core.audit_events WHERE tenant = $1")
+            .bind(&t)
+            .fetch_all(pool)
+            .await
+            .unwrap();
+    assert_eq!(events, ["fetch"]);
+}

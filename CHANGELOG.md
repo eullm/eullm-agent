@@ -24,6 +24,10 @@ calls and decide approvals over HTTP, with state and audit in PostgreSQL.
   (`/approve`, `/deny`) or from the terminal; no answer in time is a refusal.
 - Telegram tasks run in the background so approvals can be answered, and use
   `telegram.profile`.
+- `POST /v1/fetch` (`api.fetch`): HTTP GET for applications built on the Core
+  (crawling, feeds) with the same address checks as `fetch_url`, every
+  redirect re-checked, a size limit and a per-host pace shared by all
+  callers; each request is recorded in `core.fetches` and the audit.
 
 ### Changed
 

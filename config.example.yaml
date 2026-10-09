@@ -78,6 +78,12 @@ provider:
 #       tenant: default
 #       token_sha256: "<64 hex characters>"
 #       profiles: [planner]       # empty = all profiles
+#   fetch:                        # POST /v1/fetch for applications (crawling,
+#     timeout_seconds: 20         # feeds); off without this section. Public
+#     max_response_bytes: 5242880 # addresses only, every redirect re-checked.
+#     max_redirects: 5
+#     allow_http: false
+#     min_host_interval_ms: 1000  # pace per host, shared by all callers
 
 # ── Telegram bot ──────────────────────────────────────────────────────────────
 # Needed only for `eullm-agent serve`. Get a token from @BotFather.

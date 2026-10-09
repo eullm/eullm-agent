@@ -71,6 +71,7 @@ example Editorial Intelligence). The contract is
 | `GET /v1/runs`, `GET /v1/runs/{id}` | Runs of the caller's tenant, with every model and tool call |
 | `POST /v1/llm/chat` | One model call through the Model Router, recorded with tokens and cost |
 | `GET /v1/approvals`, `POST /v1/approvals/{id}` | Actions waiting for a person; approve or deny |
+| `POST /v1/fetch` | HTTP GET for applications (crawling, feeds) with the address checks of `fetch_url`, a size limit and a per-host pace; off unless `api.fetch` is set |
 
 - **Tokens:** `eullm-agent token new` prints a token and its SHA-256; only the
   hash goes in `api.tokens`. Each token belongs to a tenant and can be limited
