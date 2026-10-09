@@ -111,6 +111,80 @@ pub struct ApiConfig {
     /// Runs executing at the same time; more are queued.
     #[serde(default = "default_max_concurrent_runs")]
     pub max_concurrent_runs: usize,
+    /// `POST /v1/fetch`: HTTP GET on behalf of an application (crawling,
+    /// feeds), with the same address checks as the `fetch_url` tool. Off
+    /// unless this section is present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetch: Option<FetchApiConfig>,
+    /// Limits per tenant; a tenant without an entry has none. Days and
+    /// months are calendar periods in UTC.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tenants: BTreeMap<String, TenantLimits>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct TenantLimits {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_cost_per_month: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens_per_month: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_runs_per_day: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_fetches_per_day: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FetchApiConfig {
+    #[serde(default = "default_fetch_timeout")]
+    pub timeout_seconds: u64,
+    #[serde(default = "default_fetch_bytes")]
+    pub max_response_bytes: usize,
+    #[serde(default = "default_redirects")]
+    pub max_redirects: usize,
+    #[serde(default)]
+    pub allow_http: bool,
+    /// Lets callers reach loopback and private addresses. Dangerous: only
+    /// for trusted local services and tests.
+    #[serde(default)]
+    pub allow_private_networks: bool,
+    /// Minimum time between two requests to the same host, for all callers.
+    #[serde(default = "default_host_interval")]
+    pub min_host_interval_ms: u64,
+    #[serde(default = "default_fetch_user_agent")]
+    pub user_agent: String,
+}
+
+impl Default for FetchApiConfig {
+    fn default() -> Self {
+        Self {
+            timeout_seconds: default_fetch_timeout(),
+            max_response_bytes: default_fetch_bytes(),
+            max_redirects: default_redirects(),
+            allow_http: false,
+            allow_private_networks: false,
+            min_host_interval_ms: default_host_interval(),
+            user_agent: default_fetch_user_agent(),
+        }
+    }
+}
+
+fn default_fetch_timeout() -> u64 {
+    20
+}
+fn default_fetch_bytes() -> usize {
+    5 * 1024 * 1024
+}
+fn default_host_interval() -> u64 {
+    1000
+}
+fn default_fetch_user_agent() -> String {
+    concat!(
+        "eullm-agent/",
+        env!("CARGO_PKG_VERSION"),
+        " (+https://eullm.eu)"
+    )
+    .into()
 }
 
 fn default_listen() -> String {

@@ -13,12 +13,182 @@ use crate::util::truncate_utf8;
 /// What the model sees of a response body.
 const MAX_RETURNED_CHARS: usize = 12_000;
 
-pub struct FetchUrlTool {
+/// Headers a caller may set on a request; everything else is refused.
+const SETTABLE_HEADERS: &[&str] = &[
+    "accept",
+    "accept-language",
+    "if-none-match",
+    "if-modified-since",
+];
+
+/// A response read by [`Fetcher`].
+pub struct Fetched {
+    /// The URL that answered, after redirects.
+    pub url: Url,
+    pub status: u16,
+    pub content_type: Option<String>,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    pub body: Vec<u8>,
+    /// The body stopped at the size limit.
+    pub truncated: bool,
+    pub redirects: usize,
+}
+
+/// HTTP client that refuses non-public addresses, re-checks every redirect
+/// hop and stops reading at a size limit. Used by the `fetch_url` tool and
+/// by `POST /v1/fetch`.
+pub struct Fetcher {
     policy: NetPolicy,
     timeout: Duration,
-    methods: Vec<Method>,
     max_response_bytes: usize,
     max_redirects: usize,
+    user_agent: String,
+}
+
+impl Fetcher {
+    pub fn new(
+        policy: NetPolicy,
+        timeout: Duration,
+        max_response_bytes: usize,
+        max_redirects: usize,
+        user_agent: String,
+    ) -> Self {
+        Self {
+            policy,
+            timeout,
+            max_response_bytes,
+            max_redirects,
+            user_agent,
+        }
+    }
+
+    /// A client pinned to the address that passed the policy check, with
+    /// redirects off so every hop is checked again.
+    fn pinned_client(&self, url: &Url, addr: std::net::SocketAddr) -> Result<Client> {
+        let mut b = Client::builder()
+            .timeout(self.timeout)
+            .redirect(redirect::Policy::none())
+            .user_agent(self.user_agent.clone());
+        if let Some(host) = url.host_str() {
+            if host.parse::<std::net::IpAddr>().is_err() {
+                b = b.resolve(host, addr);
+            }
+        }
+        Ok(b.build()?)
+    }
+
+    /// Only the first request carries the method, headers and body; redirects
+    /// are followed with GET.
+    pub async fn fetch(
+        &self,
+        method: Method,
+        url: Url,
+        headers: &[(String, String)],
+        body: Option<RequestBody>,
+    ) -> Result<Fetched> {
+        let mut url = url;
+        let mut hops = 0;
+        let resp = loop {
+            let addr = self.policy.check(&url).await?;
+            let client = self.pinned_client(&url, addr)?;
+            let mut req = if hops == 0 {
+                client.request(method.clone(), url.clone())
+            } else {
+                client.get(url.clone())
+            };
+            if hops == 0 {
+                for (k, v) in headers {
+                    if k.eq_ignore_ascii_case("host") {
+                        bail!("The Host header cannot be set");
+                    }
+                    req = req.header(k.as_str(), v.as_str());
+                }
+                if method != Method::GET {
+                    match &body {
+                        Some(RequestBody::Json(v)) => req = req.json(v),
+                        Some(RequestBody::Text(t)) => req = req.body(t.clone()),
+                        None => {}
+                    }
+                }
+            }
+            let resp = req
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Request failed: {e}"))?;
+            if resp.status().is_redirection() {
+                let location = resp
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .context("Redirect without Location")?;
+                hops += 1;
+                if hops > self.max_redirects {
+                    bail!("Too many redirects (max {})", self.max_redirects);
+                }
+                url = url.join(location).context("Invalid redirect target")?;
+                continue;
+            }
+            break resp;
+        };
+
+        let header = |name: reqwest::header::HeaderName| {
+            resp.headers()
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(String::from)
+        };
+        let content_type = header(reqwest::header::CONTENT_TYPE);
+        let etag = header(reqwest::header::ETAG);
+        let last_modified = header(reqwest::header::LAST_MODIFIED);
+        let status = resp.status().as_u16();
+        let mut out = Vec::new();
+        let mut truncated = false;
+        let mut resp = resp;
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read response body: {e}"))?
+        {
+            let room = self.max_response_bytes.saturating_sub(out.len());
+            if chunk.len() > room {
+                out.extend_from_slice(&chunk[..room]);
+                truncated = true;
+                break;
+            }
+            out.extend_from_slice(&chunk);
+        }
+        Ok(Fetched {
+            url,
+            status,
+            content_type,
+            etag,
+            last_modified,
+            body: out,
+            truncated,
+            redirects: hops,
+        })
+    }
+}
+
+/// Keep only the headers a caller may set; the error names the first other.
+pub fn settable_headers(headers: &[(String, String)]) -> Result<()> {
+    for (k, _) in headers {
+        if !SETTABLE_HEADERS.iter().any(|h| k.eq_ignore_ascii_case(h)) {
+            bail!("header '{k}' cannot be set");
+        }
+    }
+    Ok(())
+}
+
+pub enum RequestBody {
+    Json(Value),
+    Text(String),
+}
+
+pub struct FetchUrlTool {
+    fetcher: Fetcher,
+    methods: Vec<Method>,
 }
 
 impl FetchUrlTool {
@@ -32,31 +202,19 @@ impl FetchUrlTool {
             }
         }
         Self {
-            policy: NetPolicy {
-                allow_http: cfg.allow_http,
-                allow_private_networks: cfg.allow_private_networks,
-                allowed_domains: cfg.allowed_domains.clone(),
-            },
-            timeout: Duration::from_secs(cfg.timeout_seconds.max(1)),
+            fetcher: Fetcher::new(
+                NetPolicy {
+                    allow_http: cfg.allow_http,
+                    allow_private_networks: cfg.allow_private_networks,
+                    allowed_domains: cfg.allowed_domains.clone(),
+                },
+                Duration::from_secs(cfg.timeout_seconds.max(1)),
+                cfg.max_response_bytes,
+                cfg.max_redirects,
+                concat!("eullm-agent/", env!("CARGO_PKG_VERSION")).into(),
+            ),
             methods,
-            max_response_bytes: cfg.max_response_bytes,
-            max_redirects: cfg.max_redirects,
         }
-    }
-
-    /// A client pinned to the address that passed the policy check, with
-    /// redirects off so every hop is checked again.
-    fn pinned_client(&self, url: &Url, addr: std::net::SocketAddr) -> Result<Client> {
-        let mut b = Client::builder()
-            .timeout(self.timeout)
-            .redirect(redirect::Policy::none())
-            .user_agent(concat!("eullm-agent/", env!("CARGO_PKG_VERSION")));
-        if let Some(host) = url.host_str() {
-            if host.parse::<std::net::IpAddr>().is_err() {
-                b = b.resolve(host, addr);
-            }
-        }
-        Ok(b.build()?)
     }
 }
 
@@ -102,73 +260,29 @@ impl Tool for FetchUrlTool {
             bail!("HTTP method {method} is not allowed (see tools.http.allow_methods)");
         }
 
-        let mut url = Url::parse(url_str).context("Invalid URL")?;
-        let mut hops = 0;
-        let resp = loop {
-            let addr = self.policy.check(&url).await?;
-            let client = self.pinned_client(&url, addr)?;
-            // Only the first request carries the method, headers and body.
-            let mut req = if hops == 0 {
-                client.request(method.clone(), url.clone())
-            } else {
-                client.get(url.clone())
-            };
-            if hops == 0 {
-                if let Some(hdrs) = arguments["headers"].as_object() {
-                    for (k, v) in hdrs {
-                        if k.eq_ignore_ascii_case("host") {
-                            bail!("The Host header cannot be set");
-                        }
-                        if let Some(val) = v.as_str() {
-                            req = req.header(k.as_str(), val);
-                        }
-                    }
-                }
-                if method != Method::GET {
-                    if !arguments["json_body"].is_null() {
-                        req = req.json(&arguments["json_body"]);
-                    } else if let Some(body) = arguments["body"].as_str() {
-                        req = req.body(body.to_string());
-                    }
-                }
-            }
-            let resp = req
-                .send()
-                .await
-                .map_err(|e| anyhow::anyhow!("Request failed: {e}"))?;
-            if resp.status().is_redirection() {
-                let location = resp
-                    .headers()
-                    .get(reqwest::header::LOCATION)
-                    .and_then(|v| v.to_str().ok())
-                    .context("Redirect without Location")?;
-                hops += 1;
-                if hops > self.max_redirects {
-                    bail!("Too many redirects (max {})", self.max_redirects);
-                }
-                url = url.join(location).context("Invalid redirect target")?;
-                continue;
-            }
-            break resp;
+        let url = Url::parse(url_str).context("Invalid URL")?;
+        let headers: Vec<(String, String)> = arguments["headers"]
+            .as_object()
+            .map(|h| {
+                h.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let body = if !arguments["json_body"].is_null() {
+            Some(RequestBody::Json(arguments["json_body"].clone()))
+        } else {
+            arguments["body"]
+                .as_str()
+                .map(|b| RequestBody::Text(b.to_string()))
         };
-
-        let status = resp.status();
-        let mut body = Vec::new();
-        let mut truncated = false;
-        let mut resp = resp;
-        while let Some(chunk) = resp
-            .chunk()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to read response body: {e}"))?
-        {
-            let room = self.max_response_bytes.saturating_sub(body.len());
-            if chunk.len() > room {
-                body.extend_from_slice(&chunk[..room]);
-                truncated = true;
-                break;
-            }
-            body.extend_from_slice(&chunk);
-        }
+        let Fetched {
+            status,
+            body,
+            truncated,
+            ..
+        } = self.fetcher.fetch(method, url, &headers, body).await?;
+        let status = reqwest::StatusCode::from_u16(status)?;
         let text = String::from_utf8_lossy(&body);
         let shown = truncate_utf8(&text, MAX_RETURNED_CHARS);
         let mut out = shown.to_string();

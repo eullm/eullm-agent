@@ -19,6 +19,10 @@ struct Inner {
     approval_order: Vec<String>,
     /// Single LLM calls outside a run, kept for completeness.
     loose_llm_calls: Vec<(String, LlmCallRecord)>,
+    fetches: Vec<(String, FetchRecord)>,
+    /// (tenant, at_ms, call) for every model call, for usage.
+    llm_log: Vec<(String, i64, LlmCallRecord)>,
+    fetch_log: Vec<(String, i64)>,
 }
 
 impl MemoryStore {
@@ -29,6 +33,11 @@ impl MemoryStore {
     /// Calls made through `/v1/llm/chat`, for tests.
     pub fn loose_llm_calls(&self) -> Vec<(String, LlmCallRecord)> {
         self.inner.lock().unwrap().loose_llm_calls.clone()
+    }
+
+    /// Requests made through `/v1/fetch`, for tests.
+    pub fn fetches(&self) -> Vec<(String, FetchRecord)> {
+        self.inner.lock().unwrap().fetches.clone()
     }
 }
 
@@ -119,6 +128,7 @@ impl Store for MemoryStore {
         call: &LlmCallRecord,
     ) -> Result<()> {
         let mut g = self.inner.lock().unwrap();
+        g.llm_log.push((tenant.to_string(), now_ms(), call.clone()));
         match run_id.and_then(|id| g.runs.get_mut(id)) {
             Some(r) => r.steps.push(Step::LlmCall {
                 at_ms: now_ms(),
@@ -127,6 +137,41 @@ impl Store for MemoryStore {
             None => g.loose_llm_calls.push((tenant.to_string(), call.clone())),
         }
         Ok(())
+    }
+
+    async fn record_fetch(&self, tenant: &str, fetch: &FetchRecord) -> Result<()> {
+        let mut g = self.inner.lock().unwrap();
+        g.fetches.push((tenant.to_string(), fetch.clone()));
+        g.fetch_log.push((tenant.to_string(), now_ms()));
+        Ok(())
+    }
+
+    async fn usage(&self, tenant: &str, since_ms: i64) -> Result<Usage> {
+        let g = self.inner.lock().unwrap();
+        let mut u = Usage {
+            runs: g
+                .runs
+                .values()
+                .filter(|r| r.summary.tenant == tenant && r.summary.created_at_ms >= since_ms)
+                .count() as u64,
+            fetches: g
+                .fetch_log
+                .iter()
+                .filter(|(t, at)| t == tenant && *at >= since_ms)
+                .count() as u64,
+            ..Usage::default()
+        };
+        for (_, _, c) in g
+            .llm_log
+            .iter()
+            .filter(|(t, at, _)| t == tenant && *at >= since_ms)
+        {
+            u.llm_calls += 1;
+            u.input_tokens += c.input_tokens.unwrap_or(0);
+            u.output_tokens += c.output_tokens.unwrap_or(0);
+            u.cost += c.cost.unwrap_or(0.0);
+        }
+        Ok(u)
     }
 
     async fn record_tool_call(

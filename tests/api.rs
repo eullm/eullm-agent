@@ -61,7 +61,11 @@ fn token(name: &str, tenant: &str, secret: &str, profiles: &[&str]) -> ApiToken 
 }
 
 fn harness(script: Vec<eullm_agent::llm::ChatResponse>) -> Harness {
-    let config = Arc::new(Config::from_yaml(CONFIG).unwrap());
+    harness_with(CONFIG, script)
+}
+
+fn harness_with(config: &str, script: Vec<eullm_agent::llm::ChatResponse>) -> Harness {
+    let config = Arc::new(Config::from_yaml(config).unwrap());
     let llm = Arc::new(Scripted::new(script));
     let router = ModelRouter::single("default", llm.clone());
     let tools = ToolRegistry::new();
@@ -662,4 +666,273 @@ async fn responses_match_the_openapi_contract() {
         &v,
         "chat",
     );
+}
+
+// --- checked fetch -------------------------------------------------------------
+
+/// A local web server: /page answers with an ETag, /moved redirects to it.
+async fn local_site() -> String {
+    use axum::response::{IntoResponse, Redirect};
+    use axum::routing::get;
+    let app = axum::Router::new()
+        .route(
+            "/page",
+            get(|| async {
+                (
+                    [("etag", "\"v1\""), ("content-type", "text/html")],
+                    "<h1>hello</h1>",
+                )
+                    .into_response()
+            }),
+        )
+        .route("/moved", get(|| async { Redirect::temporary("/page") }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+const FETCH_CONFIG: &str = r#"
+provider:
+  type: eullm
+  model: test
+api:
+  fetch:
+    allow_http: true
+    allow_private_networks: true
+    min_host_interval_ms: 300
+"#;
+
+#[tokio::test]
+async fn fetch_is_off_unless_configured() {
+    let h = harness(vec![]);
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(json!({"url": "https://example.com/"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn fetch_refuses_private_addresses_and_free_headers() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  fetch: {}\n",
+        vec![],
+    );
+    for url in [
+        "https://127.0.0.1/",
+        "https://10.0.0.1/admin",
+        "http://example.com/",
+        "file:///etc/passwd",
+    ] {
+        let (s, v) = call(
+            &h.app,
+            "POST",
+            "/v1/fetch",
+            Some(TOKEN_A),
+            Some(json!({"url": url})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::FORBIDDEN, "{url}: {v}");
+    }
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(json!({"url": "https://example.com/", "headers": {"Cookie": "x"}})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert!(v["error"].as_str().unwrap().contains("Cookie"));
+    let recorded = h.store.fetches();
+    assert!(recorded.iter().any(|(t, f)| t == "tenant-a"
+        && f.url.starts_with("https://10.0.0.1/")
+        && f.error.is_some()));
+}
+
+#[tokio::test]
+async fn fetch_follows_checked_redirects_records_and_paces() {
+    use base64::Engine;
+    let base = local_site().await;
+    let h = harness_with(FETCH_CONFIG, vec![]);
+    let spec = spec();
+    let started = std::time::Instant::now();
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(
+            json!({"url": format!("{base}/moved?key=secret"), "headers": {"Accept": "text/html"}}),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    conforms(
+        &spec,
+        response_schema(&spec, "post", "/v1/fetch", s),
+        &v,
+        "fetch",
+    );
+    assert_eq!(v["url"], format!("{base}/page"));
+    assert_eq!(v["redirects"], 1);
+    assert_eq!(v["etag"], "\"v1\"");
+    let body = base64::engine::general_purpose::STANDARD
+        .decode(v["body_base64"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(body, b"<h1>hello</h1>");
+
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_B),
+        Some(json!({"url": format!("{base}/page")})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(
+        started.elapsed() >= Duration::from_millis(300),
+        "same host must be paced"
+    );
+
+    let recorded = h.store.fetches();
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(recorded[0].0, "tenant-a");
+    assert!(
+        !recorded[0].1.url.contains("secret"),
+        "query strings are not stored"
+    );
+    assert_eq!(recorded[1].0, "tenant-b");
+}
+
+// --- limits per tenant --------------------------------------------------------------
+
+#[test]
+fn periods_are_utc_calendar_day_and_month() {
+    use eullm_agent::service::period_starts;
+    let noon = 12 * 3_600_000;
+    assert_eq!(
+        period_starts(1_710_460_800_000 + noon),
+        (1_710_460_800_000, 1_709_251_200_000)
+    );
+    // Leap day, and the first and last day of a month.
+    assert_eq!(period_starts(1_709_164_800_000 + noon).1, 1_706_745_600_000);
+    assert_eq!(
+        period_starts(1_767_225_600_000),
+        (1_767_225_600_000, 1_767_225_600_000)
+    );
+    assert_eq!(period_starts(1_769_817_600_000 + noon).1, 1_767_225_600_000);
+}
+
+#[tokio::test]
+async fn model_calls_stop_at_the_monthly_token_limit() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  tenants:\n    tenant-a:\n      max_tokens_per_month: 1\n",
+        vec![],
+    );
+    let chat = json!({"messages": [{"role": "user", "content": "hi"}]});
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/llm/chat",
+        Some(TOKEN_A),
+        Some(chat.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/llm/chat",
+        Some(TOKEN_A),
+        Some(chat.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("token limit"));
+    // Runs use the model too.
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/runs",
+        Some(TOKEN_A),
+        Some(json!({"input": "go"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
+    // Another tenant is not affected.
+    let (s, _) = call(&h.app, "POST", "/v1/llm/chat", Some(TOKEN_B), Some(chat)).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(h.store.loose_llm_calls().len(), 2);
+}
+
+#[tokio::test]
+async fn runs_and_fetches_stop_at_the_daily_limit() {
+    let base = local_site().await;
+    let config = format!(
+        "{FETCH_CONFIG}  tenants:\n    tenant-a:\n      max_runs_per_day: 1\n      max_fetches_per_day: 1\n"
+    );
+    let h = harness_with(&config, vec![]);
+    let run = json!({"input": "go"});
+    let (s, v) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_A), Some(run.clone())).await;
+    assert_eq!(s, StatusCode::ACCEPTED, "{v}");
+    let (s, v) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_A), Some(run.clone())).await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert!(v["error"].as_str().unwrap().contains("daily runs"));
+    let (s, _) = call(&h.app, "POST", "/v1/runs", Some(TOKEN_B), Some(run)).await;
+    assert_eq!(s, StatusCode::ACCEPTED);
+
+    let page = json!({"url": format!("{base}/page")});
+    let (s, _) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(page.clone()),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, v) = call(&h.app, "POST", "/v1/fetch", Some(TOKEN_A), Some(page)).await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS, "{v}");
+    assert_eq!(
+        h.store.fetches().len(),
+        1,
+        "a refused fetch makes no request"
+    );
+}
+
+#[tokio::test]
+async fn usage_reports_the_day_the_month_and_the_limits() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  tenants:\n    tenant-a:\n      max_cost_per_month: 25.0\n",
+        vec![],
+    );
+    let chat = json!({"messages": [{"role": "user", "content": "hi"}]});
+    let (s, _) = call(&h.app, "POST", "/v1/llm/chat", Some(TOKEN_A), Some(chat)).await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, v) = call(&h.app, "GET", "/v1/usage", Some(TOKEN_A), None).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let spec = spec();
+    conforms(
+        &spec,
+        response_schema(&spec, "get", "/v1/usage", s),
+        &v,
+        "usage",
+    );
+    assert_eq!(v["tenant"], "tenant-a");
+    assert_eq!(v["day"]["llm_calls"], 1);
+    assert_eq!(v["month"]["input_tokens"], 10);
+    assert_eq!(v["limits"]["max_cost_per_month"], 25.0);
+
+    let (_, v) = call(&h.app, "GET", "/v1/usage", Some(TOKEN_B), None).await;
+    assert_eq!(v["month"]["llm_calls"], 0);
+    assert_eq!(v["limits"], json!({}));
+    let (s, _) = call(&h.app, "GET", "/v1/usage", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
 }

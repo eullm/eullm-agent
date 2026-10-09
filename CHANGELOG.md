@@ -2,8 +2,10 @@
 
 ## 0.3.0
 
-The Core as a service (phase F1): other programs can start runs, make model
-calls and decide approvals over HTTP, with state and audit in PostgreSQL.
+The Core as a service: other programs can start runs, make model calls,
+decide approvals and fetch web pages over HTTP, with state and audit in
+PostgreSQL and limits per tenant. Applications such as Editor Mode are built
+on this API instead of calling providers or the web directly.
 
 ### Added
 
@@ -24,6 +26,13 @@ calls and decide approvals over HTTP, with state and audit in PostgreSQL.
   (`/approve`, `/deny`) or from the terminal; no answer in time is a refusal.
 - Telegram tasks run in the background so approvals can be answered, and use
   `telegram.profile`.
+- `POST /v1/fetch` (`api.fetch`): HTTP GET for applications built on the Core
+  (crawling, feeds) with the same address checks as `fetch_url`, every
+  redirect re-checked, a size limit and a per-host pace shared by all
+  callers; each request is recorded in `core.fetches` and the audit.
+- Limits per tenant (`api.tenants`): monthly cost and tokens, runs and
+  fetches per day, in UTC calendar periods; a request over a limit gets 429
+  with the reason. `GET /v1/usage` reports the tenant's usage and limits.
 
 ### Changed
 
