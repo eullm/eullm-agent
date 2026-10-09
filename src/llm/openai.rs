@@ -1,48 +1,73 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde::Deserialize;
+use serde_json::{json, Map, Value};
+use std::time::Duration;
 use tracing::debug;
 
-use super::{ChatResponse, LlmClient, Message, Role, ToolCall, ToolDefinition};
+use super::{
+    http_client, send_with_retry, ChatResponse, LlmClient, Message, Role, ToolCall, ToolDefinition,
+    Usage,
+};
 
+/// Client for the OpenAI Chat Completions API and compatible servers
+/// (EuLLM Engine `/v1`, vLLM, llama.cpp server, ...).
 pub struct OpenAiClient {
     client: Client,
     base_url: String,
-    api_key: String,
+    api_key: Option<String>,
     model: String,
+    provider: &'static str,
+    /// Extra top-level fields merged into every request body.
+    extra: Map<String, Value>,
 }
 
 impl OpenAiClient {
     pub fn new(
-        api_key: impl Into<String>,
+        api_key: Option<String>,
         model: impl Into<String>,
         base_url: Option<String>,
+        timeout: Duration,
     ) -> Self {
         Self {
-            client: Client::new(),
-            api_key: api_key.into(),
+            client: http_client(timeout),
+            api_key,
             model: model.into(),
             base_url: base_url
                 .unwrap_or_else(|| "https://api.openai.com/v1".into())
                 .trim_end_matches('/')
                 .to_string(),
+            provider: "openai",
+            extra: Map::new(),
         }
     }
-}
 
-#[derive(Serialize)]
-struct OpenAiRequest {
-    model: String,
-    messages: Vec<Value>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    tools: Vec<Value>,
+    /// Name reported in logs and audit records.
+    pub fn with_provider_name(mut self, name: &'static str) -> Self {
+        self.provider = name;
+        self
+    }
+
+    pub fn with_extra(mut self, extra: Map<String, Value>) -> Self {
+        self.extra = extra;
+        self
+    }
 }
 
 #[derive(Deserialize)]
 struct OpenAiResponse {
     choices: Vec<OpenAiChoice>,
+    #[serde(default)]
+    usage: Option<OpenAiUsage>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiUsage {
+    #[serde(default)]
+    prompt_tokens: u64,
+    #[serde(default)]
+    completion_tokens: u64,
 }
 
 #[derive(Deserialize)]
@@ -67,7 +92,8 @@ struct OpenAiToolCall {
 #[derive(Deserialize)]
 struct OpenAiFunction {
     name: String,
-    arguments: String,
+    /// Normally a JSON string; some servers send an object.
+    arguments: Value,
 }
 
 fn to_openai_message(msg: &Message) -> Value {
@@ -75,14 +101,18 @@ fn to_openai_message(msg: &Message) -> Value {
         Role::System => json!({ "role": "system", "content": msg.content }),
         Role::User => json!({ "role": "user", "content": msg.content }),
         Role::Assistant => {
-            let tool_calls: Option<Vec<Value>> =
-                msg.tool_calls.as_ref().map(|calls| {
-                    calls.iter().map(|c| json!({
-                    "id": c.id,
-                    "type": "function",
-                    "function": { "name": c.name, "arguments": c.arguments.to_string() },
-                })).collect()
-                });
+            let tool_calls: Option<Vec<Value>> = msg.tool_calls.as_ref().map(|calls| {
+                calls
+                    .iter()
+                    .map(|c| {
+                        json!({
+                            "id": c.id,
+                            "type": "function",
+                            "function": { "name": c.name, "arguments": c.arguments.to_string() },
+                        })
+                    })
+                    .collect()
+            });
             let mut m = json!({ "role": "assistant" });
             if !msg.content.is_empty() {
                 m["content"] = json!(msg.content);
@@ -97,6 +127,15 @@ fn to_openai_message(msg: &Message) -> Value {
             "tool_call_id": msg.tool_call_id.as_deref().unwrap_or(""),
             "content": msg.content,
         }),
+    }
+}
+
+/// Parse tool-call arguments. Invalid JSON is kept as a string so the agent
+/// can tell the model, instead of silently running the tool with `{}`.
+pub(crate) fn parse_arguments(raw: Value) -> Value {
+    match raw {
+        Value::String(s) => serde_json::from_str(&s).unwrap_or(Value::String(s)),
+        other => other,
     }
 }
 
@@ -117,28 +156,34 @@ impl LlmClient for OpenAiClient {
             })
             .collect();
 
-        let req = OpenAiRequest {
-            model: self.model.clone(),
-            messages: messages.iter().map(to_openai_message).collect(),
-            tools: openai_tools,
-        };
+        let mut body = json!({
+            "model": self.model,
+            "messages": messages.iter().map(to_openai_message).collect::<Vec<_>>(),
+        });
+        if !openai_tools.is_empty() {
+            body["tools"] = Value::Array(openai_tools);
+        }
+        for (k, v) in &self.extra {
+            body[k] = v.clone();
+        }
 
         let url = format!("{}/chat/completions", self.base_url);
         debug!("POST {url}");
 
-        let resp: OpenAiResponse = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&req)
-            .send()
-            .await
-            .context("OpenAI request failed")?
-            .error_for_status()
-            .context("OpenAI error status")?
-            .json()
-            .await
-            .context("OpenAI parse error")?;
+        let resp: OpenAiResponse = send_with_retry(
+            || {
+                let req = self.client.post(&url).json(&body);
+                match &self.api_key {
+                    Some(key) => req.bearer_auth(key),
+                    None => req,
+                }
+            },
+            self.provider,
+        )
+        .await?
+        .json()
+        .await
+        .with_context(|| format!("{} parse error", self.provider))?;
 
         let msg = resp
             .choices
@@ -151,24 +196,28 @@ impl LlmClient for OpenAiClient {
             .tool_calls
             .unwrap_or_default()
             .into_iter()
-            .map(|tc| {
-                let arguments = serde_json::from_str(&tc.function.arguments)
-                    .unwrap_or(Value::Object(Default::default()));
-                ToolCall {
-                    id: tc.id,
-                    name: tc.function.name,
-                    arguments,
-                }
+            .map(|tc| ToolCall {
+                id: tc.id,
+                name: tc.function.name,
+                arguments: parse_arguments(tc.function.arguments),
             })
             .collect();
 
         Ok(ChatResponse {
             content,
             tool_calls,
+            usage: resp.usage.map(|u| Usage {
+                input_tokens: u.prompt_tokens,
+                output_tokens: u.completion_tokens,
+            }),
         })
     }
 
     fn provider_name(&self) -> &str {
-        "openai"
+        self.provider
+    }
+
+    fn model(&self) -> &str {
+        &self.model
     }
 }
