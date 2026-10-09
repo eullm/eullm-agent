@@ -2,7 +2,7 @@
 name = "eullm-agent"
 version = "0.1.7"
 edition = "2021"
-license = "Apache-2.0"
+license = "AGPL-3.0-or-later"
 description = "EULLM Agent — autonomous ReAct agent with multi-provider LLM support"
 
 [[bin]]
