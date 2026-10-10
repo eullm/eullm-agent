@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 
 from . import auth, drafts, models as m, profile as prof, proposals as props, publishing, repo, sources, ui
 from .briefing import TEMPLATES as _BRIEF_TEMPLATES
@@ -286,7 +287,7 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
             pid = publishing.request(db, c.tenant_id, draft_id, body.target_id, body.mode, c.name)
         except publishing.PublishError as e:
             raise HTTPException(409, str(e)) from None
-        except Exception:
+        except IntegrityError:
             raise HTTPException(409, "already requested") from None
         return {"id": pid, "status": "pending_approval"}
 
