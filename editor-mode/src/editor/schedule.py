@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 
@@ -67,8 +67,14 @@ class Runner:
         with self.db.tenant(tenant) as s:
             row = s.execute(select(m.tenants.c.timezone, m.tenants.c.briefing_hour, m.tenants.c.language)).first()
         st = self.settings
+        tz = (row.timezone if row else None) or st.timezone
+        try:
+            ZoneInfo(tz)
+        except ZoneInfoNotFoundError:
+            log.warning("tenant %s has invalid timezone %r, using default %s", tenant, tz, st.timezone)
+            tz = st.timezone
         return {
-            "timezone": (row.timezone if row else None) or st.timezone,
+            "timezone": tz,
             "briefing_hour": row.briefing_hour if row and row.briefing_hour is not None else st.briefing_hour,
             "language": (row.language if row else None) or "it",
         }
