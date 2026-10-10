@@ -53,9 +53,9 @@ def test_opportunity_ranks_relevant_topics_and_skips_others(db, tenant):
     site_id = setup_site(db, tenant)
     ops = opp.score_site(db, tenant, site_id)
     with db.tenant(tenant) as s:
-        labels = {o.topic_id: s.execute(text("SELECT label FROM editor.topics WHERE id = :i"), {"i": o.topic_id}).scalar() for o in ops}
+        keywords = {o.topic_id: s.execute(text("SELECT keywords FROM editor.topics WHERE id = :i"), {"i": o.topic_id}).scalar() for o in ops}
     assert len(ops) == 2  # fibra and starlink; pizza irrelevant, calcio excluded
-    assert ops[0].matched_subtopic == "Fibra" and "bari" in labels[ops[0].topic_id]
+    assert ops[0].matched_subtopic == "Fibra" and "bari" in keywords[ops[0].topic_id]
     assert ops[0].version == "opportunity-v1" and "feedback" in ops[0].missing
     assert set(ops[0].components) >= {"relevance", "hype", "freshness", "novelty", "source_quality"}
 

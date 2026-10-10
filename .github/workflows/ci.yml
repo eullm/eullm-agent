@@ -78,4 +78,10 @@ jobs:
         run: pipx install uv==0.13.0
 
       - name: test
-        run: uv run --locked pytest
+        # Failed tests also become annotations, readable without the raw log.
+        run: |
+          set -o pipefail
+          uv run --locked pytest -rfE | tee pytest.out || {
+            grep -E '^(FAILED|ERROR) ' pytest.out | sed 's/^/::error title=pytest::/'
+            exit 1
+          }
