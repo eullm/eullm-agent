@@ -33,8 +33,13 @@ class GitHubCollector:
             headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
         )
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict):
+            raise ValueError(f"unexpected GitHub response: {str(data)[:200]}")
         items = []
-        for repo in r.json().get("items", []):
+        for repo in data.get("items") or []:
+            if not isinstance(repo, dict):
+                continue
             items.append(
                 Item(
                     url=repo["html_url"],
