@@ -102,7 +102,7 @@ def rate(
     dates = [i.published_at for i in items if i.published_at]
     month = [d for d in dates if d >= now - timedelta(days=30)]
     comp["frequency"] = round(_sat(len(month) / 4.3, 5), 3) if dates else 0.0
-    comp["freshness"] = round(math.exp(-(now - max(dates)).days / 14), 3) if dates else 0.0
+    comp["freshness"] = round(min(1.0, math.exp(-(now - max(dates)).days / 14)), 3) if dates else 0.0
     if items and known:
         dup = sum(1 for i in items if any(similarity(minhash(f"{i.title} {i.summary}"), k) >= 0.8 for k in known))
         comp["originality"] = round(1 - dup / len(items), 3)
