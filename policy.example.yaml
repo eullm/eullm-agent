@@ -32,4 +32,8 @@ rules:
 taint:
   sources: [fetch_url, read_file, ocr_image, pdf_to_text]
   effects: [write_file, run_program]
+  # A tainted run that has also read the operator's own data cannot send
+  # anything out (in a URL, a header, a body) without approval.
+  private_sources: [read_file, list_dir, ocr_image, pdf_to_text]
+  egress: [fetch_url]
   on_effect: require_approval

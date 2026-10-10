@@ -108,8 +108,10 @@ example Editor Mode). The contract is
 - **Policy:** `policy_file` (see [policy.example.yaml](policy.example.yaml))
   decides `allow`, `deny` or `require_approval` per tool and profile. A run
   that has read external content is *tainted*, and from then on tools with
-  side effects need approval: the model proposes, the policy authorises, the
-  worker executes and the system records.
+  side effects need approval. A tainted run that has also read local files or
+  documents needs approval for `fetch_url` too, so injected instructions
+  cannot send private data out. The model proposes, the policy authorises,
+  the worker executes and the system records.
 - **Approvals:** a run stops at the action and waits for a decision through
   the API, Telegram (`/approve <id>`, `/deny <id> [note]`, sent to the chat
   that started the task) or the terminal for `eullm-agent run`. No decision
