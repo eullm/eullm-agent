@@ -27,6 +27,24 @@
   profile only (approving a version starts discovery), and maintenance
   never reverses a status a person set.
 
+### Reliability
+
+- Approvals: a waiting run also reads its decision from the database, so a
+  decision taken through another Core process reaches it, and a decision
+  that lands just before the expiry wins. At startup, runs left unfinished
+  by the previous process fail as interrupted. The API stops gracefully.
+- Tenant limits: concurrent runs and fetches cannot all pass the same
+  check; the monthly budget is re-checked before every model call of a run.
+- `api.fetch.credentials`: the Core adds a header (e.g. a GitHub token) for
+  an exact host, over https and on the first request only.
+- Editor Mode: background work is recorded as jobs with its outcome
+  (shown on the site page and at `GET /api/jobs`). Each scheduled step
+  runs on its own; maintenance and the weekly review run based on their
+  last successful run, so a late tick no longer skips them. An undelivered
+  briefing is sent again within its window; recipients get it in Bcc.
+- Editor Mode: a publication is marked `sending` before anything leaves; one
+  cut short waits for a person to check the CMS instead of being sent twice.
+
 ## 0.3.5
 
 ### Added
