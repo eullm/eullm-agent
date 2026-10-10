@@ -50,6 +50,28 @@ fn approval_message(a: &Approval) -> String {
     )
 }
 
+/// Parse "/approve <id> [note]" or "/deny <id> [note]".
+/// Returns None for other messages (including "/approveX").
+///
+/// A bare "/approve" or "/deny" parses with an empty id so the caller can
+/// answer with usage instead of silently ignoring it — or worse, matching
+/// every pending approval, since "" is a prefix of any id.
+fn approval_command(text: &str) -> Option<(bool, &str, Option<&str>)> {
+    for (cmd, approve) in [("/approve", true), ("/deny", false)] {
+        let Some(rest) = text.strip_prefix(cmd) else {
+            continue;
+        };
+        if !rest.is_empty() && !rest.starts_with(' ') {
+            continue;
+        }
+        let mut parts = rest.trim().splitn(2, ' ');
+        let id = parts.next().unwrap_or_default();
+        let note = parts.next().map(str::trim).filter(|s| !s.is_empty());
+        return Some((approve, id, note));
+    }
+    None
+}
+
 /// Find a pending approval by full id or unique prefix.
 async fn find_pending(core: &Core, id: &str) -> Result<Option<String>> {
     let pending = core
@@ -108,33 +130,36 @@ async fn dispatch(bot: Bot, msg: Message, core: Arc<Core>) -> Result<()> {
         return Ok(());
     }
 
-    for (cmd, approve) in [("/approve ", true), ("/deny ", false)] {
-        if let Some(rest) = text.strip_prefix(cmd) {
-            let mut parts = rest.trim().splitn(2, ' ');
-            let id = parts.next().unwrap_or_default();
-            let note = parts.next().map(str::trim).filter(|s| !s.is_empty());
-            let reply = match find_pending(&core, id).await? {
-                None => "No pending approval with that id.".to_string(),
-                Some(full) => {
-                    let by = format!("telegram:{uid}");
-                    match core
-                        .approvals
-                        .decide(TENANT, &full, approve, &by, note)
-                        .await?
-                    {
-                        Some(a) => format!(
-                            "{} {}: {}",
-                            if approve { "✅" } else { "⛔" },
-                            a.status.as_str(),
-                            a.tool
-                        ),
-                        None => "That approval was already decided.".to_string(),
-                    }
-                }
-            };
-            bot.send_message(msg.chat.id, reply).await?;
+    if let Some((approve, id, note)) = approval_command(text) {
+        if id.is_empty() {
+            bot.send_message(
+                msg.chat.id,
+                "Usage: /approve <id>\nUsage: /deny <id> [note]",
+            )
+            .await?;
             return Ok(());
         }
+        let reply = match find_pending(&core, id).await? {
+            None => "No pending approval with that id.".to_string(),
+            Some(full) => {
+                let by = format!("telegram:{uid}");
+                match core
+                    .approvals
+                    .decide(TENANT, &full, approve, &by, note)
+                    .await?
+                {
+                    Some(a) => format!(
+                        "{} {}: {}",
+                        if approve { "✅" } else { "⛔" },
+                        a.status.as_str(),
+                        a.tool
+                    ),
+                    None => "That approval was already decided.".to_string(),
+                }
+            }
+        };
+        bot.send_message(msg.chat.id, reply).await?;
+        return Ok(());
     }
 
     if let Some(task) = text.strip_prefix("/run ") {
@@ -187,4 +212,34 @@ async fn dispatch(bot: Bot, msg: Message, core: Arc<Core>) -> Result<()> {
 /// Only listed users may send tasks; an empty list allows nobody.
 pub fn is_allowed(allowed_users: &[i64], uid: i64) -> bool {
     allowed_users.contains(&uid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approval_command_parses_id_and_note() {
+        assert_eq!(
+            approval_command("/approve abc123"),
+            Some((true, "abc123", None))
+        );
+        assert_eq!(
+            approval_command("/deny abc123 not now"),
+            Some((false, "abc123", Some("not now")))
+        );
+    }
+
+    #[test]
+    fn bare_command_parses_with_empty_id() {
+        assert_eq!(approval_command("/approve"), Some((true, "", None)));
+        assert_eq!(approval_command("/deny  "), Some((false, "", None)));
+    }
+
+    #[test]
+    fn other_messages_are_not_approval_commands() {
+        assert_eq!(approval_command("/approveX abc"), None);
+        assert_eq!(approval_command("/run do things"), None);
+        assert_eq!(approval_command("hello"), None);
+    }
 }
