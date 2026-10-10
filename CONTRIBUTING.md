@@ -8,7 +8,8 @@ all welcome.
 ```bash
 git clone https://github.com/eullm/eullm-agent.git && cd eullm-agent
 cargo build
-cargo clippy -- -D warnings
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
