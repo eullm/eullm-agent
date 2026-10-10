@@ -44,6 +44,13 @@ def test_rate_rewards_relevant_fresh_original_sources():
     assert src.rate([], kws)["status"] == "rejected"
 
 
+def test_freshness_never_exceeds_one_for_future_dates():
+    kws = {"fibra", "ftth"}
+    future = [Item(url="f", title="Fibra FTTH futura", summary="x" * 400,
+                   published_at=NOW + timedelta(days=30))]
+    assert src.rate(future, kws)["components"]["freshness"] == 1.0
+
+
 def test_api_candidates_follow_the_profile():
     body = {"subtopics": [{"name": "Sicurezza", "keywords": ["ransomware", "firewall"], "share": 0.5},
                           {"name": "Cloud", "keywords": ["cloud", "datacenter"], "share": 0.3}]}
