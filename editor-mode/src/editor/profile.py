@@ -233,14 +233,14 @@ def drift(old: dict, new: dict, min_share: float = 0.1, min_change: float = 0.15
     old_subs, new_subs = old.get("subtopics", []), new.get("subtopics", [])
     for s in new_subs:
         o = _match(s, old_subs)
-        if o is None and s["share"] >= min_share:
-            changes.append({"kind": "emerging", "subtopic": s["name"], "share": s["share"], "evidence": s["evidence"]})
-        elif o is not None and s["share"] - o["share"] >= min_change:
-            changes.append({"kind": "growing", "subtopic": s["name"], "from": o["share"], "to": s["share"], "evidence": s["evidence"]})
+        if o is None and s.get("share", 0) >= min_share:
+            changes.append({"kind": "emerging", "subtopic": s["name"], "share": s["share"], "evidence": s.get("evidence", [])})
+        elif o is not None and s.get("share", 0) - o.get("share", 0) >= min_change:
+            changes.append({"kind": "growing", "subtopic": s["name"], "from": o.get("share", 0), "to": s["share"], "evidence": s.get("evidence", [])})
     for o in old_subs:
         n = _match(o, new_subs)
-        if o["share"] >= min_share and (n is None or o["share"] - n["share"] >= min_change):
-            changes.append({"kind": "declining", "subtopic": o["name"], "from": o["share"], "to": n["share"] if n else 0.0})
+        if o.get("share", 0) >= min_share and (n is None or o["share"] - n.get("share", 0) >= min_change):
+            changes.append({"kind": "declining", "subtopic": o["name"], "from": o["share"], "to": n.get("share", 0) if n else 0.0})
     return changes
 
 
@@ -285,6 +285,10 @@ def approve(s, site_id: int, version: int, by: str) -> bool:
 def edit(s, tenant_id: str, site_id: int, body: dict) -> int:
     """A manual edit becomes a new draft based on the approved version."""
     current = approved_profile(s, site_id)
+    if current is not None:
+        # Like reanalysis: the owner's settings survive a manual edit that
+        # does not mention them (the API only requires a subtopics list).
+        body.setdefault("settings", current.body.get("settings", dict(DEFAULT_SETTINGS)))
     changes = drift(current.body, body) if current else []
     return save_draft(s, tenant_id, site_id, body, "manual", based_on=current.version if current else None, changes=changes)
 
