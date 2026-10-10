@@ -50,7 +50,8 @@ class TargetIn(BaseModel):
     kind: str = Field(..., pattern="^(wordpress|webhook|telegram_channel)$")
     name: str = Field(..., max_length=100)
     config: dict = {}
-    secret_env: str | None = Field(None, pattern="^[A-Z][A-Z0-9_]{1,63}$")
+    # Only the secret's short name: the server reads EDITOR_SECRET_<TENANT>__<NAME>.
+    secret_env: str | None = Field(None, pattern="^[A-Z0-9]+(_[A-Z0-9]+)*$", max_length=40)
 
 
 class PublicationIn(BaseModel):
@@ -148,11 +149,13 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
         return {"profiles": [{k: v for k, v in r._mapping.items() if k != "tenant_id"} for r in rows]}
 
     @app.post("/api/sites/{site_id}/profiles/{version}/approve")
-    def approve(site_id: int, version: int, c: auth.Caller = Depends(need("owner"))):
+    def approve(site_id: int, version: int, background: BackgroundTasks, c: auth.Caller = Depends(need("owner"))):
         with db.tenant(c.tenant_id) as s:
             site_or_404(s, site_id)
             if not prof.approve(s, site_id, version, c.name):
                 raise HTTPException(404, "version not found")
+        # Sources follow the approved line only, so look for them now.
+        background.add_task(run_discovery, c.tenant_id, site_id)
         return {"approved": version}
 
     @app.put("/api/sites/{site_id}/profile")
@@ -179,7 +182,7 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
         with db.tenant(c.tenant_id) as s:
             if s.execute(select(m.sources.c.id).where(m.sources.c.id == source_id)).scalar() is None:
                 raise HTTPException(404, "source not found")
-            repo.set_source_status(s, source_id, body.status, body.reason or f"set by {c.name}")
+            repo.set_source_status(s, source_id, body.status, body.reason or f"set by {c.name}", by=c.name)
         return {"status": body.status}
 
     @app.get("/api/proposals")

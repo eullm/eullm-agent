@@ -61,7 +61,7 @@ setting.
 
 | Capability | Default | When enabled |
 |---|---|---|
-| `run_program` (`tools.exec`) | off | Only programs in `allowed_programs`, argv only (never a shell), run in the workspace with a clean environment, killed with their process group on timeout, output capped |
+| `run_program` (`tools.exec`) | off | Only programs in `allowed_programs`, argv only (never a shell), run in a bubblewrap sandbox (no network, read-only system directories, only the workspace visible and read-only, own process tree, memory and file size limits), killed with everything they started on timeout, output capped |
 | `read_file`, `list_dir` | on | Confined to `workspace`: `..`, absolute paths outside it and symlinks leading out are refused |
 | `write_file` | off (`allow_write`) | Same confinement; never writes through a symlink; size capped |
 | `fetch_url` (`tools.http`) | off | HTTPS GET only; every resolved address must be public (no loopback, LAN, link-local or cloud metadata); each redirect is checked again; the connection is pinned to the checked address; optional domain allowlist; body capped |
@@ -108,8 +108,10 @@ example Editor Mode). The contract is
 - **Policy:** `policy_file` (see [policy.example.yaml](policy.example.yaml))
   decides `allow`, `deny` or `require_approval` per tool and profile. A run
   that has read external content is *tainted*, and from then on tools with
-  side effects need approval: the model proposes, the policy authorises, the
-  worker executes and the system records.
+  side effects need approval. A tainted run that has also read local files or
+  documents needs approval for `fetch_url` too, so injected instructions
+  cannot send private data out. The model proposes, the policy authorises,
+  the worker executes and the system records.
 - **Approvals:** a run stops at the action and waits for a decision through
   the API, Telegram (`/approve <id>`, `/deny <id> [note]`, sent to the chat
   that started the task) or the terminal for `eullm-agent run`. No decision

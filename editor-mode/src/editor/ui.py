@@ -308,11 +308,13 @@ def register(app, ctx) -> None:
         return done("/site", f"Rianalisi di {domain} avviata.")
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
-    def ui_approve(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_approve(site_id: int, version: int, background: BackgroundTasks,
+                   c: auth.Caller = Depends(ctx.need("owner"))):
         with db.tenant(c.tenant_id) as s:
             if not prof.approve(s, site_id, version, c.name):
                 raise HTTPException(404, "version not found")
-        return done("/site", f"Versione {version} approvata: è la linea del sito da ora.")
+        background.add_task(ctx.run_discovery, c.tenant_id, site_id)
+        return done("/site", f"Versione {version} approvata: è la linea del sito da ora. Cerco le fonti adatte.")
 
     @app.post("/ui/sites/{site_id}/discard/{version}")
     def ui_discard(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -375,7 +377,7 @@ def register(app, ctx) -> None:
                 raise HTTPException(404, "source not found")
             if status == "active":
                 quotas.check(s, "sources")
-            repo.set_source_status(s, source_id, status, f"set by {c.name}")
+            repo.set_source_status(s, source_id, status, f"set by {c.name}", by=c.name)
         label = {"active": "riattivata", "suspended": "sospesa", "rejected": "scartata"}[status]
         return done(safe_path(back, "/sources"), f"{name} {label}.")
 
@@ -520,7 +522,8 @@ def register(app, ctx) -> None:
             return render(request, "publications.html.j2", c, s, "publications", _sites=(sites, site),
                           pending=[r for r in rows if r.status == "pending_approval"],
                           history=[r for r in rows if r.status != "pending_approval"],
-                          targets=targets, kinds=TARGET_KINDS)
+                          targets=targets, kinds=TARGET_KINDS,
+                          secret_var=lambda name: _secret_var(c.tenant_id, name))
 
     @app.post("/ui/publications/{pub_id}/decision")
     def ui_pub_decision(pub_id: int, background: BackgroundTasks, accept: str = Form(...),
@@ -532,6 +535,12 @@ def register(app, ctx) -> None:
             background.add_task(ctx.publisher.run, db, c.tenant_id, pub_id)
         return done("/publications", "Approvata: l'invio parte adesso." if ok else "Pubblicazione rifiutata.")
 
+    def _secret_var(tenant_id, name):
+        try:
+            return publishing.secret_variable(tenant_id, name)
+        except publishing.PublishError:
+            return f"{name} (nome non valido: ricrea la destinazione)"
+
     @app.post("/ui/targets")
     def ui_add_target(site_id: int = Form(...), kind: str = Form(...), name: str = Form(...),
                       address: str = Form(""), secret_env: str = Form(""),
@@ -540,9 +549,8 @@ def register(app, ctx) -> None:
             raise HTTPException(400, "unknown kind")
         config = {"chat_id": address.strip()} if kind == "telegram_channel" else {"url": address.strip()}
         env_name = secret_env.strip() or None
-        if env_name is not None and not (env_name[:1].isalpha() and env_name.replace("_", "").isalnum()
-                                         and env_name.upper() == env_name):
-            return done("/publications", "Il nome della variabile va scritto in MAIUSCOLO, es. WP_SITO.")
+        if env_name is not None and (len(env_name) > 40 or not publishing.SECRET_NAME.match(env_name)):
+            return done("/publications", "Il nome del segreto va scritto in MAIUSCOLO, es. WP_SITO.")
         try:
             with db.tenant(c.tenant_id) as s:
                 if s.execute(select(m.sites.c.id).where(m.sites.c.id == site_id)).scalar() is None:
@@ -550,7 +558,10 @@ def register(app, ctx) -> None:
             publishing.add_target(db, c.tenant_id, site_id, kind, name.strip()[:100], config, env_name)
         except publishing.PublishError as e:
             return done("/publications", f"Destinazione non aggiunta: {e}.")
-        return done("/publications", f"Destinazione {name.strip()[:100]} aggiunta.")
+        added = f"Destinazione {name.strip()[:100]} aggiunta."
+        if env_name:
+            added += f" Sul server la credenziale va nella variabile {publishing.secret_variable(c.tenant_id, env_name)}."
+        return done("/publications", added)
 
     # --- Impostazioni ---------------------------------------------------------------
 

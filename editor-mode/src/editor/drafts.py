@@ -27,6 +27,7 @@ from . import models as m
 from . import quotas, repo
 from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
+from .site import RobotsCache
 from .normalize import normalize_text
 
 log = logging.getLogger(__name__)
@@ -186,12 +187,16 @@ def fetch_contents(db, tenant_id: str, item_ids: list[int], client: httpx.Client
     with db.tenant(tenant_id) as s:
         todo = s.execute(select(m.source_items.c.id, m.source_items.c.url).where(
             m.source_items.c.id.in_(item_ids), m.source_items.c.content_fetched_at.is_(None))).all()
+    robots = RobotsCache(client)
     for row in todo:
         content = None
         try:
-            r = client.get(row.url, headers={"Accept": "text/html"})
-            if r.status_code == 200 and "html" in r.headers.get("content-type", "html"):
-                content = parse_html(r.text, row.url).text[:MAX_CONTENT] or None
+            if robots.allowed(row.url):
+                r = client.get(row.url, headers={"Accept": "text/html"})
+                if r.status_code == 200 and "html" in r.headers.get("content-type", "html"):
+                    content = parse_html(r.text, row.url).text[:MAX_CONTENT] or None
+            else:
+                log.info("robots.txt forbids reading %s: drafting from its summary", row.url)
         except httpx.HTTPError as e:
             log.info("cannot read %s: %s", row.url, e)
         with db.tenant(tenant_id) as s:

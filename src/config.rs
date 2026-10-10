@@ -331,6 +331,70 @@ pub struct ToolsConfig {
     pub filesystem: FilesystemToolConfig,
     #[serde(default)]
     pub http: HttpToolConfig,
+    /// Isolation for run_program and module tools.
+    #[serde(default)]
+    pub sandbox: SandboxConfig,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxMode {
+    /// Linux namespaces through bubblewrap: no network, read-only system,
+    /// only the workspace visible. Startup fails if it cannot work.
+    Bubblewrap,
+    /// No isolation beyond the working directory and a clean environment.
+    None,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SandboxConfig {
+    #[serde(default = "default_sandbox_mode")]
+    pub mode: SandboxMode,
+    /// The bubblewrap executable.
+    #[serde(default = "default_bwrap")]
+    pub bwrap: PathBuf,
+    /// Give programs network access (it bypasses the fetch_url guard).
+    #[serde(default)]
+    pub network: bool,
+    /// Let programs write in the workspace (read-only by default).
+    #[serde(default)]
+    pub writable_workspace: bool,
+    /// More host paths visible read-only, e.g. /opt/tools or /etc/fonts.
+    #[serde(default)]
+    pub read_only_paths: Vec<PathBuf>,
+    /// Address space limit per program, in MiB (0: no limit).
+    #[serde(default = "default_memory_mb")]
+    pub max_memory_mb: u64,
+    /// Largest file a program may write, in MiB (0: no limit).
+    #[serde(default = "default_file_mb")]
+    pub max_file_mb: u64,
+}
+
+impl Default for SandboxConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_sandbox_mode(),
+            bwrap: default_bwrap(),
+            network: false,
+            writable_workspace: false,
+            read_only_paths: Vec::new(),
+            max_memory_mb: default_memory_mb(),
+            max_file_mb: default_file_mb(),
+        }
+    }
+}
+
+fn default_sandbox_mode() -> SandboxMode {
+    SandboxMode::Bubblewrap
+}
+fn default_bwrap() -> PathBuf {
+    PathBuf::from("bwrap")
+}
+fn default_memory_mb() -> u64 {
+    2048
+}
+fn default_file_mb() -> u64 {
+    100
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

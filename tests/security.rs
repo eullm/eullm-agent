@@ -8,7 +8,7 @@ use serde_json::json;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use eullm_agent::config::{Config, ExecToolConfig, HttpToolConfig};
+use eullm_agent::config::{Config, ExecToolConfig, HttpToolConfig, SandboxConfig, SandboxMode};
 use eullm_agent::modules::{builtin::all_modules, ModuleRegistry};
 use eullm_agent::setup::build_tools;
 use eullm_agent::telegram::is_allowed;
@@ -17,6 +17,7 @@ use eullm_agent::tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
     http::FetchUrlTool,
     module_tool::ModuleTool,
+    process::check_sandbox,
     sandbox::Workspace,
     Tool,
 };
@@ -35,7 +36,26 @@ fn exec_tool(ws: Workspace, programs: &[&str], timeout: u64) -> ExecTool {
         timeout_seconds: timeout,
         ..Default::default()
     };
-    ExecTool::new(&cfg, ws)
+    ExecTool::new(&cfg, ws, &writable())
+}
+
+/// The default bubblewrap sandbox, with a writable workspace so that the
+/// tests below can tell "the attack failed" from "the write was refused".
+fn writable() -> SandboxConfig {
+    SandboxConfig {
+        writable_workspace: true,
+        ..Default::default()
+    }
+}
+
+fn sandboxed(ws: Workspace, programs: &[&str], sandbox: SandboxConfig) -> ExecTool {
+    let cfg = ExecToolConfig {
+        enabled: true,
+        allowed_programs: programs.iter().map(|s| s.to_string()).collect(),
+        timeout_seconds: 5,
+        ..Default::default()
+    };
+    ExecTool::new(&cfg, ws, &sandbox)
 }
 
 fn tool_names(config: &Config, name: &str) -> Vec<String> {
@@ -147,13 +167,106 @@ async fn s10_output_is_capped() {
         timeout_seconds: 5,
         max_output_bytes: 1000,
     };
-    let t = ExecTool::new(&cfg, ws);
+    let t = ExecTool::new(&cfg, ws, &writable());
     let out = t
         .execute(&json!({"program": "head", "args": ["-c", "100000", "/dev/zero"]}))
         .await
         .unwrap();
     assert!(out.len() < 1200, "{} bytes", out.len());
     assert!(out.contains("[output truncated]"));
+}
+
+// --- Sandbox: what a program can reach ------------------------------------
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sandbox_hides_host_files_and_secrets() {
+    let (ws, base) = workspace("sbfiles");
+    std::fs::write(base.join("outside.txt"), "host secret").unwrap();
+    std::fs::write(ws.root().join("inside.txt"), "workspace data").unwrap();
+    let t = sandboxed(ws.clone(), &["cat"], SandboxConfig::default());
+    let inside = ws.root().join("inside.txt");
+    let out = t
+        .execute(&json!({"program": "cat", "args": [inside.to_str().unwrap()]}))
+        .await
+        .unwrap();
+    assert!(out.contains("workspace data"), "{out}");
+    for path in [
+        base.join("outside.txt").to_str().unwrap().to_string(),
+        "/etc/passwd".into(),
+        "/etc/shadow".into(),
+        "/root/.bashrc".into(),
+    ] {
+        let out = t
+            .execute(&json!({"program": "cat", "args": [path]}))
+            .await
+            .unwrap();
+        assert!(
+            out.contains("[exit 1]") && !out.contains("host secret"),
+            "{path}: {out}"
+        );
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sandbox_has_no_network_and_a_read_only_workspace() {
+    let (ws, _) = workspace("sbnet");
+    let t = sandboxed(ws.clone(), &["cat", "touch"], SandboxConfig::default());
+    let out = t
+        .execute(&json!({"program": "cat", "args": ["/proc/net/dev"]}))
+        .await
+        .unwrap();
+    let ifaces: Vec<&str> = out
+        .lines()
+        .skip(2)
+        .filter_map(|l| l.split(':').next())
+        .collect();
+    assert_eq!(
+        ifaces.iter().map(|s| s.trim()).collect::<Vec<_>>(),
+        ["lo"],
+        "{out}"
+    );
+    let target = ws.root().join("new.txt");
+    let out = t
+        .execute(&json!({"program": "touch", "args": [target.to_str().unwrap()]}))
+        .await
+        .unwrap();
+    assert!(out.contains("[exit 1]") && !target.exists(), "{out}");
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sandbox_kills_what_the_program_left_behind() {
+    let (ws, _) = workspace("sbsetsid");
+    let marker = ws.root().join("escaped");
+    let t = sandboxed(ws.clone(), &["sh"], writable());
+    // A new session escapes a process-group kill, not the PID namespace.
+    let script = format!(
+        "setsid sh -c 'sleep 2; touch {}' >/dev/null 2>&1 & exit 0",
+        marker.display()
+    );
+    t.execute(&json!({"program": "sh", "args": ["-c", script]}))
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(!marker.exists(), "a background process outlived the run");
+}
+
+#[test]
+fn sandbox_that_cannot_start_stops_the_setup() {
+    let (ws, _) = workspace("sbmissing");
+    let missing = SandboxConfig {
+        bwrap: "/nonexistent/bwrap".into(),
+        ..Default::default()
+    };
+    let err = check_sandbox(&missing, ws.root()).unwrap_err().to_string();
+    assert!(err.contains("mode: none"), "{err}");
+    let none = SandboxConfig {
+        mode: SandboxMode::None,
+        ..missing
+    };
+    assert!(check_sandbox(&none, ws.root()).is_ok());
 }
 
 // --- S2/S3: filesystem confinement ----------------------------------------
@@ -360,7 +473,7 @@ fn pdf_tool(ws: Workspace) -> ModuleTool {
         .unwrap()
         .tools[0]
         .clone();
-    ModuleTool::new(spec, ws, Duration::from_secs(5)).unwrap()
+    ModuleTool::new(spec, ws, Duration::from_secs(5), &SandboxConfig::default()).unwrap()
 }
 
 #[test]

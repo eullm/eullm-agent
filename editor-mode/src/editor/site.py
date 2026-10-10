@@ -9,10 +9,10 @@ could not read is recorded as a problem instead of being guessed.
 
 from __future__ import annotations
 
-import gzip
 import logging
 import time
 import xml.etree.ElementTree as ET
+import zlib
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -29,7 +29,9 @@ from .text import tokens
 
 log = logging.getLogger(__name__)
 
-AGENT = "EuLLMAgent"
+# The product token of the User-Agent the Core sends (``eullm-agent/<version>``),
+# so that a site's ``User-agent: eullm-agent`` rules are the ones we obey.
+AGENT = "eullm-agent"
 MIN_POSTS = 5
 GOOD_POSTS = 15
 MAX_SITEMAP_BYTES = 10_000_000
@@ -97,6 +99,48 @@ def guess_language(text: str) -> str | None:
     counts = {lang: sum(1 for w in words if w in stop) for lang, stop in STOP_LANG.items()}
     lang, best = max(counts.items(), key=lambda kv: kv[1])
     return lang if best >= max(5, len(words) * 0.03) else None
+
+
+def gunzip_limited(data: bytes, limit: int) -> bytes | None:
+    """Inflate gzip data without ever producing more than ``limit`` bytes.
+
+    A few MB of gzip can expand to gigabytes, so the output is bounded while
+    inflating, not after. Returns None for corrupt, truncated (the Core cuts
+    bodies at its size limit) or oversized input.
+    """
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    try:
+        out = d.decompress(data, limit + 1)
+    except zlib.error:
+        return None
+    if len(out) > limit or not d.eof:
+        return None
+    return out
+
+
+class RobotsCache:
+    """robots.txt per host, read once through the Core. Unreachable or 5xx
+    means "do not read", a missing file means "read"."""
+
+    def __init__(self, client: httpx.Client):
+        self.client = client
+        self._robots: dict[str, RobotFileParser] = {}
+
+    def allowed(self, url: str) -> bool:
+        u = httpx.URL(url)
+        rp = self._robots.get(u.host)
+        if rp is None:
+            rp = RobotFileParser()
+            try:
+                r = self.client.get(f"{u.scheme}://{u.host}/robots.txt", headers={"Accept": "text/plain"})
+                if r.status_code >= 500:
+                    rp.parse(["User-agent: *", "Disallow: /"])
+                else:
+                    rp.parse(r.text.splitlines() if r.status_code == 200 else [])
+            except httpx.HTTPError:
+                rp.parse(["User-agent: *", "Disallow: /"])
+            self._robots[u.host] = rp
+        return rp.can_fetch(AGENT, url)
 
 
 class SiteCrawler:
@@ -226,9 +270,9 @@ class SiteCrawler:
                 continue
             data = r.content[:MAX_SITEMAP_BYTES]
             if url.endswith(".gz") or data[:2] == b"\x1f\x8b":
-                try:
-                    data = gzip.decompress(data)[:MAX_SITEMAP_BYTES]
-                except OSError:
+                data = gunzip_limited(data, MAX_SITEMAP_BYTES)
+                if data is None:
+                    snap.problems.append(f"sitemap {url}: unreadable or oversized gzip, skipped")
                     continue
             try:
                 root = ET.fromstring(data)

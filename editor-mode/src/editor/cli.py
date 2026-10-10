@@ -24,6 +24,9 @@ def cmd_migrate(a):
 
 def cmd_tenant_add(a):
     from . import repo
+    from .publishing import TENANT_ID
+    if not TENANT_ID.match(a.tenant):
+        sys.exit("tenant ids are lowercase letters and digits, words joined by single dashes (e.g. i3k or rag-enterprise)")
     with _db().tenant(a.tenant) as s:
         repo.ensure_tenant(s, a.tenant, a.name or a.tenant)
     print(f"tenant {a.tenant} ready")

@@ -65,10 +65,33 @@ def test_targets_must_be_public_and_secret_free(db, tenant, monkeypatch):
         pub.add_target(db, tenant, site_id, "wordpress", "wp", {"url": "https://blog.example", "user": "a", "password": "x"}, None)
 
 
+def test_a_tenant_cannot_name_server_or_other_tenants_variables(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv("EDITOR_DATABASE_URL", "postgresql://app:pw@db/editor")
+    monkeypatch.setenv("WP_PASS", "server-wide")
+    for bad in ("lower", "_X", "A__B", "X_", "A-B"):
+        with pytest.raises(pub.PublishError, match="secret name"):
+            pub.add_target(db, tenant, site_id, "webhook", "h", {"url": "https://hooks.example/in"}, bad)
+    # A plain name is always read inside the tenant's own namespace.
+    target = pub.add_target(db, tenant, site_id, "wordpress", "wp", {"url": "https://evil.example", "user": "a"},
+                            "EDITOR_DATABASE_URL")
+    pid = pub.request(db, tenant, did, target, "draft", "redazione")
+    pub.decide(db, tenant, pid, True, "francesco")
+    with respx.mock(assert_all_called=False) as router:
+        wp = router.post("https://evil.example/wp-json/wp/v2/posts").mock(return_value=httpx.Response(201, json={"id": 1}))
+        out = pub.Publisher(resolver=public_resolver).run(db, tenant, pid)
+    assert out["status"] == "failed" and not wp.called
+    assert pub.secret_variable(tenant, "EDITOR_DATABASE_URL") in out["error"]
+    assert pub.secret_variable("a-b", "X") != pub.secret_variable("a", "B_X")
+    with pytest.raises(pub.PublishError, match="tenant id"):
+        pub.secret_variable("a_b", "X")
+
+
 def test_nothing_leaves_without_approval(db, tenant, monkeypatch):
     did, site_id = approved_draft(db, tenant)
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
-    monkeypatch.setenv("WP_PASS", "app-pass-123")
+    monkeypatch.setenv(pub.secret_variable(tenant, "WP_PASS"), "app-pass-123")
     target = pub.add_target(db, tenant, site_id, "wordpress", "Blog", {"url": "https://blog.example", "user": "editor"}, "WP_PASS")
     pid = pub.request(db, tenant, did, target, "draft", "redazione")
     publisher = pub.Publisher(resolver=public_resolver)
@@ -92,8 +115,8 @@ def test_nothing_leaves_without_approval(db, tenant, monkeypatch):
 def test_webhook_is_signed_and_telegram_token_is_not_logged(db, tenant, monkeypatch):
     did, site_id = approved_draft(db, tenant)
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
-    monkeypatch.setenv("HOOK_SECRET", "s3cret")
-    monkeypatch.setenv("TG_TOKEN", "123:ABC")
+    monkeypatch.setenv(pub.secret_variable(tenant, "HOOK_SECRET"), "s3cret")
+    monkeypatch.setenv(pub.secret_variable(tenant, "TG_TOKEN"), "123:ABC")
     hook = pub.add_target(db, tenant, site_id, "webhook", "social", {"url": "https://hooks.example/in"}, "HOOK_SECRET")
     tg = pub.add_target(db, tenant, site_id, "telegram_channel", "canale", {"chat_id": "@canale"}, "TG_TOKEN")
     publisher = pub.Publisher(resolver=public_resolver)

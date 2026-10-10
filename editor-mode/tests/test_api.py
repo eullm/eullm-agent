@@ -109,7 +109,7 @@ def test_publication_routes_need_an_owner_decision(db, tenant, monkeypatch):
 
     did, site_id = approved_draft(db, tenant)
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
-    monkeypatch.setenv("HOOK_SECRET", "s")
+    monkeypatch.setenv(publishing.secret_variable(tenant, "HOOK_SECRET"), "s")
     owner = auth.create_token(db, tenant, "owner", "owner")
     editor = auth.create_token(db, tenant, "ed", "editor")
     ho, he = {"Authorization": f"Bearer {owner}"}, {"Authorization": f"Bearer {editor}"}

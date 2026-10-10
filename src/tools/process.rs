@@ -1,12 +1,20 @@
 //! Running external programs without a shell, with a timeout that really
 //! stops them and output that cannot grow without bound.
+//!
+//! With the bubblewrap sandbox (the default) a program runs in its own
+//! namespaces: no network, its own process tree (everything it starts dies
+//! with it), a read-only view of the system directories, the workspace and
+//! nothing else of the host (no /home, /root, /etc/shadow, /var...).
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use std::ffi::OsString;
 use std::path::Path;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
+
+use crate::config::{SandboxConfig, SandboxMode};
 
 pub struct ProgramOutput {
     pub status: ExitStatus,
@@ -15,31 +23,183 @@ pub struct ProgramOutput {
     pub truncated: bool,
 }
 
+/// setrlimit with the same soft and hard value (a macro: the resource type
+/// differs between libc flavours).
+#[cfg(unix)]
+macro_rules! set_limit {
+    ($resource:expr, $value:expr) => {{
+        let lim = libc::rlimit {
+            rlim_cur: $value as libc::rlim_t,
+            rlim_max: $value as libc::rlim_t,
+        };
+        libc::setrlimit($resource, &lim);
+    }};
+}
+
+const KEPT_VARS: [&str; 6] = ["PATH", "LANG", "LC_ALL", "SYSTEMROOT", "TEMP", "TMP"];
+
+/// System directories a sandboxed program sees, read-only, when present.
+const SYSTEM_DIRS: [&str; 7] = [
+    "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32",
+];
+/// The few files under /etc that common programs need.
+const SYSTEM_ETC: [&str; 6] = [
+    "/etc/ld.so.cache",
+    "/etc/ld.so.conf",
+    "/etc/ld.so.conf.d",
+    "/etc/alternatives",
+    "/etc/localtime",
+    "/etc/fonts",
+];
+
+/// The bubblewrap arguments that set up the sandbox, up to and including `--`.
+pub fn bwrap_args(sandbox: &SandboxConfig, cwd: &Path) -> Vec<OsString> {
+    let mut a: Vec<OsString> = Vec::new();
+    let mut push = |items: &[&std::ffi::OsStr]| a.extend(items.iter().map(|s| s.to_os_string()));
+    push(&[
+        "--unshare-all".as_ref(),
+        "--die-with-parent".as_ref(),
+        "--new-session".as_ref(),
+    ]);
+    if sandbox.network {
+        push(&["--share-net".as_ref()]);
+    }
+    for dir in SYSTEM_DIRS {
+        let p = Path::new(dir);
+        match std::fs::read_link(p) {
+            // Merged /usr: /bin -> usr/bin and so on.
+            Ok(target) => push(&["--symlink".as_ref(), target.as_os_str(), p.as_os_str()]),
+            Err(_) if p.is_dir() => push(&["--ro-bind".as_ref(), p.as_os_str(), p.as_os_str()]),
+            Err(_) => {}
+        }
+    }
+    for path in SYSTEM_ETC
+        .iter()
+        .map(Path::new)
+        .chain(sandbox.read_only_paths.iter().map(|p| p.as_path()))
+    {
+        push(&["--ro-bind-try".as_ref(), path.as_os_str(), path.as_os_str()]);
+    }
+    push(&[
+        "--proc".as_ref(),
+        "/proc".as_ref(),
+        "--dev".as_ref(),
+        "/dev".as_ref(),
+        "--tmpfs".as_ref(),
+        "/tmp".as_ref(),
+    ]);
+    let bind = if sandbox.writable_workspace {
+        "--bind"
+    } else {
+        "--ro-bind"
+    };
+    push(&[bind.as_ref(), cwd.as_os_str(), cwd.as_os_str()]);
+    push(&["--chdir".as_ref(), cwd.as_os_str(), "--clearenv".as_ref()]);
+    for var in KEPT_VARS {
+        if let Some(v) = std::env::var_os(var) {
+            push(&["--setenv".as_ref(), var.as_ref(), v.as_os_str()]);
+        }
+    }
+    push(&[
+        "--setenv".as_ref(),
+        "HOME".as_ref(),
+        cwd.as_os_str(),
+        "--setenv".as_ref(),
+        "TMPDIR".as_ref(),
+        "/tmp".as_ref(),
+        "--".as_ref(),
+    ]);
+    a
+}
+
+/// Check at startup that the sandbox works on this host, so that a missing
+/// or blocked bubblewrap stops the service instead of running programs
+/// unconfined.
+pub fn check_sandbox(sandbox: &SandboxConfig, cwd: &Path) -> Result<()> {
+    if sandbox.mode == SandboxMode::None {
+        tracing::warn!(
+            "tools.sandbox.mode is none: programs run without isolation (network, files and \
+             processes of the service user are reachable)"
+        );
+        return Ok(());
+    }
+    if !cfg!(target_os = "linux") {
+        bail!("tools.sandbox.mode bubblewrap needs Linux; set tools.sandbox.mode: none to run programs unconfined");
+    }
+    let out = std::process::Command::new(&sandbox.bwrap)
+        .args(bwrap_args(sandbox, cwd))
+        .arg("true")
+        .env_clear()
+        .stdin(Stdio::null())
+        .output();
+    match out {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => bail!(
+            "the bubblewrap sandbox does not work on this host: {}. Allow unprivileged user \
+             namespaces for bwrap, or set tools.sandbox.mode: none to run programs unconfined",
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => bail!(
+            "cannot start {} ({e}): install bubblewrap, or set tools.sandbox.mode: none to run \
+             programs unconfined",
+            sandbox.bwrap.display()
+        ),
+    }
+}
+
 /// Run `program` with `args` (never through a shell) in `cwd`, with a clean
-/// environment. On timeout the whole process group is killed.
+/// environment, inside the sandbox. On timeout the whole process group is
+/// killed; in the sandbox, everything the program started dies with it.
 pub async fn run_program(
     program: &str,
     args: &[String],
     cwd: &Path,
     timeout: Duration,
     max_output_bytes: usize,
+    sandbox: &SandboxConfig,
 ) -> Result<ProgramOutput> {
-    let mut cmd = Command::new(program);
+    let mut cmd = match sandbox.mode {
+        SandboxMode::Bubblewrap => {
+            let mut c = Command::new(&sandbox.bwrap);
+            c.args(bwrap_args(sandbox, cwd)).arg(program);
+            c
+        }
+        SandboxMode::None => Command::new(program),
+    };
     cmd.args(args)
         .current_dir(cwd)
-        .env_clear()
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    for var in ["PATH", "LANG", "LC_ALL", "SYSTEMROOT", "TEMP", "TMP"] {
-        if let Ok(v) = std::env::var(var) {
-            cmd.env(var, v);
+    cmd.env_clear();
+    if sandbox.mode == SandboxMode::None {
+        // In the sandbox bwrap sets these for the program itself.
+        for var in KEPT_VARS {
+            if let Ok(v) = std::env::var(var) {
+                cmd.env(var, v);
+            }
+        }
+        cmd.env("HOME", cwd);
+    }
+    #[cfg(unix)]
+    {
+        cmd.process_group(0);
+        let (mem, file) = (sandbox.max_memory_mb, sandbox.max_file_mb);
+        // SAFETY: only async-signal-safe setrlimit calls between fork and exec.
+        unsafe {
+            cmd.pre_exec(move || {
+                set_limit!(libc::RLIMIT_CORE, 0);
+                if mem > 0 {
+                    set_limit!(libc::RLIMIT_AS, mem * 1024 * 1024);
+                }
+                if file > 0 {
+                    set_limit!(libc::RLIMIT_FSIZE, file * 1024 * 1024);
+                }
+                Ok(())
+            });
         }
     }
-    cmd.env("HOME", cwd);
-    #[cfg(unix)]
-    cmd.process_group(0);
 
     let mut child = cmd
         .spawn()

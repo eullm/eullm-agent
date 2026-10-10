@@ -9,6 +9,7 @@ from sqlalchemy import text
 import fakesite
 from conftest import fixture
 from editor import profile as prof
+from editor import repo
 from editor import sources as src
 from editor.collectors import Item
 from editor.core_client import CoreClient
@@ -64,6 +65,14 @@ def test_discovery_and_maintenance(db, tenant):
                     return SiteCrawler(c).analyse(domain)
 
     site = prof.analyse_site(db, tenant, "blog.example", Crawler())
+    # A draft profile is only a proposal: it never steers the sources.
+    with respx.mock() as router, httpx.Client() as c:
+        early = src.discover(db, tenant, site["site_id"], c, CoreClient("http://core.test", "tok"))
+    assert early.candidates == 0 and "approve" in early.notes[0]
+    with db.tenant(tenant) as s:
+        version = s.execute(text("SELECT max(version) FROM editor.editorial_profiles WHERE site_id = :i"),
+                            {"i": site["site_id"]}).scalar()
+        assert prof.approve(s, site["site_id"], version, "francesco")
     with respx.mock(assert_all_called=False) as router:
         # A publication the blog cites, with a feed on topic.
         router.get("https://agcom.it/robots.txt").mock(return_value=httpx.Response(404))
@@ -115,6 +124,18 @@ def test_discovery_and_maintenance(db, tenant):
     with db.tenant(tenant) as s:
         status, reason = s.execute(text("SELECT status, status_reason FROM editor.sources WHERE id = :i"), {"i": sid}).one()
     assert (status, reason) == ("active", "re-evaluated")
+
+    # A source a person suspended stays suspended.
+    with db.tenant(tenant) as s:
+        repo.set_source_status(s, sid, "suspended", "set by francesco", by="francesco")
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://agcom.it/rss").mock(return_value=httpx.Response(200, text=feed(
+            [f"Fibra FTTH e Wi-Fi: relazione {i}" for i in range(10)])))
+        with httpx.Client() as c:
+            m3 = src.maintain(db, tenant, c, now=later + timedelta(days=30))
+    assert sid not in m3.reactivated
+    with db.tenant(tenant) as s:
+        assert s.execute(text("SELECT status FROM editor.sources WHERE id = :i"), {"i": sid}).scalar() == "suspended"
 
 
 def test_stale_source_is_suspended(db, tenant):

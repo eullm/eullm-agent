@@ -73,12 +73,12 @@ def active_sources(s: Session) -> list:
     return list(s.execute(select(m.sources).where(m.sources.c.status == "active").order_by(m.sources.c.id)))
 
 
-def set_source_status(s: Session, source_id: int, status: str, reason: str | None = None) -> None:
-    s.execute(
-        update(m.sources)
-        .where(m.sources.c.id == source_id, m.sources.c.status != status)
-        .values(status=status, status_reason=reason, status_changed_at=datetime.now(UTC))
-    )
+def set_source_status(s: Session, source_id: int, status: str, reason: str | None = None, by: str | None = None) -> None:
+    """``by`` names the person who decided; automatic changes leave it empty."""
+    stmt = update(m.sources).where(m.sources.c.id == source_id)
+    if by is None:  # an automatic change never rewrites a status that is already right
+        stmt = stmt.where(m.sources.c.status != status)
+    s.execute(stmt.values(status=status, status_reason=reason, status_changed_at=datetime.now(UTC), status_set_by=by))
 
 
 def mark_source(

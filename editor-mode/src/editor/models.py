@@ -73,6 +73,7 @@ sources = Table(
     Column("evaluated_at", DateTime(timezone=True)),
     Column("status_reason", Text),
     Column("status_changed_at", DateTime(timezone=True)),
+    Column("status_set_by", Text),
     Column("consecutive_errors", Integer),
     Column("last_item_at", DateTime(timezone=True)),
     Column("etag", Text),

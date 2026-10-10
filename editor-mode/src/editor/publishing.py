@@ -4,7 +4,10 @@ A publication is requested for an approved draft and a target, waits in
 `pending_approval` until a person decides, and only then is executed. The
 target's address must resolve to public addresses (a tenant cannot point
 Editor Mode at an internal service) and credentials come from environment
-variables, never from the database. Every outcome is recorded.
+variables, never from the database. A tenant only names its secret (``WP``);
+the variable actually read is ``EDITOR_SECRET_<TENANT>__WP``, which the
+operator sets on the server, so a tenant can never reach the server's own
+variables or another tenant's. Every outcome is recorded.
 
 Adapters: WordPress REST API (as draft or published post), a signed webhook
 (for automation tools that post to LinkedIn, X, newsletters...), and a
@@ -18,6 +21,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import socket
 from datetime import UTC, datetime
 from urllib.parse import urljoin, urlsplit
@@ -75,12 +79,32 @@ def _ensure_no_redirect(response: httpx.Response, base: str, resolver=None) -> N
     raise PublishError(f"redirects are not followed ({response.status_code} to {location or '?'})")
 
 
+SECRET_PREFIX = "EDITOR_SECRET_"
+TENANT_ID = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+SECRET_NAME = re.compile(r"^[A-Z0-9]+(_[A-Z0-9]+)*$")
+
+
+def secret_variable(tenant_id: str, name: str) -> str:
+    """The environment variable holding a tenant's secret ``name``.
+
+    The tenant part has no double underscore (ids are lowercase words joined
+    by single dashes) and the name cannot start with one, so the first ``__``
+    separates them and two tenants can never map to the same variable.
+    """
+    if not TENANT_ID.match(tenant_id):
+        raise PublishError(f"tenant id {tenant_id!r} cannot own secrets: use lowercase letters, digits and single dashes")
+    if not SECRET_NAME.match(name or "") or len(name) > 40:
+        raise PublishError("the secret name must be UPPERCASE letters and digits, words joined by single underscores")
+    return f"{SECRET_PREFIX}{tenant_id.upper().replace('-', '_')}__{name}"
+
+
 def _secret(target) -> str:
     if not target.secret_env:
-        raise PublishError(f"target {target.name} has no secret_env")
-    value = os.environ.get(target.secret_env)
+        raise PublishError(f"target {target.name} has no secret")
+    var = secret_variable(target.tenant_id, target.secret_env)
+    value = os.environ.get(var)
     if not value:
-        raise PublishError(f"environment variable {target.secret_env} is not set")
+        raise PublishError(f"environment variable {var} is not set")
     return value
 
 
@@ -91,6 +115,8 @@ def add_target(db, tenant_id: str, site_id: int, kind: str, name: str, config: d
         raise PublishError("a Telegram channel needs chat_id")
     if any(k in config for k in ("password", "token", "secret", "api_key")):
         raise PublishError("secrets go in an environment variable (secret_env), not in config")
+    if secret_env is not None:
+        secret_variable(tenant_id, secret_env)
     with db.tenant(tenant_id) as s:
         return s.execute(insert(m.publish_targets).values(
             tenant_id=tenant_id, site_id=site_id, kind=kind, name=name, config=config, secret_env=secret_env,
@@ -149,7 +175,10 @@ class Publisher:
             ext_id, ext_url = getattr(self, f"_{target.kind}")(target, pub, cms_url)
         except (PublishError, httpx.HTTPError, KeyError, ValueError) as e:
             msg = f"{type(e).__name__}: {e}"
-            secret = os.environ.get(target.secret_env or "", "")
+            try:
+                secret = os.environ.get(secret_variable(target.tenant_id, target.secret_env), "") if target.secret_env else ""
+            except PublishError:
+                secret = ""
             if secret:  # a token can sit in the request URL (Telegram)
                 msg = msg.replace(secret, "***")
             with db.tenant(tenant_id) as s:

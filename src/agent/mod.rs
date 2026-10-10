@@ -41,6 +41,8 @@ struct RunState {
     output_tokens: u64,
     cost: Option<f64>,
     tainted: bool,
+    /// The run has read the operator's own data (see `Policy::reads_private`).
+    read_private: bool,
 }
 
 impl<'a> Agent<'a> {
@@ -305,7 +307,8 @@ impl<'a> Agent<'a> {
         };
 
         let decision = if self.tool_allowed(&tc.name) {
-            self.policy.evaluate(&tc.name, &self.profile, state.tainted)
+            self.policy
+                .evaluate(&tc.name, &self.profile, state.tainted, state.read_private)
         } else {
             Decision::Deny(format!("tool not available in profile '{}'", self.profile))
         };
@@ -358,6 +361,9 @@ impl<'a> Agent<'a> {
                 // by a third party.
                 if self.policy.taints(&tc.name) {
                     state.tainted = true;
+                }
+                if self.policy.reads_private(&tc.name) {
+                    state.read_private = true;
                 }
                 r
             }
