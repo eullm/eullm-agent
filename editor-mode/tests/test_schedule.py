@@ -1,7 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from editor.schedule import briefing_due
+from sqlalchemy import text
+
+from editor.config import Settings
+from editor.schedule import Runner, briefing_due
 
 ROME = "Europe/Rome"
 
@@ -40,3 +43,12 @@ def test_late_worker_still_sends_within_the_window_but_not_later():
     evening = datetime(2026, 10, 9, 18, tzinfo=UTC)
     assert briefing_due(evening, ROME, 8, sent) is None
     assert briefing_due(nine, ROME, 8, {nine.astimezone(ZoneInfo(ROME)).date()}) is None
+
+
+def test_invalid_tenant_timezone_falls_back_to_default(db, pg_urls, tenant):
+    import psycopg
+
+    with psycopg.connect(pg_urls[0], autocommit=True) as conn:
+        conn.execute("UPDATE editor.tenants SET timezone = 'Mars/Olympus' WHERE tenant_id = %s", (tenant,))
+    runner = Runner(db, Settings(), http_factory=lambda: None)
+    assert runner.tenant_settings(tenant)["timezone"] == Settings().timezone
