@@ -1,0 +1,88 @@
+import socket
+
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from editor import auth, publishing
+from editor.api import create_app
+from test_publishing import approved_draft, public_resolver
+
+PAGES = ["/", "/site", "/site?edit=1", "/sources", "/sources?status=all", "/trends", "/drafts",
+         "/publications", "/settings"]
+
+
+def logged_in(db, tenant, role):
+    token = auth.create_token(db, tenant, f"{role}-user", role)
+    c = TestClient(create_app(db))
+    assert c.post("/login", data={"token": token}, follow_redirects=False).status_code == 303
+    return c
+
+
+def test_every_page_renders_for_every_role(db, tenant):
+    did, _ = approved_draft(db, tenant)
+    for role in ("viewer", "editor", "owner"):
+        c = logged_in(db, tenant, role)
+        for path in PAGES + [f"/drafts/{did}"]:
+            r = c.get(path)
+            assert r.status_code == 200, (role, path)
+            assert "blog.example" in r.text or path == "/settings"
+        draft = c.get(f"/drafts/{did}").text
+        assert 'href="#src-1"' in draft and 'id="src-1"' in draft
+        settings = c.get("/settings").text
+        assert ("Crea accesso" in settings) == (role == "owner")
+
+
+def test_forms_check_the_role_and_leave_a_notice(db, tenant):
+    setup = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        source = s.execute(text("SELECT id FROM editor.sources LIMIT 1")).scalar()
+    viewer = logged_in(db, tenant, "viewer")
+    r = viewer.post(f"/ui/sources/{source}/status", data={"status": "suspended"})
+    assert r.status_code == 403 and "permesso" in r.text
+    owner = logged_in(db, tenant, "owner")
+    r = owner.post(f"/ui/sources/{source}/status", data={"status": "suspended", "back": "/sources?status=suspended"},
+                   follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/sources?status=suspended"
+    page = owner.get("/sources?status=suspended")
+    assert "news sospesa." in page.text and "Sospesa" in page.text
+    # The notice shows once.
+    assert "news sospesa." not in owner.get("/sources?status=suspended").text
+    # Unknown back paths fall back to a local page.
+    r = owner.post(f"/ui/sources/{source}/status", data={"status": "active", "back": "https://evil.example"},
+                   follow_redirects=False)
+    assert r.headers["location"] == "/sources"
+    assert setup
+
+
+def test_publish_flow_from_the_pages(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    token = auth.create_token(db, tenant, "boss", "owner")
+    c = TestClient(create_app(db, publisher=publishing.Publisher(resolver=public_resolver)))
+    c.post("/login", data={"token": token})
+    r = c.post("/ui/targets", data={"site_id": site_id, "kind": "webhook", "name": "Hook",
+                                    "address": "https://hooks.example/in", "secret_env": "lower"})
+    assert "MAIUSCOLO" in r.text
+    r = c.post("/ui/targets", data={"site_id": site_id, "kind": "webhook", "name": "Hook",
+                                    "address": "https://hooks.example/in"})
+    assert "Destinazione Hook aggiunta." in r.text
+    with db.tenant(tenant) as s:
+        tid = s.execute(text("SELECT id FROM editor.publish_targets")).scalar()
+    r = c.post(f"/ui/drafts/{did}/publish", data={"target_id": tid, "mode": "draft"})
+    assert "Pubblicazione chiesta" in r.text and "Approva e invia" in r.text
+
+
+def test_site_switch_and_tokens(db, tenant):
+    from editor import repo
+    approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        other = repo.ensure_site(s, tenant, "altro.example", "Altro")
+    c = logged_in(db, tenant, "owner")
+    r = c.get(f"/switch?site={other}&back=/sources", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/sources"
+    assert "Fonti · altro.example" in c.get("/sources").text
+    assert c.get("/switch?site=999999").status_code == 404
+    page = c.post("/ui/tokens", data={"name": "Giulia", "role": "editor"})
+    assert "non verrà più mostrato" in page.text and "Giulia" in page.text
+    assert c.post("/logout", follow_redirects=False).headers["location"] == "/login"
+    assert c.get("/", follow_redirects=False).status_code == 303

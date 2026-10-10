@@ -1,0 +1,86 @@
+{% extends "base.html.j2" %}
+{% block title %}Pubblicazioni{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">Pubblicazioni{% if site %} · {{ site.domain }}{% endif %}</span>
+    <h1>Cosa esce, e dove</h1>
+    <p class="lead">Un editor chiede, un owner approva. Nulla viene inviato al CMS o al canale senza quel sì.</p>
+  </div>
+</header>
+
+<section class="card" aria-labelledby="h-pending" style="gap: 0;">
+  <div class="card-head"><h2 id="h-pending">In attesa di approvazione</h2><span class="hint">{{ pending|length }}</span></div>
+  {% for p in pending %}
+  <div class="item">
+    <span class="chip amber">{{ kinds.get(p.kind, p.kind) }}</span>
+    <div class="what">
+      <strong>{{ p.title }}</strong>
+      <span>Verso {{ p.target }} · {{ 'come bozza nel CMS' if p.mode == 'draft' else 'pubblicata subito' }} · chiesta da {{ p.requested_by }} {{ when(p.requested_at) }}</span>
+    </div>
+    <div class="row">
+      <a class="btn" href="/drafts/{{ p.draft_id }}">Leggi</a>
+      {% if caller.can('owner') %}
+      <form class="inline" method="post" action="/ui/publications/{{ p.id }}/decision"><input type="hidden" name="accept" value="0"><button class="btn" type="submit">Rifiuta</button></form>
+      <form class="inline" method="post" action="/ui/publications/{{ p.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn pri" type="submit">Approva e invia</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="empty">Nessuna richiesta in attesa.</p>
+  {% endfor %}
+</section>
+
+<section class="card" aria-labelledby="h-hist" style="gap: 0;">
+  <div class="card-head"><h2 id="h-hist">Storico</h2></div>
+  {% if history %}
+  <div class="scroll">
+    <table style="min-width: 680px;">
+      <thead><tr><th>Articolo</th><th>Destinazione</th><th>Chiesta da</th><th>Decisa da</th><th>Esito</th></tr></thead>
+      <tbody>
+      {% for p in history %}
+      <tr {% if p.status in ('failed', 'rejected') %}class="off"{% endif %}>
+        <td style="max-width: 320px;"><a href="/drafts/{{ p.draft_id }}">{{ p.title }}</a></td>
+        <td>{{ p.target }}<small>{{ kinds.get(p.kind, p.kind) }} · {{ 'bozza' if p.mode == 'draft' else 'subito' }}</small></td>
+        <td>{{ p.requested_by }}<small>{{ when(p.requested_at) }}</small></td>
+        <td>{{ p.decided_by or '–' }}{% if p.decided_at %}<small>{{ when(p.decided_at) }}</small>{% endif %}</td>
+        <td>
+          {% set ps = {'approved': ('blue', 'In invio'), 'published': ('green', 'Pubblicata'), 'rejected': ('', 'Rifiutata'), 'failed': ('red', 'Non riuscita')}.get(p.status, ('', p.status)) %}
+          {% if p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
+          {% if p.error %}<small>{{ p.error|truncate(120) }}</small>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">Ancora nessuna pubblicazione.</p>
+  {% endif %}
+</section>
+
+{% if site %}
+<section class="card pad" aria-labelledby="h-targets">
+  <h2 id="h-targets">Destinazioni di {{ site.domain }}</h2>
+  {% for t in targets %}
+  <div class="list-row">
+    <span><strong>{{ t.name }}</strong> <span class="chip">{{ kinds.get(t.kind, t.kind) }}</span></span>
+    <span class="hint num">{{ (t.config or {}).get('url') or (t.config or {}).get('chat_id') or '' }}{% if t.secret_env %} · credenziali in {{ t.secret_env }}{% endif %}{% if t.enabled is sameas false %} · disattivata{% endif %}</span>
+  </div>
+  {% else %}
+  <p class="hint">Nessuna destinazione: le bozze approvate restano qui finché non ne aggiungi una.</p>
+  {% endfor %}
+  {% if caller.can('owner') %}
+  <form method="post" action="/ui/targets" class="form-grid" style="margin-top: 8px;">
+    <input type="hidden" name="site_id" value="{{ site.id }}">
+    <label class="field">Tipo<select name="kind">{% for k, label in kinds.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+    <label class="field">Nome<input name="name" required placeholder="Blog principale"></label>
+    <label class="field">Indirizzo<input name="address" placeholder="https://… oppure @canale"></label>
+    <label class="field">Variabile con le credenziali<input name="secret_env" placeholder="WP_SITO"></label>
+    <div><button class="btn" type="submit">Aggiungi</button></div>
+  </form>
+  <p class="hint">Le password non passano mai dall'interfaccia: indica il nome della variabile d'ambiente che le contiene sul server.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

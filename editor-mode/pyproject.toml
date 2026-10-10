@@ -1,0 +1,40 @@
+[project]
+name = "eullm-editor-mode"
+version = "0.1.0"
+description = "Editor Mode for EuLLM Agent: domain-first editorial intelligence (site analysis, source discovery, trends, proposals, drafts) on top of the Core API"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.143.0",
+    "uvicorn==0.54.0",
+    "sqlalchemy==2.1.4",
+    "alembic==1.20.0",
+    "psycopg[binary]==3.3.6",
+    "procrastinate==3.10.0",
+    "feedparser==6.0.14",
+    "httpx==0.28.1",
+    "pyyaml==6.0.3",
+    "jinja2==3.1.6",
+    "python-multipart==0.0.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "respx==0.23.1",
+]
+
+[project.scripts]
+editor = "editor.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/editor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,86 @@
+{% extends "base.html.j2" %}
+{% block title %}Trend e piano{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">Trend e piano{% if site %} · {{ site.domain }}{% endif %}</span>
+    <h1>Cosa sale, e cosa conviene scrivere</h1>
+    <p class="lead">Hype misura quanto un tema cresce nel settore. Opportunità misura quanto conviene a questo sito: vicinanza al profilo, copertura che manca, fonti solide.</p>
+  </div>
+  {% if briefing_hour is not none %}<span class="chip">Briefing ogni giorno alle {{ '%02d'|format(briefing_hour) }}:00</span>{% endif %}
+</header>
+
+{% if not site %}
+<section class="card pad"><h2>Nessun sito</h2><p class="lead">Aggiungi un dominio da <a href="/site">Sito e profilo</a>.</p></section>
+{% else %}
+<div class="cols">
+  <section class="card pad col-wide" aria-labelledby="h-map">
+    <div class="row" style="justify-content: space-between;"><h2 id="h-map">Mappa dei temi</h2>
+      <div class="legend"><span><i></i>Opportunità alta</span><span><i class="hype"></i>Solo hype</span></div></div>
+    {% if dots %}
+    <div class="map" role="img" aria-label="Temi disposti per hype (orizzontale) e opportunità (verticale)">
+      <span class="mid-x"></span><span class="mid-y"></span>
+      <span class="q" style="right: 8px; top: 8px;">Scrivi ora</span>
+      <span class="q" style="left: 8px; top: 8px;">Nicchia utile</span>
+      <span class="q" style="right: 8px; bottom: 8px;">Rumore</span>
+      <span class="q" style="left: 8px; bottom: 8px;">Ignora</span>
+      {% for t in dots %}
+      {% set x = [[t.hype, 2]|max, 96]|min %}{% set y = [[t.opportunity, 2]|max, 96]|min %}
+      <span class="dot {% if t.opportunity < 50 %}far{% endif %}" style="left: {{ x|round|int }}%; bottom: {{ y|round|int }}%;{% if x > 60 %} flex-direction: row-reverse; transform: translate(calc(-100% + 6px), 6px);{% endif %}" title="{{ t.label }} · opportunità {{ t.opportunity|s100 }} · hype {{ t.hype|s100 }}"><i></i><span>{{ t.label }}</span></span>
+      {% endfor %}
+      <span class="axis-x">Hype nel settore →</span>
+      <span class="axis-y">Opportunità per il sito →</span>
+    </div>
+    {% else %}
+    <p class="empty">La mappa compare quando ci sono temi con entrambi i punteggi: serve un profilo approvato e almeno un giro di raccolta.</p>
+    {% endif %}
+  </section>
+
+  <section class="card col-side" aria-labelledby="h-topics" style="gap: 0;">
+    <div class="card-head"><h2 id="h-topics">Temi della settimana</h2><span class="hint">{% if topics|length > 7 %}primi 7 di {{ topics|length }}{% else %}{{ topics|length }}{% endif %}</span></div>
+    <div class="pad" style="gap: 14px;">
+      {% for t in topics[:7] %}
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div class="row" style="justify-content: space-between;"><span style="font-size: 14px; font-weight: 500;">{{ t.label }}</span><span class="hint">{{ t.items|plural('notizia', 'notizie') }}</span></div>
+        <div class="pair">
+          <div class="bar"><i style="width: {{ (t.opportunity or 0)|round|int }}%"></i></div><span class="num">{{ t.opportunity|s100 }}</span>
+          <div class="bar"><i class="hype" style="width: {{ (t.hype or 0)|round|int }}%"></i></div><span class="num" style="color: var(--muted);">{{ t.hype|s100 }}</span>
+        </div>
+      </div>
+      {% else %}
+      <p class="hint">Nessun tema negli ultimi sette giorni.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="h-plan" style="gap: 0;">
+  <div class="card-head"><h2 id="h-plan">Piano editoriale</h2><span class="hint">Proposte nate dai temi a più alta opportunità, ognuna con le sue fonti</span></div>
+  {% for p in plan %}
+  <div class="item">
+    {% if p.status == 'proposed' %}<span class="chip">Proposta</span>{% elif p.status == 'accepted' %}<span class="chip blue">Accettata</span>{% else %}<span class="chip green">Bozza pronta</span>{% endif %}
+    <div class="what">
+      <strong>{{ p.title }}</strong>
+      {% if p.angle %}<span>{{ p.angle }}</span>{% endif %}
+      {% if p.why_now %}<span><em>Perché ora:</em> {{ p.why_now }}</span>{% endif %}
+      <span class="num" style="font-size: 12px;">Opportunità {{ p.opportunity|s100 }} · Hype {{ p.hype|s100 }} · {{ p.citations|plural('fonte', 'fonti') }}{% if p.format %} · {{ p.format }}{% endif %}</span>
+    </div>
+    <div class="row">
+      {% if p.status == 'proposed' and caller.can('editor') %}
+      <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="0"><button class="btn" type="submit">Scarta</button></form>
+      <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="1"><button class="btn pri" type="submit">Accetta</button></form>
+      {% elif p.draft_id %}
+      <a class="btn" href="/drafts/{{ p.draft_id }}">Apri la bozza</a>
+      {% elif p.status == 'accepted' and caller.can('editor') and can_draft %}
+      <form class="inline" method="post" action="/ui/proposals/{{ p.id }}/draft"><button class="btn pri" type="submit">Scrivi la bozza</button></form>
+      {% elif p.status == 'accepted' %}
+      <span class="hint">In attesa di bozza</span>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="empty">Nessuna proposta aperta. Le nuove arrivano con il briefing del mattino.</p>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

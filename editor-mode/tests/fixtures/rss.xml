@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Telecom News</title>
+<link>https://telecom.example</link>
+<item>
+  <title>Open Fiber accelera il cablaggio FTTH nelle aree bianche</title>
+  <link>https://www.telecom.example/2026/10/open-fiber-ftth/?utm_source=rss&amp;utm_medium=feed</link>
+  <guid>https://telecom.example/?p=101</guid>
+  <description>&lt;p&gt;Il piano prevede &lt;b&gt;2 milioni&lt;/b&gt; di nuove unità immobiliari.&lt;/p&gt;</description>
+  <author>redazione@telecom.example (Redazione)</author>
+  <pubDate>Thu, 08 Oct 2026 07:30:00 +0200</pubDate>
+</item>
+<item>
+  <title>MikroTik rilascia RouterOS 7.20 con supporto Wi-Fi 7</title>
+  <link>https://telecom.example/2026/10/routeros-7-20</link>
+  <guid>https://telecom.example/?p=102</guid>
+  <description>Novità per hAP e cAP.</description>
+  <pubDate>Wed, 07 Oct 2026 18:00:00 +0000</pubDate>
+</item>
+<item>
+  <title></title>
+  <link>https://telecom.example/empty</link>
+</item>
+</channel>
+</rss>

@@ -2,10 +2,21 @@
 
 ## 0.3.5
 
+### Added
+
+- Editor Mode (`editor-mode/`, Python): the first vertical built on the
+  Core, now part of this repository under AGPL-3.0-or-later. Domain-first
+  editorial work: site analysis and an editorial profile with evidence,
+  source discovery and rating, Hype and Opportunity scores, an editorial
+  plan, drafts where every sentence cites a stored source, publication to
+  WordPress, webhooks and Telegram after an owner's approval, and a
+  seven-page dashboard. Plan limits per tenant on top of the Core's.
+
 ### Changed
 
-- README: Editor Mode, the first vertical on the Core, shown with its
-  dashboard.
+- README: Editor Mode shown with its dashboard.
+- Pull request template: no CLA section; the CLA check tells external
+  contributors what to add.
 
 ## 0.3.0
 

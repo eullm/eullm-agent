@@ -1,0 +1,4 @@
+[
+ {"id":"mistralai/Example-24B-Instruct","likes":1800,"downloads":250000,"trendingScore":320,"pipeline_tag":"text-generation","tags":["transformers","safetensors","text-generation"],"createdAt":"2026-10-01T12:00:00.000Z"},
+ {"modelId":"bge-tiny","likes":12,"downloads":900,"trendingScore":4,"tags":[],"createdAt":"2026-09-20T12:00:00.000Z"}
+]
