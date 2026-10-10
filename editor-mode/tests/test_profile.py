@@ -127,3 +127,37 @@ def test_site_analysis_and_review_lifecycle(db, tenant):
         assert prof.approve(s, first["site_id"], 2, "francesco")
         statuses = s.execute(text("SELECT version, status FROM editor.editorial_profiles ORDER BY version")).all()
     assert [tuple(r) for r in statuses] == [(1, "retired"), (2, "approved")]
+
+
+def test_manual_edit_keeps_owner_settings(db, tenant):
+    def crawler(articles):
+        class C:
+            def analyse(self, domain):
+                return snapshot(articles)
+        return C()
+
+    first = prof.analyse_site(db, tenant, "blog.example", crawler(fakesite.ARTICLES))
+    with db.tenant(tenant) as s:
+        assert prof.approve(s, first["site_id"], 1, "francesco")
+        s.execute(text("UPDATE editor.editorial_profiles SET body = jsonb_set(body, '{settings,exclude}', '[\"calcio\"]') "
+                       "WHERE site_id = :s AND status = 'approved'"), {"s": first["site_id"]})
+        pid = prof.edit(s, tenant, first["site_id"], {"subtopics": [{"name": "Fibra", "keywords": ["fibra"]}]})
+        body = s.execute(text("SELECT body FROM editor.editorial_profiles WHERE id = :i"), {"i": pid}).scalar()
+    assert body["settings"]["exclude"] == ["calcio"]
+
+
+def test_manual_edit_keeps_explicit_settings(db, tenant):
+    def crawler(articles):
+        class C:
+            def analyse(self, domain):
+                return snapshot(articles)
+        return C()
+
+    first = prof.analyse_site(db, tenant, "blog.example", crawler(fakesite.ARTICLES))
+    settings = {"proposals_per_day": 9, "min_relevance": 0.5, "exclude": []}
+    with db.tenant(tenant) as s:
+        assert prof.approve(s, first["site_id"], 1, "francesco")
+        pid = prof.edit(s, tenant, first["site_id"], {"subtopics": [{"name": "Fibra", "keywords": ["fibra"]}],
+                                                      "settings": settings})
+        body = s.execute(text("SELECT body FROM editor.editorial_profiles WHERE id = :i"), {"i": pid}).scalar()
+    assert body["settings"] == settings
