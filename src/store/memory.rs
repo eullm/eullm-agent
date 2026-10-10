@@ -252,7 +252,43 @@ impl Store for MemoryStore {
             .rev()
             .filter_map(|id| g.approvals.get(id))
             .filter(|a| a.tenant == tenant && status.is_none_or(|s| a.status == s))
+            // Same bound as PgStore (LIMIT 200): the API does not page.
+            .take(200)
             .cloned()
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approval(id: &str) -> Approval {
+        Approval {
+            id: id.to_string(),
+            tenant: "t".into(),
+            run_id: "r".into(),
+            tool: "read_file".into(),
+            arguments: serde_json::json!({}),
+            reason: "test".into(),
+            status: ApprovalStatus::Pending,
+            decided_by: None,
+            decision_note: None,
+            created_at_ms: 0,
+            decided_at_ms: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn list_approvals_is_capped_like_postgres() {
+        let store = MemoryStore::new();
+        for n in 0..205 {
+            store
+                .create_approval(&approval(&format!("a-{n:03}")))
+                .await
+                .unwrap();
+        }
+        let list = store.list_approvals("t", None).await.unwrap();
+        assert_eq!(list.len(), 200);
     }
 }
