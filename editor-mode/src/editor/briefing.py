@@ -201,9 +201,12 @@ class Sender:
                             json={"chat_id": chat, "text": part, "parse_mode": "HTML", "disable_web_page_preview": True},
                         )
                         r.raise_for_status()
+                        body = r.json()
+                        if not body.get("ok", False):
+                            raise ValueError(f"telegram refused the message: {body.get('description', body)}"[:200])
                 values["sent_telegram_at"] = datetime.now(UTC)
                 result["telegram"] = len(chats)
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, ValueError) as e:
                 errors.append(f"telegram: {type(e).__name__}")
         values["send_error"] = "; ".join(errors) or None
         with db.tenant(tenant_id) as s:

@@ -74,6 +74,24 @@ def test_morning_builds_and_sends_once(db, tenant):
     assert "Blog Rete" in tg_text and "parse_mode" in tg_text
 
 
+def test_telegram_ok_false_is_not_marked_sent(db, tenant):
+    setup_site(db, tenant)
+    add_recipients(db, tenant)
+    FakeSMTP.sent = []
+    with respx.mock() as router:
+        tg = router.post("https://api.telegram.org/botT0K/sendMessage").mock(
+            return_value=httpx.Response(200, json={"ok": False, "description": "Bad Request: chat not found"}))
+        sender = briefing.Sender(SETTINGS, smtp_factory=FakeSMTP)
+        bid = briefing.build(db, tenant, date(2026, 10, 9))
+        result = sender.send(db, tenant, bid)
+        assert tg.call_count >= 1
+        assert result["telegram"] == 0 and result["errors"]
+    with db.tenant(tenant) as s:
+        row = s.execute(text("SELECT sent_email_at, sent_telegram_at, send_error FROM editor.briefings WHERE id = :i"),
+                        {"i": bid}).one()
+    assert row.sent_email_at and row.sent_telegram_at is None and "telegram" in (row.send_error or "")
+
+
 def test_html_is_escaped(db, tenant):
     with db.tenant(tenant) as s:
         repo.ensure_site(s, tenant, "x.example", "<script>alert(1)</script>")
