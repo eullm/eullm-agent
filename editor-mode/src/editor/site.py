@@ -9,10 +9,10 @@ could not read is recorded as a problem instead of being guessed.
 
 from __future__ import annotations
 
-import gzip
 import logging
 import time
 import xml.etree.ElementTree as ET
+import zlib
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -97,6 +97,23 @@ def guess_language(text: str) -> str | None:
     counts = {lang: sum(1 for w in words if w in stop) for lang, stop in STOP_LANG.items()}
     lang, best = max(counts.items(), key=lambda kv: kv[1])
     return lang if best >= max(5, len(words) * 0.03) else None
+
+
+def gunzip_limited(data: bytes, limit: int) -> bytes | None:
+    """Inflate gzip data without ever producing more than ``limit`` bytes.
+
+    A few MB of gzip can expand to gigabytes, so the output is bounded while
+    inflating, not after. Returns None for corrupt, truncated (the Core cuts
+    bodies at its size limit) or oversized input.
+    """
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    try:
+        out = d.decompress(data, limit + 1)
+    except zlib.error:
+        return None
+    if len(out) > limit or not d.eof:
+        return None
+    return out
 
 
 class SiteCrawler:
@@ -226,9 +243,9 @@ class SiteCrawler:
                 continue
             data = r.content[:MAX_SITEMAP_BYTES]
             if url.endswith(".gz") or data[:2] == b"\x1f\x8b":
-                try:
-                    data = gzip.decompress(data)[:MAX_SITEMAP_BYTES]
-                except OSError:
+                data = gunzip_limited(data, MAX_SITEMAP_BYTES)
+                if data is None:
+                    snap.problems.append(f"sitemap {url}: unreadable or oversized gzip, skipped")
                     continue
             try:
                 root = ET.fromstring(data)

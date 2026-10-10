@@ -125,3 +125,16 @@ def test_core_refusal_is_an_error():
         with httpx.Client(transport=CoreTransport("http://core.test", "tok")) as c:
             with pytest.raises(FetchRefused, match="not public"):
                 c.get("https://intranet.example/")
+
+
+def test_gzip_is_inflated_within_a_limit():
+    import gzip
+
+    from editor.site import gunzip_limited
+
+    small = b"<urlset></urlset>"
+    assert gunzip_limited(gzip.compress(small), 1000) == small
+    bomb = gzip.compress(b"\0" * 5_000_000)  # about 5 KB that inflate to 5 MB
+    assert gunzip_limited(bomb, 1_000_000) is None
+    assert gunzip_limited(gzip.compress(small * 100)[:40], 10_000) is None  # cut by the Core's size limit
+    assert gunzip_limited(b"\x1f\x8bnot gzip", 1000) is None
