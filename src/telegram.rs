@@ -41,7 +41,7 @@ pub async fn serve(core: Arc<Core>) -> Result<()> {
 
 fn approval_message(a: &Approval) -> String {
     let args = serde_json::to_string_pretty(&a.arguments).unwrap_or_default();
-    let short = &a.id[..8];
+    let short = a.id.get(..8).unwrap_or(&a.id);
     format!(
         "⚠ Approval needed\nTool: {}\nReason: {}\nArguments:\n{}\n\n/approve {short}\n/deny {short}",
         a.tool,
