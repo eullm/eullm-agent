@@ -212,6 +212,95 @@ async fn unanswered_approval_expires() {
 }
 
 #[tokio::test]
+async fn a_decision_taken_elsewhere_reaches_the_waiting_run() {
+    let Some(s) = store().await else { return };
+    let s: Arc<dyn Store> = Arc::new(s);
+    let t = tenant("other");
+    let run = new_run(&t);
+    s.create_run(&run).await.unwrap();
+    // Two Core processes on one database: the run waits in one, the
+    // decision is taken through the other.
+    let here = ApprovalQueue::new(Arc::clone(&s), Duration::from_secs(10));
+    let there = ApprovalQueue::new(Arc::clone(&s), Duration::from_secs(10));
+    let q = Arc::clone(&here);
+    let req = ApprovalRequest {
+        tenant: t.clone(),
+        run_id: run.id.clone(),
+        tool: "write_file".into(),
+        arguments: json!({}),
+        reason: "test".into(),
+    };
+    let waiter = tokio::spawn(async move { q.request_with(req, None).await });
+    let pending = loop {
+        if let Some(a) = s
+            .list_approvals(&t, Some(ApprovalStatus::Pending))
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+        {
+            break a;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    there
+        .decide(&t, &pending.id, false, "francesco", Some("no"))
+        .await
+        .unwrap()
+        .unwrap();
+    let (_, outcome) = tokio::time::timeout(Duration::from_secs(5), waiter)
+        .await
+        .expect("the waiting run was not woken")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        outcome,
+        Outcome::Denied {
+            by: "francesco".into(),
+            note: Some("no".into())
+        }
+    );
+}
+
+#[tokio::test]
+async fn runs_left_unfinished_are_closed_at_startup() {
+    let Some(s) = store().await else { return };
+    let t = tenant("recover");
+    let mut api_run = new_run(&t);
+    api_run.source = "api:test".into();
+    let mut tg_run = new_run(&t);
+    tg_run.source = "telegram:42".into();
+    s.create_run(&api_run).await.unwrap();
+    s.create_run(&tg_run).await.unwrap();
+    s.set_run_status(&api_run.id, RunStatus::WaitingApproval)
+        .await
+        .unwrap();
+    let approval = Approval {
+        id: uuid::Uuid::new_v4().to_string(),
+        tenant: t.clone(),
+        run_id: api_run.id.clone(),
+        tool: "write_file".into(),
+        arguments: json!({}),
+        reason: "test".into(),
+        status: ApprovalStatus::Pending,
+        decided_by: None,
+        decision_note: None,
+        created_at_ms: now_ms(),
+        decided_at_ms: None,
+    };
+    s.create_approval(&approval).await.unwrap();
+    assert!(s.recover_interrupted("api:").await.unwrap() >= 1);
+    let api = s.get_run(&t, &api_run.id).await.unwrap().unwrap();
+    assert_eq!(api.summary.status, RunStatus::Failed);
+    assert!(api.error.unwrap().contains("interrupted"));
+    let a = s.get_approval(&t, &approval.id).await.unwrap().unwrap();
+    assert_eq!(a.status, ApprovalStatus::Expired);
+    // Telegram runs belong to the other process.
+    let tg = s.get_run(&t, &tg_run.id).await.unwrap().unwrap();
+    assert_eq!(tg.summary.status, RunStatus::Queued);
+}
+
+#[tokio::test]
 async fn expire_approval_tolerates_malformed_id() {
     let Some(s) = store().await else { return };
     let s: Arc<dyn Store> = Arc::new(s);

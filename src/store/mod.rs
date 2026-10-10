@@ -237,6 +237,12 @@ pub trait Store: Send + Sync {
         note: Option<&str>,
     ) -> Result<Option<Approval>>;
     async fn expire_approval(&self, id: &str) -> Result<()>;
+    async fn get_approval(&self, tenant: &str, id: &str) -> Result<Option<Approval>>;
+    /// At startup: runs whose source starts with `source_prefix` (`api:`,
+    /// `telegram:`) left queued, running or waiting by a previous process
+    /// fail as interrupted, and their pending approvals expire. Assumes one
+    /// process per kind of source on a database. Returns the runs closed.
+    async fn recover_interrupted(&self, source_prefix: &str) -> Result<u64>;
     async fn list_approvals(
         &self,
         tenant: &str,

@@ -241,6 +241,16 @@ impl Store for MemoryStore {
         Ok(())
     }
 
+    async fn get_approval(&self, tenant: &str, id: &str) -> Result<Option<Approval>> {
+        let g = self.inner.lock().unwrap();
+        Ok(g.approvals.get(id).filter(|a| a.tenant == tenant).cloned())
+    }
+
+    async fn recover_interrupted(&self, _source_prefix: &str) -> Result<u64> {
+        // Nothing survives a restart in memory.
+        Ok(0)
+    }
+
     async fn list_approvals(
         &self,
         tenant: &str,

@@ -111,6 +111,7 @@ async fn main() -> Result<()> {
         Commands::Serve => {
             config.validate_telegram()?;
             let core = setup::build_core(Arc::new(config), Arc::clone(&module_registry)).await?;
+            setup::recover_runs(&core, "telegram:").await?;
             telegram::serve(core).await?;
         }
         Commands::Api { listen } => {
@@ -125,6 +126,7 @@ async fn main() -> Result<()> {
                 .collect::<Result<Vec<_>>>()?;
             let listen = listen.unwrap_or(api_cfg.listen);
             let core = setup::build_core(Arc::new(config), Arc::clone(&module_registry)).await?;
+            setup::recover_runs(&core, "api:").await?;
             api::serve(core, &listen, tokens).await?;
         }
         Commands::Run { task } => {

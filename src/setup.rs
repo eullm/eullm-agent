@@ -193,6 +193,15 @@ pub async fn build_store(config: &Config) -> Result<Arc<dyn Store>> {
     }
 }
 
+/// Close the runs a previous process of this kind left unfinished.
+pub async fn recover_runs(core: &Core, source_prefix: &str) -> Result<()> {
+    let n = core.store.recover_interrupted(source_prefix).await?;
+    if n > 0 {
+        warn!("{n} run(s) left unfinished by the previous process marked as interrupted");
+    }
+    Ok(())
+}
+
 pub async fn build_core(
     config: Arc<Config>,
     module_registry: Arc<Mutex<ModuleRegistry>>,
