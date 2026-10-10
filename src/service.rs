@@ -404,6 +404,10 @@ impl Core {
         let mut shown = url.clone();
         shown.set_query(None);
         shown.set_fragment(None);
+        // Credentials are refused at fetch time, but the recorded URL must
+        // never carry them either: the store keeps every attempt.
+        shown.set_username("").ok();
+        shown.set_password(None).ok();
         let started = Instant::now();
         let result = svc.fetcher.fetch(Method::GET, url, headers, None).await;
         let record = FetchRecord {
