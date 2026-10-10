@@ -50,7 +50,8 @@ class TargetIn(BaseModel):
     kind: str = Field(..., pattern="^(wordpress|webhook|telegram_channel)$")
     name: str = Field(..., max_length=100)
     config: dict = {}
-    secret_env: str | None = Field(None, pattern="^[A-Z][A-Z0-9_]{1,63}$")
+    # Only the secret's short name: the server reads EDITOR_SECRET_<TENANT>__<NAME>.
+    secret_env: str | None = Field(None, pattern="^[A-Z0-9]+(_[A-Z0-9]+)*$", max_length=40)
 
 
 class PublicationIn(BaseModel):
