@@ -48,7 +48,9 @@ def item_terms(title: str, summary: str = "", summary_terms: int = 8) -> set[str
 
 
 def top_terms(texts: list[str], n: int = 12) -> list[str]:
+    # Ties keep the order of first appearance, so the same titles always give
+    # the same terms (a set would follow the per-process string hash).
     counts = Counter()
     for t in texts:
-        counts.update(set(tokens(t)))
+        counts.update(dict.fromkeys(tokens(t), 1))
     return [t for t, _ in counts.most_common(n)]

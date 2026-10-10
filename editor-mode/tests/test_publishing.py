@@ -14,12 +14,22 @@ from test_drafts import accepted_proposal, chat
 from editor.core_client import CoreClient
 
 
-def public_resolver(host, port, proto=None):
-    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
+_real_getaddrinfo = socket.getaddrinfo
+LOCAL = ("localhost", "127.0.0.1", "::1")
 
 
-def private_resolver(host, port, proto=None):
-    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", port))]
+def _fake(ip):
+    # Patched over socket.getaddrinfo: the test database (localhost) still
+    # resolves for real, every other host gets the fixed address.
+    def resolve(host, port, *args, **kwargs):
+        if host in LOCAL:
+            return _real_getaddrinfo(host, port, *args, **kwargs)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+    return resolve
+
+
+public_resolver = _fake("93.184.216.34")
+private_resolver = _fake("10.0.0.5")
 
 
 def approved_draft(db, tenant):
