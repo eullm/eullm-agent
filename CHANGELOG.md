@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- `run_program` and module tools run in a bubblewrap sandbox by default
+  (`tools.sandbox`): no network, system directories read-only, only the
+  workspace visible and read-only, own PID namespace (nothing a program
+  starts outlives it), memory, file size and core limits. If the sandbox
+  cannot work the service does not start; `tools.sandbox.mode: none` turns
+  it off knowingly.
+- A tainted run that has also read local files or documents needs approval
+  for `fetch_url` (`taint.private_sources`, `taint.egress`), so injected
+  instructions cannot send private data out.
+- Editor Mode: a tenant names only its publishing secret; the server reads
+  `EDITOR_SECRET_<TENANT>__<NAME>`, never another variable. Tenant ids are
+  lowercase words joined by single dashes.
+- Editor Mode: gzip sitemaps are inflated within the size limit (no gzip
+  bomb), and a truncated one no longer stops the analysis.
+- Editor Mode: robots.txt is checked under the name the Core sends
+  (`eullm-agent`), also before reading the articles cited in drafts.
+
+### Changed
+
+- Editor Mode: source discovery and relevance checks follow the approved
+  profile only (approving a version starts discovery), and maintenance
+  never reverses a status a person set.
+
 ## 0.3.5
 
 ### Added
