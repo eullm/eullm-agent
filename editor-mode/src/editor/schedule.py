@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 
-from . import briefing, models as m, opportunity, proposals, sources
+from . import briefing, jobs, models as m, opportunity, proposals, sources
 from .ingest import collect_tenant
 from .profile import analyse_site
 from .scoring import score_topics
@@ -23,6 +23,23 @@ log = logging.getLogger(__name__)
 BRIEFING_WINDOW_HOURS = 3  # a worker that was down at 08:00 still sends until 11:00
 MAINTENANCE_HOUR = 3
 REVIEW_WEEKDAY, REVIEW_HOUR = 0, 4  # Monday 04:00: re-read the sites, look for new sources
+
+
+def maintenance_due(local: datetime, last: datetime | None) -> bool:
+    """Once a local day, from 03:00; a tick that comes late still runs it."""
+    if local.hour < MAINTENANCE_HOUR:
+        return False
+    return last is None or last.astimezone(local.tzinfo).date() < local.date()
+
+
+def review_due(local: datetime, last: datetime | None) -> bool:
+    """Once a week, from Monday 04:00; if Monday was missed, as soon as possible."""
+    if last is None:
+        return local.weekday() == REVIEW_WEEKDAY and local.hour >= REVIEW_HOUR
+    since = local - last.astimezone(local.tzinfo)
+    if since >= timedelta(days=8):
+        return True
+    return since >= timedelta(days=6) and local.weekday() == REVIEW_WEEKDAY and local.hour >= REVIEW_HOUR
 
 
 def briefing_due(now_utc: datetime, tz: str, hour: int, already_sent: set[date]) -> date | None:
@@ -56,11 +73,14 @@ class Runner:
         report = TickReport()
         for tenant in self.tenants():
             done = report.tenants.setdefault(tenant, [])
+            failed: list[str] = []
             try:
-                self.tenant_tick(tenant, now, done)
+                self.tenant_tick(tenant, now, done, failed)
             except Exception as e:  # one tenant's failure must not stop the others
                 log.exception("tick failed for tenant %s", tenant)
-                report.errors[tenant] = f"{type(e).__name__}: {e}"
+                failed.append(f"{type(e).__name__}: {e}")
+            if failed:
+                report.errors[tenant] = "; ".join(failed)
         return report
 
     def tenant_settings(self, tenant: str) -> dict:
@@ -82,29 +102,53 @@ class Runner:
     def core_for(self, tenant: str):
         return self.core.for_tenant(self.db, tenant) if self.core is not None else None
 
-    def tenant_tick(self, tenant: str, now: datetime, done: list[str]) -> None:
+    def step(self, tenant: str, kind: str, done: list[str], failed: list[str], fn, label: str | None = None) -> bool:
+        """Run one step in its own job: a failure is recorded and does not
+        stop the other steps."""
+        ok = False
+        with jobs.track(self.db, tenant, kind):
+            fn()
+            ok = True
+        if ok:
+            done.append(label or kind)
+        else:
+            failed.append(f"{kind} failed")
+        return ok
+
+    def tenant_tick(self, tenant: str, now: datetime, done: list[str], failed: list[str] | None = None) -> None:
+        failed = [] if failed is None else failed
         conf = self.tenant_settings(tenant)
         tz = conf["timezone"]
         local = now.astimezone(ZoneInfo(tz))
         core = self.core_for(tenant)
+        with self.db.tenant(tenant) as s:
+            last_maintain, last_review = jobs.last_done(s, "maintain"), jobs.last_done(s, "review")
         with self.http_factory() as client:
-            collect_tenant(self.db, tenant, client)
-            detect_topics(self.db, tenant, core)
-            score_topics(self.db, tenant, now=now)
-            done.append("collect")
-            if local.hour == MAINTENANCE_HOUR:
-                sources.maintain(self.db, tenant, client, now=now)
-                done.append("maintain")
-            if local.weekday() == REVIEW_WEEKDAY and local.hour == REVIEW_HOUR:
-                self.review(tenant, client)
-                done.append("review")
+            def collect():
+                collect_tenant(self.db, tenant, client)
+                detect_topics(self.db, tenant, core)
+                score_topics(self.db, tenant, now=now)
+            self.step(tenant, "collect", done, failed, collect)
+            if maintenance_due(local, last_maintain):
+                self.step(tenant, "maintain", done, failed, lambda: sources.maintain(self.db, tenant, client, now=now))
+            if review_due(local, last_review):
+                self.step(tenant, "review", done, failed, lambda: self.review(tenant, client))
             with self.db.tenant(tenant) as s:
-                sent = set(s.execute(select(m.briefings.c.briefing_date).where(
-                    m.briefings.c.briefing_date >= local.date().replace(day=1))).scalars())
-            day = briefing_due(now, tz, conf["briefing_hour"], sent)
+                built = {r.briefing_date: r for r in s.execute(
+                    select(m.briefings.c.id, m.briefings.c.briefing_date, m.briefings.c.send_error).where(
+                        m.briefings.c.briefing_date >= local.date() - timedelta(days=1))).all()}
+            day = briefing_due(now, tz, conf["briefing_hour"], set(built))
             if day is not None:
-                self.morning(tenant, day, now, conf["language"])
-                done.append(f"briefing {day.isoformat()}")
+                self.step(tenant, "briefing", done, failed, lambda: self.morning(tenant, day, now, conf["language"]),
+                          f"briefing {day.isoformat()}")
+            else:
+                # Built but not delivered (mail server down, Telegram error):
+                # try again within the same window; channels already sent are skipped.
+                today = built.get(local.date())
+                in_window = briefing_due(now, tz, conf["briefing_hour"], set()) is not None
+                if today is not None and today.send_error and in_window and self.sender is not None:
+                    self.step(tenant, "briefing", done, failed, lambda: self.sender.send(self.db, tenant, today.id),
+                              f"briefing {today.briefing_date.isoformat()} resent")
 
     def review(self, tenant: str, client) -> None:
         from .site import SiteCrawler

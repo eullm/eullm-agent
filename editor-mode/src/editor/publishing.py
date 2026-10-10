@@ -150,6 +150,17 @@ def decide(db, tenant_id: str, pub_id: int, approve: bool, by: str, note: str | 
     return True
 
 
+def mark_uncertain_failed(db, tenant_id: str, pub_id: int, by: str) -> bool:
+    """A person checked the CMS after a send whose outcome is unknown and
+    found nothing: the publication counts as failed and can be requested
+    again."""
+    with db.tenant(tenant_id) as s:
+        n = s.execute(update(m.publications).where(
+            m.publications.c.id == pub_id, m.publications.c.status == "sending",
+        ).values(status="failed", error=f"outcome unknown; checked on the CMS by {by}")).rowcount
+    return bool(n)
+
+
 class Publisher:
     def __init__(self, http: httpx.Client | None = None, resolver=None, telegram_api="https://api.telegram.org"):
         self.http = http or httpx.Client(timeout=30, follow_redirects=False)
@@ -157,20 +168,30 @@ class Publisher:
         self.telegram_api = telegram_api
 
     def run(self, db, tenant_id: str, pub_id: int) -> dict:
-        """Execute an approved publication. Refuses anything not approved."""
+        """Execute an approved publication. Refuses anything not approved.
+
+        The publication is marked ``sending`` before the request leaves: two
+        workers cannot both send it, and a process that dies mid-way leaves
+        it ``sending`` for a person to check on the CMS (see
+        `mark_uncertain_failed`) instead of sending it again."""
         with db.tenant(tenant_id) as s:
-            pub = s.execute(select(m.publications).where(m.publications.c.id == pub_id)).first()
+            pub = s.execute(update(m.publications).where(
+                m.publications.c.id == pub_id, m.publications.c.status == "approved",
+                m.publications.c.decided_by.is_not(None),
+            ).values(status="sending", attempts=m.publications.c.attempts + 1).returning(m.publications)).first()
             if pub is None:
-                raise PublishError("publication not found")
-            if pub.status == "published":
-                return {"status": "published", "url": pub.external_url}
-            if pub.status != "approved" or not pub.decided_by:
-                raise PublishError(f"publication is {pub.status}: it needs a person's approval first")
+                cur = s.execute(select(m.publications).where(m.publications.c.id == pub_id)).first()
+                if cur is None:
+                    raise PublishError("publication not found")
+                if cur.status == "published":
+                    return {"status": "published", "url": cur.external_url}
+                if cur.status == "sending":
+                    return {"status": "sending"}
+                raise PublishError(f"publication is {cur.status}: it needs a person's approval first")
             target = s.execute(select(m.publish_targets).where(m.publish_targets.c.id == pub.target_id)).first()
             cms_url = s.execute(select(m.publications.c.external_url).where(
                 m.publications.c.draft_id == pub.draft_id, m.publications.c.status == "published",
                 m.publications.c.external_url.is_not(None)).limit(1)).scalar()
-            s.execute(update(m.publications).where(m.publications.c.id == pub_id).values(attempts=m.publications.c.attempts + 1))
         try:
             ext_id, ext_url = getattr(self, f"_{target.kind}")(target, pub, cms_url)
         except (PublishError, httpx.HTTPError, KeyError, ValueError) as e:

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
-from . import auth, drafts, models as m, profile as prof, proposals as props, publishing, repo, sources, ui
+from . import auth, drafts, jobs, models as m, profile as prof, proposals as props, publishing, repo, sources, ui
 from .briefing import TEMPLATES as _BRIEF_TEMPLATES
 from .site import SiteCrawler
 
@@ -101,12 +101,18 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
     def run_analysis(tenant: str, domain: str):
         if http_factory is None:
             return
-        with http_factory() as client:
+        with jobs.track(db, tenant, "analysis", domain), http_factory() as client:
             res = prof.analyse_site(db, tenant, domain, SiteCrawler(client), core_for(tenant))
             if res["status"] != "failed":
                 sources.discover(db, tenant, res["site_id"], client, core_for(tenant))
 
     # --- JSON -------------------------------------------------------------
+
+    @app.get("/api/jobs")
+    def list_jobs(c: auth.Caller = Depends(caller)):
+        """Latest background work and how it ended."""
+        with db.tenant(c.tenant_id) as s:
+            return {"jobs": jobs.recent(s, 50)}
 
     @app.get("/api/health")
     def health():
@@ -212,11 +218,12 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
     def run_draft(tenant: str, proposal_id: int):
         if core is None:
             return
-        if http_factory is None:
-            drafts.write_draft(db, tenant, proposal_id, core_for(tenant), None)
-            return
-        with http_factory() as client:
-            drafts.write_draft(db, tenant, proposal_id, core_for(tenant), client)
+        with jobs.track(db, tenant, "draft", f"proposal {proposal_id}"):
+            if http_factory is None:
+                drafts.write_draft(db, tenant, proposal_id, core_for(tenant), None)
+                return
+            with http_factory() as client:
+                drafts.write_draft(db, tenant, proposal_id, core_for(tenant), client)
 
     @app.post("/api/proposals/{proposal_id}/draft", status_code=202)
     def request_draft(proposal_id: int, background: BackgroundTasks, c: auth.Caller = Depends(need("editor"))):
@@ -346,7 +353,7 @@ def create_app(db, http_factory=None, core=None, publisher=None) -> FastAPI:
     def run_discovery(tenant: str, site_id: int):
         if http_factory is None:
             return
-        with http_factory() as client:
+        with jobs.track(db, tenant, "discovery", f"site {site_id}"), http_factory() as client:
             sources.discover(db, tenant, site_id, client, core_for(tenant))
 
     ui.register(app, SimpleNamespace(db=db, pages=pages, need=need, core=core, publisher=publisher,

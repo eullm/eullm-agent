@@ -189,7 +189,7 @@ class Sender:
                 self._email(emails, f"Briefing {b.briefing_date.isoformat()}", b.body_md, b.body_html)
                 values["sent_email_at"] = datetime.now(UTC)
                 result["email"] = len(emails)
-            except (OSError, smtplib.SMTPException) as e:
+            except (OSError, smtplib.SMTPException, ValueError) as e:
                 errors.append(f"email: {e}")
         if chats and b.sent_telegram_at is None and self.settings.telegram_token:
             try:
@@ -216,7 +216,9 @@ class Sender:
 
     def _email(self, to: list[str], subject: str, text: str, page: str) -> None:
         msg = EmailMessage()
-        msg["Subject"], msg["From"], msg["To"] = subject, self.settings.mail_from, ", ".join(to)
+        # Recipients in Bcc: they do not see each other's addresses.
+        msg["Subject"], msg["From"], msg["To"] = subject, self.settings.mail_from, self.settings.mail_from
+        msg["Bcc"] = ", ".join(to)
         msg.set_content(text)
         msg.add_alternative(page, subtype="html")
         with self.smtp_factory(self.settings.smtp_host, self.settings.smtp_port, timeout=30) as smtp:

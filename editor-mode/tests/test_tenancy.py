@@ -51,6 +51,9 @@ def populate(db, tenant, monkeypatch):
                   {"t": tenant, "s": site_id})
         proposals.record_feedback(s, tenant, "source", 1, "up", "x")
     briefing.build(db, tenant, __import__("datetime").date(2026, 10, 9))
+    from editor import jobs
+    with jobs.track(db, tenant, "analysis", "x"):
+        pass
 
 
 def test_two_tenants_are_fully_isolated(db, pg_urls, tenant, monkeypatch):
