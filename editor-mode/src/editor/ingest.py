@@ -122,17 +122,3 @@ def collect_tenant(db: Database, tenant_id: str, client: httpx.Client) -> Collec
                 s, src.id, etag=result.etag, last_modified=result.last_modified, newest=max(dates, default=None)
             )
     return report
-
-
-def http_client(user_agent: str, github_token: str = "", **kwargs) -> httpx.Client:
-    headers = {"User-Agent": user_agent}
-    client = httpx.Client(headers=headers, timeout=30, follow_redirects=True, **kwargs)
-    if github_token:
-        token = github_token
-
-        def add_auth(request: httpx.Request) -> None:
-            if request.url.host == "api.github.com":
-                request.headers["Authorization"] = f"Bearer {token}"
-
-        client.event_hooks["request"].append(add_auth)
-    return client
