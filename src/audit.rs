@@ -97,7 +97,7 @@ impl Audit {
         fields["run"] = json!(run.id);
         let mut line = fields.to_string();
         line.push('\n');
-        let mut f = self.file.lock().unwrap();
+        let mut f = self.file.lock().unwrap_or_else(|e| e.into_inner());
         // Auditing must never stop the agent; a failed write is logged.
         if let Err(e) = f.write_all(line.as_bytes()) {
             tracing::warn!("audit write failed: {e}");
@@ -190,5 +190,37 @@ impl Recorder for StoreRecorder {
         if let Err(e) = self.store.finish_run(&run.id, end).await {
             tracing::warn!("store: cannot finish run {}: {e}", run.id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info() -> RunInfo {
+        RunInfo {
+            id: "run".into(),
+            tenant: "tenant".into(),
+            profile: "profile".into(),
+            source: "cli".into(),
+            provider: "provider".into(),
+            model: "model".into(),
+        }
+    }
+
+    #[test]
+    fn poisoned_lock_does_not_stop_auditing() {
+        let path =
+            std::env::temp_dir().join(format!("eullm-audit-test-{}.jsonl", std::process::id()));
+        let audit = Audit::open(&path).unwrap();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = audit.file.lock().unwrap();
+            panic!("poison the audit lock");
+        }));
+        assert!(audit.file.is_poisoned());
+        audit.write("run_start", &info(), json!({}));
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.lines().count() >= 1);
+        let _ = std::fs::remove_file(&path);
     }
 }
