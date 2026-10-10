@@ -756,6 +756,29 @@ async fn fetch_refuses_private_addresses_and_free_headers() {
 }
 
 #[tokio::test]
+async fn fetch_records_no_credentials() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  fetch: {}\n",
+        vec![],
+    );
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/fetch",
+        Some(TOKEN_A),
+        Some(json!({"url": "https://user:s3cret@example.com/page"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+    let recorded = h.store.fetches();
+    let entry = recorded
+        .iter()
+        .find(|entry| entry.0 == "tenant-a")
+        .expect("refused fetch is recorded");
+    assert_eq!(entry.1.url, "https://example.com/page");
+}
+
+#[tokio::test]
 async fn fetch_follows_checked_redirects_records_and_paces() {
     use base64::Engine;
     let base = local_site().await;

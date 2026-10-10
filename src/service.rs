@@ -544,6 +544,10 @@ impl Core {
         let mut shown = url.clone();
         shown.set_query(None);
         shown.set_fragment(None);
+        // Credentials are refused at fetch time, but the recorded URL must
+        // never carry them either: the store keeps every attempt.
+        shown.set_username("").ok();
+        shown.set_password(None).ok();
         let mut headers = headers.to_vec();
         if let Some((name, value)) = credential_for(&svc.credentials, &url) {
             headers.retain(|(k, _)| !k.eq_ignore_ascii_case(name));
