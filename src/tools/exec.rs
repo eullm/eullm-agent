@@ -12,7 +12,7 @@ use std::time::Duration;
 use super::process::{format_output, run_program};
 use super::sandbox::Workspace;
 use super::Tool;
-use crate::config::ExecToolConfig;
+use crate::config::{ExecToolConfig, SandboxConfig};
 use crate::llm::ToolDefinition;
 
 const MAX_ARGS: usize = 64;
@@ -23,15 +23,17 @@ pub struct ExecTool {
     timeout: Duration,
     max_output_bytes: usize,
     workspace: Workspace,
+    sandbox: SandboxConfig,
 }
 
 impl ExecTool {
-    pub fn new(cfg: &ExecToolConfig, workspace: Workspace) -> Self {
+    pub fn new(cfg: &ExecToolConfig, workspace: Workspace, sandbox: &SandboxConfig) -> Self {
         Self {
             allowed: cfg.allowed_programs.clone(),
             timeout: Duration::from_secs(cfg.timeout_seconds.max(1)),
             max_output_bytes: cfg.max_output_bytes,
             workspace,
+            sandbox: sandbox.clone(),
         }
     }
 }
@@ -92,6 +94,7 @@ impl Tool for ExecTool {
             self.workspace.root(),
             self.timeout,
             self.max_output_bytes,
+            &self.sandbox,
         )
         .await?;
         Ok(format_output(&out))

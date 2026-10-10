@@ -134,6 +134,20 @@ tools:
     timeout_seconds: 30
     max_output_bytes: 65536
 
+  # Isolation for run_program and module tools. With bubblewrap (the
+  # default, Linux only: `apt install bubblewrap`) a program sees the system
+  # directories read-only and the workspace, nothing else of the host; it has
+  # no network and everything it starts dies with it. If bwrap is missing or
+  # blocked, the service does not start: set `mode: none` only knowingly.
+  # On Ubuntu 24.04+ AppArmor may block user namespaces for bwrap.
+  sandbox:
+    mode: bubblewrap            # bubblewrap | none
+    network: false
+    writable_workspace: false
+    read_only_paths: []         # e.g. [/opt/tools, /etc/ImageMagick-6]
+    max_memory_mb: 2048
+    max_file_mb: 100
+
   # read_file and list_dir inside the workspace; write_file only if allow_write.
   filesystem:
     enabled: true

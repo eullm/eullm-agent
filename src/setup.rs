@@ -22,6 +22,7 @@ use crate::tools::{
     filesystem::{ListDirTool, ReadFileTool, WriteFileTool},
     http::FetchUrlTool,
     module_tool::{ListModulesTool, ModuleTool},
+    process::check_sandbox,
     sandbox::Workspace,
     ToolRegistry,
 };
@@ -105,13 +106,26 @@ pub fn build_tools(
     let ws = Workspace::open(&config.workspace)?;
     info!("workspace={}", ws.root().display());
 
+    // Programs run only inside a sandbox that works, or with an explicit
+    // `tools.sandbox.mode: none`.
+    let runs_programs = (tc.exec.enabled && !tc.exec.allowed_programs.is_empty())
+        || (config.modules.enabled && {
+            let reg = module_registry.lock().unwrap();
+            reg.manifests
+                .iter()
+                .any(|m| reg.state.installed.contains(&m.name) && !m.tools.is_empty())
+        });
+    if runs_programs {
+        check_sandbox(&tc.sandbox, ws.root())?;
+    }
+
     if tc.exec.enabled {
         if tc.exec.allowed_programs.is_empty() {
             warn!(
                 "tools.exec is enabled but allowed_programs is empty: run_program not registered"
             );
         } else {
-            r.register(Arc::new(ExecTool::new(&tc.exec, ws.clone())));
+            r.register(Arc::new(ExecTool::new(&tc.exec, ws.clone(), &tc.sandbox)));
         }
     }
     if tc.filesystem.enabled {
@@ -136,7 +150,7 @@ pub fn build_tools(
         for manifest in &reg.manifests {
             if reg.state.installed.contains(&manifest.name) {
                 for spec in &manifest.tools {
-                    match ModuleTool::new(spec.clone(), ws.clone(), timeout) {
+                    match ModuleTool::new(spec.clone(), ws.clone(), timeout, &tc.sandbox) {
                         Ok(t) => {
                             r.register(Arc::new(t));
                         }

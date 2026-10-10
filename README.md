@@ -61,7 +61,7 @@ setting.
 
 | Capability | Default | When enabled |
 |---|---|---|
-| `run_program` (`tools.exec`) | off | Only programs in `allowed_programs`, argv only (never a shell), run in the workspace with a clean environment, killed with their process group on timeout, output capped |
+| `run_program` (`tools.exec`) | off | Only programs in `allowed_programs`, argv only (never a shell), run in a bubblewrap sandbox (no network, read-only system directories, only the workspace visible and read-only, own process tree, memory and file size limits), killed with everything they started on timeout, output capped |
 | `read_file`, `list_dir` | on | Confined to `workspace`: `..`, absolute paths outside it and symlinks leading out are refused |
 | `write_file` | off (`allow_write`) | Same confinement; never writes through a symlink; size capped |
 | `fetch_url` (`tools.http`) | off | HTTPS GET only; every resolved address must be public (no loopback, LAN, link-local or cloud metadata); each redirect is checked again; the connection is pinned to the checked address; optional domain allowlist; body capped |

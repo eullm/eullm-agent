@@ -7,6 +7,7 @@ use std::time::Duration;
 use super::process::{format_output, run_program};
 use super::sandbox::Workspace;
 use super::Tool;
+use crate::config::SandboxConfig;
 use crate::llm::ToolDefinition;
 use crate::modules::{ArgvToken, ModuleRegistry, ModuleToolSpec};
 
@@ -19,16 +20,23 @@ pub struct ModuleTool {
     argv: Vec<ArgvToken>,
     workspace: Workspace,
     timeout: Duration,
+    sandbox: SandboxConfig,
 }
 
 impl ModuleTool {
-    pub fn new(spec: ModuleToolSpec, workspace: Workspace, timeout: Duration) -> Result<Self> {
+    pub fn new(
+        spec: ModuleToolSpec,
+        workspace: Workspace,
+        timeout: Duration,
+        sandbox: &SandboxConfig,
+    ) -> Result<Self> {
         let argv = spec.argv_template()?;
         Ok(Self {
             spec,
             argv,
             workspace,
             timeout,
+            sandbox: sandbox.clone(),
         })
     }
 
@@ -83,6 +91,7 @@ impl Tool for ModuleTool {
             self.workspace.root(),
             self.timeout,
             MAX_OUTPUT_BYTES,
+            &self.sandbox,
         )
         .await?;
         if !out.status.success() {
