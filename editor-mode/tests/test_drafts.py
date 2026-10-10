@@ -14,6 +14,25 @@ ARTICLE_PAGE = """<html><head><title>Bari</title></head><body><article>
 </article></body></html>"""
 
 
+def _article_doc(**over):
+    claims = [{"text": f"Claim number {i} about fiber networks", "sources": [7]} for i in range(3)]
+    doc = {"title": "Fiber rollout accelerates in southern Italy",
+           "subtitle": "The network is complete",
+           "sections": [{"heading": "Facts", "claims": claims}]}
+    doc.update(over)
+    return doc
+
+
+def test_null_subtitle_becomes_empty():
+    assert drafts.parse_article(_article_doc(subtitle=None), {7}).subtitle == ""
+
+
+def test_missing_subtitle_becomes_empty():
+    doc = _article_doc()
+    del doc["subtitle"]
+    assert drafts.parse_article(doc, {7}).subtitle == ""
+
+
 def test_numbers_and_copy_checks():
     assert drafts.numbers("Copre 120.000 case al 35% e 3,5 Gbit") == {"120000", "35", "3.5"}
     assert drafts.numbers("1,200 utenti") == {"1200"}

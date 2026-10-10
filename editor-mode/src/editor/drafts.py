@@ -132,7 +132,7 @@ def parse_article(value, allowed: set[int]) -> Article:
             claims.append(Claim(c["text"].strip(), list(dict.fromkeys(ids)), heading))
     if len(claims) < 3:
         raise ValueError("an article needs at least 3 claims")
-    return Article(title.strip(), str(value.get("subtitle", "")).strip()[:300], claims)
+    return Article(title.strip(), str(value.get("subtitle") or "").strip()[:300], claims)
 
 
 def render(article: Article, sources: dict[int, Source], language: str | None) -> str:

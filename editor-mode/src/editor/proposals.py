@@ -54,8 +54,8 @@ def _validator(allowed_ids: set[int]):
         fmt = v.get("format") if v.get("format") in FORMATS else "analysis"
         return {
             "title": title.strip(),
-            "angle": str(v.get("angle", "")).strip()[:1000],
-            "why_now": str(v.get("why_now", "")).strip()[:1000],
+            "angle": str(v.get("angle") or "").strip()[:1000],
+            "why_now": str(v.get("why_now") or "").strip()[:1000],
             "format": fmt,
             "citations": list(dict.fromkeys(ids)),
         }
