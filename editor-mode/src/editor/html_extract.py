@@ -167,6 +167,8 @@ def parse_html(html: str, url: str) -> Page:
 
 
 def same_site(url: str, domain: str) -> bool:
-    host = (urlsplit(url).hostname or "").lower()
-    domain = domain.lower()
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    domain = domain.lower().rstrip(".")
+    if not host or not domain:
+        return False
     return host == domain or host.endswith("." + domain)

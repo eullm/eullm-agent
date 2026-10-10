@@ -6,13 +6,23 @@ import respx
 
 import fakesite
 from editor.core_fetch import CoreTransport, FetchRefused
-from editor.html_extract import parse_html
+from editor.html_extract import parse_html, same_site
 from editor.site import SiteCrawler
 
 
 def crawl(router, **kw):
     with httpx.Client() as c:
         return SiteCrawler(c, **kw).analyse("blog.example")
+
+
+def test_same_site_ignores_trailing_dot_and_empties():
+    assert same_site("https://example.com./x", "example.com")
+    assert same_site("https://sub.example.com./x", "example.com")
+    assert same_site("https://example.com/x", "example.com.")
+    assert not same_site("not a url", "")
+    assert not same_site("https://a.it/x", "")
+    assert same_site("https://example.com/x", "example.com")
+    assert not same_site("https://other.com/x", "example.com")
 
 
 def test_menu_div_does_not_swallow_following_text():
