@@ -20,7 +20,7 @@ import json
 import os
 import socket
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from sqlalchemy import select, update
@@ -50,6 +50,29 @@ def check_public_url(url: str, resolver=None) -> None:
         ip = ipaddress.ip_address(info[4][0])
         if not ip.is_global:
             raise PublishError(f"{host} resolves to a non-public address ({ip})")
+
+
+_REDIRECT_STATUS = {301, 302, 303, 307, 308}
+
+
+def _ensure_no_redirect(response: httpx.Response, base: str, resolver=None) -> None:
+    """Refuse redirect responses instead of following them.
+
+    The publisher client is created with ``follow_redirects=False`` (like the
+    Core, which re-checks every hop), so a 3xx here means the target tried to
+    send us elsewhere. Fail closed: validate the Location when present so a
+    redirect to a private address is reported as such, and refuse the rest.
+    """
+    if response.status_code not in _REDIRECT_STATUS:
+        return
+    location = response.headers.get("location", "")
+    if location:
+        target = urljoin(base, location)
+        try:
+            check_public_url(target, resolver)
+        except PublishError as e:
+            raise PublishError(f"redirect refused ({response.status_code} to {location}): {e}") from e
+    raise PublishError(f"redirects are not followed ({response.status_code} to {location or '?'})")
 
 
 def _secret(target) -> str:
@@ -147,6 +170,7 @@ class Publisher:
             json={"title": pub.payload["title"], "content": pub.payload["html"], "excerpt": pub.payload["subtitle"],
                   "status": "publish" if pub.mode == "publish" else "draft"},
         )
+        _ensure_no_redirect(r, base, self.resolver)
         r.raise_for_status()
         body = r.json()
         return str(body["id"]), body.get("link")
@@ -159,6 +183,7 @@ class Publisher:
                           ensure_ascii=False).encode()
         sig = hmac.new(_secret(target).encode(), data, hashlib.sha256).hexdigest()
         r = self.http.post(url, content=data, headers={"Content-Type": "application/json", "X-Editor-Signature": f"sha256={sig}"})
+        _ensure_no_redirect(r, url, self.resolver)
         r.raise_for_status()
         return None, None
 
@@ -169,7 +194,9 @@ class Publisher:
             text += f"\n{h.escape(pub.payload['subtitle'])}"
         if cms_url:
             text += f'\n\n<a href="{h.escape(cms_url, quote=True)}">{h.escape(cms_url)}</a>'
-        r = self.http.post(f"{self.telegram_api}/bot{_secret(target)}/sendMessage",
+        endpoint = f"{self.telegram_api}/bot{_secret(target)}/sendMessage"
+        r = self.http.post(endpoint,
                            json={"chat_id": target.config["chat_id"], "text": text, "parse_mode": "HTML"})
+        _ensure_no_redirect(r, endpoint, self.resolver)
         r.raise_for_status()
         return str(r.json().get("result", {}).get("message_id")), None
