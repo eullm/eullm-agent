@@ -16,7 +16,8 @@ cargo test
 
 1. Branch from `main` and keep each pull request to one change.
 2. Make sure `cargo clippy -- -D warnings` and `cargo test` pass.
-3. Fill in the pull request template, including the CLA line below.
+3. Fill in the pull request template. External contributors also add the
+   CLA line below; members of the eullm organisation do not.
 
 ## License
 
@@ -30,8 +31,8 @@ request description:
 I have read and agree to the Contributor Licence Agreement in CLA.md.
 ```
 
-A check named **CLA** runs on every pull request and fails until that line is
-in the description. Editing the description re-runs it; you do not need to push
+A check named **CLA** runs on every pull request from outside the eullm
+organisation and fails until that line is in the description. Editing the description re-runs it; you do not need to push
 again.
 
 Agreeing only that your contribution is "licensed under AGPL-3.0-or-later" is

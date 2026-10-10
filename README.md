@@ -17,7 +17,12 @@ into a multi-tenant Core that other applications build on:
   per run, and monthly and daily limits per tenant (`429` when reached).
 
 Editor Mode, the first vertical built on the Core, uses it to run editorial
-work for any domain.
+work for any domain: it reads the site, proposes an editorial line with
+evidence, finds its own sources, separates hype from real opportunity and
+drafts articles where every sentence cites a source. Nothing goes out
+without a person's yes.
+
+![Editor Mode dashboard built on the EuLLM Agent Core](docs/images/editor-mode.png)
 
 ## Quick start
 

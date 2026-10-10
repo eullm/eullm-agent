@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.5
+
+### Changed
+
+- README: Editor Mode, the first vertical on the Core, shown with its
+  dashboard.
+
 ## 0.3.0
 
 The Core as a service: other programs can start runs, make model calls,
