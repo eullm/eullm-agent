@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from fastapi import BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 
 from . import auth, drafts, models as m, profile as prof, proposals as props, publishing, quotas
 
@@ -498,7 +499,7 @@ def register(app, ctx) -> None:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
             return done(f"/drafts/{draft_id}", f"Richiesta non inviata: {e}.")
-        except Exception:
+        except IntegrityError:
             return done(f"/drafts/{draft_id}", "Questa pubblicazione è già stata chiesta.")
         return done("/publications", "Pubblicazione chiesta: aspetta l'approvazione di un owner.")
 
