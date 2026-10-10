@@ -58,7 +58,9 @@ impl ModelRouter {
                 }
             }
             let client: Arc<dyn LlmClient> = if chain.len() == 1 {
-                chain.pop().unwrap()
+                chain
+                    .pop()
+                    .expect("fallback chain always holds the model itself")
             } else {
                 Arc::new(FallbackClient { chain })
             };
@@ -128,7 +130,7 @@ impl LlmClient for FallbackClient {
                 }
             }
         }
-        Err(last_err.unwrap())
+        Err(last_err.expect("fallback chain is never empty"))
     }
 
     fn provider_name(&self) -> &str {
