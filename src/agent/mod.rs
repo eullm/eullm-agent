@@ -13,6 +13,13 @@ use crate::store::{LlmCallRecord, RunEnd, ToolCallRecord};
 use crate::tools::ToolRegistry;
 use crate::util::truncate_utf8;
 
+/// A limit outside the run (e.g. a tenant's monthly budget), checked
+/// before each model call after the first.
+#[async_trait::async_trait]
+pub trait BudgetGuard: Send + Sync {
+    async fn check(&self) -> Result<()>;
+}
+
 /// One ReAct loop: the model proposes, the policy decides, the tool runs
 /// and the recorder writes it down.
 pub struct Agent<'a> {
@@ -28,6 +35,7 @@ pub struct Agent<'a> {
     policy: Arc<Policy>,
     approver: Arc<dyn Approver>,
     recorder: Option<Arc<dyn Recorder>>,
+    budget: Option<Arc<dyn BudgetGuard>>,
     tenant: String,
     profile: String,
     source: String,
@@ -61,6 +69,7 @@ impl<'a> Agent<'a> {
             policy: Arc::new(Policy::default()),
             approver: Arc::new(DenyAll),
             recorder: None,
+            budget: None,
             tenant: "default".into(),
             profile: "default".into(),
             source: "cli".into(),
@@ -112,6 +121,11 @@ impl<'a> Agent<'a> {
     pub fn with_audit(mut self, audit: Option<Arc<Audit>>, source: &str) -> Self {
         self.recorder = audit.map(|a| a as Arc<dyn Recorder>);
         self.source = source.to_string();
+        self
+    }
+
+    pub fn with_budget(mut self, budget: Option<Arc<dyn BudgetGuard>>) -> Self {
+        self.budget = budget;
         self
     }
 
@@ -229,6 +243,11 @@ impl<'a> Agent<'a> {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 bail!("run time limit reached ({}s)", self.max_run.as_secs());
+            }
+            if iteration > 0 {
+                if let Some(b) = &self.budget {
+                    b.check().await?;
+                }
             }
             let started = Instant::now();
             let response =

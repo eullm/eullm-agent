@@ -32,6 +32,107 @@ pub struct Core {
     pub extra_recorder: Option<Arc<dyn Recorder>>,
     slots: Arc<Semaphore>,
     fetch: Option<FetchService>,
+    /// Runs and fetches that passed the limit check and are not in the
+    /// store yet, so that concurrent requests cannot all slip under a limit.
+    in_flight: InFlight,
+    /// Serialises "check, then reserve" within this process.
+    limit_gate: Mutex<()>,
+}
+
+type InFlight = Arc<std::sync::Mutex<HashMap<(String, Consume), u64>>>;
+
+/// A slot counted against a tenant's limit until the work is in the store.
+pub struct Reservation {
+    in_flight: InFlight,
+    key: (String, Consume),
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        let mut m = self.in_flight.lock().unwrap();
+        if let Some(n) = m.get_mut(&self.key) {
+            *n = n.saturating_sub(1);
+            if *n == 0 {
+                m.remove(&self.key);
+            }
+        }
+    }
+}
+
+/// Re-checks a tenant's monthly budget before every model call of a run, so
+/// one long run cannot overshoot it.
+pub struct TenantBudget {
+    store: Arc<dyn Store>,
+    tenant: String,
+    limits: TenantLimits,
+}
+
+#[async_trait::async_trait]
+impl crate::agent::BudgetGuard for TenantBudget {
+    async fn check(&self) -> Result<()> {
+        check_tenant_limits(
+            self.store.as_ref(),
+            &self.limits,
+            &self.tenant,
+            Consume::ModelCall,
+            0,
+        )
+        .await
+    }
+}
+
+/// Refuse when the tenant has reached a limit that applies to `what`;
+/// `pending` counts work already admitted but not yet recorded.
+async fn check_tenant_limits(
+    store: &dyn Store,
+    l: &TenantLimits,
+    tenant: &str,
+    what: Consume,
+    pending: u64,
+) -> Result<()> {
+    let (day_start, month_start) = period_starts(now_ms());
+    let monthly = l.max_cost_per_month.is_some() || l.max_tokens_per_month.is_some();
+    // Runs call the model too, so they count against the monthly budget.
+    if matches!(what, Consume::Run | Consume::ModelCall) && monthly {
+        let m = store.usage(tenant, month_start).await?;
+        if let Some(max) = l.max_cost_per_month {
+            if m.cost >= max {
+                return Err(LimitReached(format!(
+                    "monthly cost limit reached ({:.2} of {max:.2})",
+                    m.cost
+                ))
+                .into());
+            }
+        }
+        if let Some(max) = l.max_tokens_per_month {
+            let used = m.input_tokens + m.output_tokens;
+            if used >= max {
+                return Err(
+                    LimitReached(format!("monthly token limit reached ({used} of {max})")).into(),
+                );
+            }
+        }
+    }
+    let daily = match what {
+        Consume::Run => l.max_runs_per_day.map(|max| ("runs", max)),
+        Consume::Fetch => l.max_fetches_per_day.map(|max| ("fetches", max)),
+        Consume::ModelCall => None,
+    };
+    if let Some((name, max)) = daily {
+        let d = store.usage(tenant, day_start).await?;
+        let used = pending
+            + if what == Consume::Run {
+                d.runs
+            } else {
+                d.fetches
+            };
+        if used >= max {
+            return Err(
+                LimitReached(format!("daily {name} limit reached ({used} of {max})")).into(),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// `POST /v1/fetch` behind the address checks, plus a per-host pace shared
@@ -55,7 +156,7 @@ pub enum FetchError {
 }
 
 /// What a caller is about to consume, checked against `api.tenants`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Consume {
     Run,
     ModelCall,
@@ -152,6 +253,8 @@ impl Core {
                     interval: Duration::from_millis(f.min_host_interval_ms),
                     next_slot: Mutex::new(HashMap::new()),
                 }),
+            in_flight: Arc::default(),
+            limit_gate: Mutex::new(()),
             config,
         })
     }
@@ -203,60 +306,49 @@ impl Core {
     /// The check is made before the work: a call already under way may
     /// take a tenant slightly past a monthly budget, never further.
     pub async fn check_limits(&self, tenant: &str, what: Consume) -> Result<()> {
+        self.reserve(tenant, what).await.map(drop)
+    }
+
+    /// Check the limits and hold a slot until the work is recorded: requests
+    /// arriving together are counted one after the other, not all against
+    /// the same total. (Within one process; several Core processes on one
+    /// database can still overshoot by the work they admit at once.)
+    pub async fn reserve(&self, tenant: &str, what: Consume) -> Result<Reservation> {
+        let key = (tenant.to_string(), what);
+        let reservation = || {
+            *self
+                .in_flight
+                .lock()
+                .unwrap()
+                .entry(key.clone())
+                .or_default() += 1;
+            Reservation {
+                in_flight: Arc::clone(&self.in_flight),
+                key: key.clone(),
+            }
+        };
         let Some(l) = self.limits(tenant) else {
-            return Ok(());
+            return Ok(reservation());
         };
-        let (day_start, month_start) = period_starts(now_ms());
-        let monthly = l.max_cost_per_month.is_some() || l.max_tokens_per_month.is_some();
-        // Runs call the model too, so they count against the monthly budget.
-        if matches!(what, Consume::Run | Consume::ModelCall) && monthly {
-            let m = self.store.usage(tenant, month_start).await?;
-            if let Some(max) = l.max_cost_per_month {
-                if m.cost >= max {
-                    return Err(LimitReached(format!(
-                        "monthly cost limit reached ({:.2} of {max:.2})",
-                        m.cost
-                    ))
-                    .into());
-                }
-            }
-            if let Some(max) = l.max_tokens_per_month {
-                let used = m.input_tokens + m.output_tokens;
-                if used >= max {
-                    return Err(LimitReached(format!(
-                        "monthly token limit reached ({used} of {max})"
-                    ))
-                    .into());
-                }
-            }
-        }
-        let daily = match what {
-            Consume::Run => l.max_runs_per_day.map(|max| ("runs", max)),
-            Consume::Fetch => l.max_fetches_per_day.map(|max| ("fetches", max)),
-            Consume::ModelCall => None,
-        };
-        if let Some((name, max)) = daily {
-            let d = self.store.usage(tenant, day_start).await?;
-            let used = if what == Consume::Run {
-                d.runs
-            } else {
-                d.fetches
-            };
-            if used >= max {
-                return Err(
-                    LimitReached(format!("daily {name} limit reached ({used} of {max})")).into(),
-                );
-            }
-        }
-        Ok(())
+        let _gate = self.limit_gate.lock().await;
+        let pending = self
+            .in_flight
+            .lock()
+            .unwrap()
+            .get(&key)
+            .copied()
+            .unwrap_or(0);
+        check_tenant_limits(self.store.as_ref(), l, tenant, what, pending).await?;
+        Ok(reservation())
     }
 
     /// Validate and record a run, then execute it in the background.
     /// Returns the run id at once.
     pub async fn start_run(self: &Arc<Self>, req: StartRun) -> Result<String> {
         let profile = self.prepare(&req)?;
-        self.check_limits(&req.tenant, Consume::Run).await?;
+        let reserved = self.reserve(&req.tenant, Consume::Run).await?;
         let id = self.record_new(&req).await?;
+        drop(reserved);
         let core = Arc::clone(self);
         let run_id = id.clone();
         tokio::spawn(async move {
@@ -269,8 +361,9 @@ impl Core {
     /// Record a run and execute it now, returning its answer.
     pub async fn run_now(&self, req: StartRun) -> Result<(String, Result<String>)> {
         let profile = self.prepare(&req)?;
-        self.check_limits(&req.tenant, Consume::Run).await?;
+        let reserved = self.reserve(&req.tenant, Consume::Run).await?;
         let id = self.record_new(&req).await?;
+        drop(reserved);
         let _permit = self.slots.clone().acquire_owned().await;
         let result = self.execute(&id, &req, &profile).await;
         Ok((id, result))
@@ -321,6 +414,13 @@ impl Core {
         .with_policy(Arc::clone(&self.policy))
         .with_approver(approver)
         .with_recorder(Some(Arc::new(Recorders(recorders))))
+        .with_budget(self.limits(&req.tenant).map(|l| {
+            Arc::new(TenantBudget {
+                store: Arc::clone(&self.store),
+                tenant: req.tenant.clone(),
+                limits: l.clone(),
+            }) as Arc<dyn crate::agent::BudgetGuard>
+        }))
         .with_identity(&req.tenant, &req.source);
         agent
             .run_with_id(run_id, &system_prompt, &req.input, |_| {})
@@ -381,16 +481,23 @@ impl Core {
         let svc = self.fetch.as_ref().ok_or(FetchError::Disabled)?;
         let url = Url::parse(url).map_err(|e| FetchError::Refused(format!("invalid URL: {e}")))?;
         settable_headers(headers).map_err(|e| FetchError::Refused(e.to_string()))?;
-        if let Err(e) = self.check_limits(tenant, Consume::Fetch).await {
-            return Err(match e.downcast::<LimitReached>() {
-                Ok(l) => FetchError::Limited(l.0),
-                Err(e) => FetchError::Failed(e.to_string()),
-            });
-        }
+        let _reserved = match self.reserve(tenant, Consume::Fetch).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(match e.downcast::<LimitReached>() {
+                    Ok(l) => FetchError::Limited(l.0),
+                    Err(e) => FetchError::Failed(e.to_string()),
+                })
+            }
+        };
         let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
         let wait = {
             let mut slots = svc.next_slot.lock().await;
             let now = Instant::now();
+            if slots.len() > 10_000 {
+                // Hosts whose next slot has passed need no entry.
+                slots.retain(|_, t| *t > now);
+            }
             let at = slots
                 .get(&host)
                 .copied()
