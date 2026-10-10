@@ -34,10 +34,10 @@ jobs:
           fi
           echo "@${PR_AUTHOR} is ${PR_ASSOC}: the CLA line is required."
           required='I have read and agree to the Contributor Licence Agreement in CLA.md.'
-          # Compare line by line, ignoring surrounding whitespace and CRLF.
-          if printf '%s\n' "$PR_BODY" | tr -d '\r' \
-              | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-              | grep -Fxq -- "$required"; then
+          # The sentence may sit anywhere in the description, even inside a
+          # paragraph or wrapped across lines: whitespace is collapsed first.
+          if printf '%s\n' "$PR_BODY" | tr '\r\n\t' '   ' | tr -s ' ' \
+              | grep -Fq -- "$required"; then
             echo "CLA agreed by @${PR_AUTHOR}."
             exit 0
           fi
