@@ -49,6 +49,12 @@ def setup_site(db, tenant):
     return site_id
 
 
+def test_null_angle_and_why_now_become_empty():
+    v = props._validator({7})({"title": "Fiber rollout accelerates in the south", "angle": None,
+                               "why_now": None, "format": "news", "citations": [7]})
+    assert v["angle"] == "" and v["why_now"] == ""
+
+
 def test_opportunity_ranks_relevant_topics_and_skips_others(db, tenant):
     site_id = setup_site(db, tenant)
     ops = opp.score_site(db, tenant, site_id)
