@@ -508,7 +508,9 @@ impl Store for PgStore {
     }
 
     async fn expire_approval(&self, id: &str) -> Result<()> {
-        let id = uuid(id)?;
+        let Ok(id) = Uuid::parse_str(id) else {
+            return Ok(());
+        };
         let mut tx = self.pool.begin().await?;
         let row: Option<(String, Uuid)> = sqlx::query_as(
             "UPDATE core.approvals SET status = 'expired', decided_at = now() \

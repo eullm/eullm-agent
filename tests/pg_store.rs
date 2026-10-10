@@ -212,6 +212,13 @@ async fn unanswered_approval_expires() {
 }
 
 #[tokio::test]
+async fn expire_approval_tolerates_malformed_id() {
+    let Some(s) = store().await else { return };
+    let s: Arc<dyn Store> = Arc::new(s);
+    s.expire_approval("not-a-uuid").await.unwrap();
+}
+
+#[tokio::test]
 async fn audit_events_are_append_only() {
     let Some(s) = store().await else { return };
     let t = tenant("audit");
