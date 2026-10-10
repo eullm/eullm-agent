@@ -1,0 +1,137 @@
+# Editorial Intelligence — seed for the first 4 sites.
+#
+# Human-operated seed, not loaded by code (there is no seed loader yet).
+# Apply with the Editor Mode CLI, one site at a time:
+#
+#   uv run editor migrate
+#   uv run editor tenant-add i3k-editorial --name "I3K Editorial"
+#   uv run editor tenant-plan i3k-editorial --plan pro --max-sites 4 \
+#     --max-cost-month 40 --core-token-env EDITOR_CORE_TOKEN \
+#     --timezone Europe/Rome --briefing-hour 8 --language it
+#   uv run editor recipient-add --tenant i3k-editorial --channel email --address me@example.com
+#   for d in i3k.eu rag-enterprise.com speedtest.it eullm.eu; do
+#     uv run editor site-add "$d" --tenant i3k-editorial
+#   done
+#   # review each profile, then:
+#   uv run editor profile-approve <domain> 1 --tenant i3k-editorial --by <owner>
+#
+# The blocks below document the expected editorial line per site. They are
+# hints for the reviewer (and for future `profile-edit` JSON), not inputs
+# to `site-add`: the profile is always built from what the site shows, with
+# evidence, and proposals start only after a person approves it.
+#
+# Scoring stays as implemented: Hype (hype-v1, 0-100, missing listed) says
+# how much a topic is talked about; Opportunity (opportunity-v1, per site)
+# says whether THIS site should write about it now.
+
+tenant: i3k-editorial
+timezone: Europe/Rome
+briefing_hour: 8
+
+sites:
+  - domain: i3k.eu
+    language: it
+    expected_sector: "AI aziendale, trasformazione digitale, automazione"
+    audience: "PMI e enterprise IT, decisori e tecnici"
+    tone: "professionale, pratico, sobrio"
+    proposals_per_day: 3
+    min_relevance: 0.15
+    exclude: []
+    expected_subtopics:
+      - name: "AI aziendale"
+        keywords: ["ai aziendale", "adozione ai", "casi uso", "pmi", "enterprise"]
+      - name: "automazione"
+        keywords: ["automazione", "workflow", "rpa", "agenti", "integrazione"]
+      - name: "software e innovazione"
+        keywords: ["software", "innovazione", "open source", "saas", "piattaforma"]
+      - name: "infrastrutture IT"
+        keywords: ["infrastruttura", "cloud", "on-premise", "server", "sicurezza"]
+      - name: "mercato tecnologico"
+        keywords: ["mercato", "startup", "investimenti", "ue", "ai act"]
+    discovery_hints:
+      hn_terms: ["AI enterprise", "automation", "EU AI Act"]
+      github_topics: ["rag", "llm-inference"]
+      arxiv_categories: ["cs.CL", "cs.LG", "cs.CR", "cs.DC"]
+      hf_terms: ["llm", "rag", "inference"]
+
+  - domain: rag-enterprise.com
+    language: en
+    expected_sector: "RAG, retrieval, knowledge management"
+    audience: "enterprise engineers, architects, regulated orgs"
+    tone: "technical, practical, evidence-driven"
+    proposals_per_day: 3
+    min_relevance: 0.15
+    exclude: []
+    expected_subtopics:
+      - name: "RAG and retrieval"
+        keywords: ["rag", "retrieval", "reranking", "hybrid search", "evaluation"]
+      - name: "vector databases"
+        keywords: ["vector database", "qdrant", "embeddings", "indexing", "bge-m3"]
+      - name: "knowledge management"
+        keywords: ["knowledge management", "document intelligence", "ocr", "ingestion"]
+      - name: "agentic RAG"
+        keywords: ["agentic rag", "agents", "tool calling", "multi-query"]
+      - name: "private AI"
+        keywords: ["private ai", "on-premise", "air-gap", "sovereignty", "gdpr"]
+    discovery_hints:
+      hn_terms: ["RAG", "vector database", "retrieval"]
+      github_topics: ["retrieval-augmented-generation", "vector-database", "qdrant"]
+      arxiv_categories: ["cs.IR", "cs.CL", "cs.LG"]
+      hf_terms: ["rag", "embedding", "embeddings", "reranker"]
+
+  - domain: speedtest.it
+    language: it
+    expected_sector: "connettivita, networking, telecomunicazioni"
+    audience: "consumer e prosumer, tecnici e appassionati"
+    tone: "divulgativo ma tecnico, molto pratico"
+    proposals_per_day: 3
+    min_relevance: 0.15
+    exclude: []
+    expected_subtopics:
+      - name: "FTTH e fibra"
+        keywords: ["ftth", "fibra", "fttc", "open fiber", "fibercop"]
+      - name: "5G e 6G"
+        keywords: ["5g", "6g", "mobile", "fwa", "copertura"]
+      - name: "Wi-Fi e networking"
+        keywords: ["wi-fi", "wifi", "router", "mesh", "latency", "bufferbloat"]
+      - name: "MikroTik e homelab"
+        keywords: ["mikrotik", "routeros", "homelab", "vlan", "wireguard"]
+      - name: "Starlink, ISP e infrastrutture"
+        keywords: ["starlink", "isp", "infrastrutture", "ookla", "m-lab"]
+    discovery_hints:
+      hn_terms: ["FTTH", "5G", "Starlink", "MikroTik", "bufferbloat"]
+      github_topics: ["networking", "mikrotik", "measurement"]
+      arxiv_categories: ["cs.NI", "cs.CR"]
+      hf_terms: []
+
+  - domain: eullm.eu
+    language: en
+    expected_sector: "LLM inference, open-weight models, local AI"
+    audience: "developers, ML engineers, EU regulated orgs"
+    tone: "technical, deep, no-hype"
+    proposals_per_day: 3
+    min_relevance: 0.15
+    exclude: []
+    expected_subtopics:
+      - name: "LLM inference"
+        keywords: ["llm", "inference", "llama.cpp", "batching", "throughput"]
+      - name: "AI architectures"
+        keywords: ["transformer", "moe", "architecture", "context", "kv cache"]
+      - name: "open-weight models"
+        keywords: ["open-weight", "qwen", "mistral", "llama", "licensing"]
+      - name: "GPU CPU ARM"
+        keywords: ["gpu", "cpu", "arm", "cuda", "rocm", "vulkan"]
+      - name: "quantization distillation fine-tuning"
+        keywords: ["quantization", "gguf", "distillation", "fine-tuning", "lora"]
+      - name: "local AI"
+        keywords: ["local ai", "edge", "private", "telemetry", "offline"]
+    discovery_hints:
+      hn_terms: ["LLM inference", "quantization", "llama.cpp", "GGUF"]
+      github_topics: ["llm-inference", "llama.cpp", "gguf"]
+      arxiv_categories: ["cs.CL", "cs.LG", "cs.AR", "cs.DC"]
+      hf_terms: ["llm", "inference", "quantization", "gguf"]
+
+notes:
+  - "No fixed RSS list: sources are discovered from what each site cites and from the approved profile, then rated before use."
+  - "speedtest.it leans on cs.NI-flavoured sources; the other three lean on cs.CL/cs.LG/cs.IR plus GitHub/HF."
+  - "Every publication still waits for an owner's approval (dashboard or API); briefing default 08:00 Europe/Rome."
