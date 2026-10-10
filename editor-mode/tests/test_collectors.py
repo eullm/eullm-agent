@@ -69,6 +69,24 @@ def test_github():
     assert res.items[1].summary == ""
 
 
+def test_hackernews_rejects_non_dict_json():
+    with respx.mock() as router:
+        router.get("https://hn.algolia.com/api/v1/search").mock(
+            return_value=httpx.Response(200, json=["hit"]))
+        with httpx.Client() as c:
+            with pytest.raises(ValueError, match="unexpected Hacker News response"):
+                COLLECTORS["hackernews"].fetch(c, SourceSpec("hackernews", ""))
+
+
+def test_github_rejects_non_dict_json():
+    with respx.mock() as router:
+        router.get("https://api.github.com/search/repositories").mock(
+            return_value=httpx.Response(200, json=["acme/fast-rag"]))
+        with httpx.Client() as c:
+            with pytest.raises(ValueError, match="unexpected GitHub response"):
+                COLLECTORS["github"].fetch(c, SourceSpec("github", ""))
+
+
 @respx.mock
 def test_huggingface():
     respx.get("https://huggingface.co/api/models").mock(

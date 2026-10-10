@@ -26,8 +26,13 @@ class HackerNewsCollector:
             params["numericFilters"] = f"points>={int(cfg['min_points'])}"
         r = client.get(source.url or DEFAULT_URL, params=params)
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict):
+            raise ValueError(f"unexpected Hacker News response: {str(data)[:200]}")
         items = []
-        for hit in r.json().get("hits", []):
+        for hit in data.get("hits") or []:
+            if not isinstance(hit, dict):
+                continue
             oid = hit.get("objectID")
             title = clean_text(hit.get("title") or hit.get("story_title"))
             if not oid or not title:
