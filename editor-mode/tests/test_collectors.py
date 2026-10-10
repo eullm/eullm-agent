@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import httpx
+import pytest
 import respx
 
 from conftest import fixture
@@ -79,6 +80,15 @@ def test_huggingface():
     assert res.items[0].author == "mistralai"
     assert res.items[0].metrics == {"likes": 1800, "downloads": 250000, "trending": 320}
     assert res.items[1].title == "bge-tiny" and res.items[1].author is None
+
+
+def test_huggingface_rejects_error_envelope():
+    with respx.mock() as router:
+        router.get("https://huggingface.co/api/models").mock(
+            return_value=httpx.Response(200, json={"error": "Rate limit exceeded"}))
+        with httpx.Client() as c:
+            with pytest.raises(ValueError, match="unexpected Hugging Face response"):
+                COLLECTORS["huggingface"].fetch(c, SourceSpec("huggingface", ""))
 
 
 @respx.mock
