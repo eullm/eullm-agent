@@ -308,11 +308,13 @@ def register(app, ctx) -> None:
         return done("/site", f"Rianalisi di {domain} avviata.")
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
-    def ui_approve(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_approve(site_id: int, version: int, background: BackgroundTasks,
+                   c: auth.Caller = Depends(ctx.need("owner"))):
         with db.tenant(c.tenant_id) as s:
             if not prof.approve(s, site_id, version, c.name):
                 raise HTTPException(404, "version not found")
-        return done("/site", f"Versione {version} approvata: è la linea del sito da ora.")
+        background.add_task(ctx.run_discovery, c.tenant_id, site_id)
+        return done("/site", f"Versione {version} approvata: è la linea del sito da ora. Cerco le fonti adatte.")
 
     @app.post("/ui/sites/{site_id}/discard/{version}")
     def ui_discard(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -375,7 +377,7 @@ def register(app, ctx) -> None:
                 raise HTTPException(404, "source not found")
             if status == "active":
                 quotas.check(s, "sources")
-            repo.set_source_status(s, source_id, status, f"set by {c.name}")
+            repo.set_source_status(s, source_id, status, f"set by {c.name}", by=c.name)
         label = {"active": "riattivata", "suspended": "sospesa", "rejected": "scartata"}[status]
         return done(safe_path(back, "/sources"), f"{name} {label}.")
 
