@@ -21,11 +21,18 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ASSOC: ${{ github.event.pull_request.author_association }}
         run: |
-          # The copyright holder's own people do not sign the CLA.
+          # The copyright holder's own people do not sign the CLA. A private
+          # organisation membership shows up as CONTRIBUTOR in the event, so
+          # the copyright holder's accounts are also listed by name.
+          case " primoco " in *" ${PR_AUTHOR} "*)
+            echo "@${PR_AUTHOR} is the copyright holder: no CLA needed."
+            exit 0;;
+          esac
           if [ "$PR_ASSOC" = "OWNER" ] || [ "$PR_ASSOC" = "MEMBER" ]; then
             echo "@${PR_AUTHOR} is ${PR_ASSOC} of the organisation: no CLA needed."
             exit 0
           fi
+          echo "@${PR_AUTHOR} is ${PR_ASSOC}: the CLA line is required."
           required='I have read and agree to the Contributor Licence Agreement in CLA.md.'
           # Compare line by line, ignoring surrounding whitespace and CRLF.
           if printf '%s\n' "$PR_BODY" | tr -d '\r' \
