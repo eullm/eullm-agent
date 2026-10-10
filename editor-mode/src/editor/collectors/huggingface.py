@@ -24,10 +24,15 @@ class HuggingFaceCollector:
                 params[key] = cfg[key]
         r = client.get(url, params=params)
         r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list):
+            raise ValueError(f"unexpected Hugging Face response: {str(data)[:200]}")
         kind = url.rstrip("/").rsplit("/", 1)[-1]
         prefix = {"datasets": "datasets/", "spaces": "spaces/"}.get(kind, "")
         items = []
-        for m in r.json():
+        for m in data:
+            if not isinstance(m, dict):
+                continue
             mid = m.get("id") or m.get("modelId")
             if not mid:
                 continue
