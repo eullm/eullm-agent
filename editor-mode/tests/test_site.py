@@ -15,6 +15,13 @@ def crawl(router, **kw):
         return SiteCrawler(c, **kw).analyse("blog.example")
 
 
+def test_menu_div_does_not_swallow_following_text():
+    body = '<div class="menu"><a href="/x">m</a></div><p>' + "parola " * 30 + "</p>"
+    page = parse_html(body, "https://e.it/")
+    assert len(page.paragraphs) == 1
+    assert [l.in_nav for l in page.links if l.url == "https://e.it/x"] == [True]
+
+
 def test_html_is_read_not_run():
     page = parse_html(fakesite.article_html("x", "Titolo", ["Fibra"], "a.it", fakesite.NOW), "https://blog.example/x/")
     assert page.lang == "it" and page.h1 == "Titolo" and page.section == "Fibra"

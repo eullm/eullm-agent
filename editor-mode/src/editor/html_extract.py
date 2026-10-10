@@ -48,6 +48,7 @@ class _Parser(HTMLParser):
         self.base = base
         self.skip = 0
         self.nav = 0
+        self.nav_tags: list[str] = []
         self.article = 0
         self.in_title = False
         self.in_h1 = False
@@ -71,6 +72,7 @@ class _Parser(HTMLParser):
             self.in_h1 = True
         elif tag in ("nav", "header", "footer") or "menu" in a.get("class", "") or a.get("role") == "navigation":
             self.nav += 1
+            self.nav_tags.append(tag)
         elif tag in ("article", "main"):
             self.article += 1
         elif tag == "meta":
@@ -117,8 +119,10 @@ class _Parser(HTMLParser):
             self.in_title = False
         elif tag == "h1":
             self.in_h1 = False
-        elif tag in ("nav", "header", "footer"):
+        elif tag in ("nav", "header", "footer") or tag in self.nav_tags:
             self.nav = max(0, self.nav - 1)
+            if tag in self.nav_tags:
+                self.nav_tags.remove(tag)
         elif tag in ("article", "main"):
             self.article = max(0, self.article - 1)
         elif tag == "a" and self.link:
