@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ status }} · EuLLM Editor</title>
+{% include "_style.html.j2" %}
+</head>
+<body>
+<main class="solo">
+  <div class="brand"><span class="mark" aria-hidden="true">E</span><span><strong>EuLLM Editor</strong><small>Editor Mode</small></span></div>
+  <section class="card pad">
+    <span class="kicker num">Errore {{ status }}</span>
+    <h1 style="font-size: 22px;">{{ {403: 'Non hai il permesso per questa azione', 404: 'Non trovato', 429: 'Limite del piano raggiunto'}.get(status, 'Qualcosa non è andato') }}</h1>
+    {% if detail %}<p class="lead">{{ detail }}</p>{% endif %}
+    <div class="row"><a class="btn pri" href="/">Torna a Oggi</a></div>
+  </section>
+</main>
+</body>
+</html>

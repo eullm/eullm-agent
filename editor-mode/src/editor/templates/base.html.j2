@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Editor Mode{% endblock %} · EuLLM Editor</title>
+{% include "_style.html.j2" %}
+</head>
+<body>
+<div class="shell">
+<nav class="nav" aria-label="Sezioni">
+  <div class="brand"><span class="mark" aria-hidden="true">E</span><span><strong>EuLLM Editor</strong><small>Editor Mode</small></span></div>
+  {% if sites %}
+  <form method="get" action="/switch" class="switch">
+    <label for="site-pick">Sito</label>
+    <select id="site-pick" name="site" onchange="this.form.submit()">
+      {% for x in sites %}<option value="{{ x.id }}" {% if site and x.id == site.id %}selected{% endif %}>{{ x.domain }}</option>{% endfor %}
+    </select>
+    <input type="hidden" name="back" value="{{ request.url.path }}">
+    <noscript><button class="btn sm" type="submit">Vai</button></noscript>
+  </form>
+  {% endif %}
+  <a href="/" {% if active == 'today' %}class="on" aria-current="page"{% endif %}>Oggi</a>
+  <a href="/site" {% if active == 'site' %}class="on" aria-current="page"{% endif %}>Sito e profilo</a>
+  <a href="/sources" {% if active == 'sources' %}class="on" aria-current="page"{% endif %}>Fonti</a>
+  <a href="/trends" {% if active == 'trends' %}class="on" aria-current="page"{% endif %}>Trend e piano</a>
+  <a href="/drafts" {% if active == 'drafts' %}class="on" aria-current="page"{% endif %}>Bozze</a>
+  <a href="/publications" {% if active == 'publications' %}class="on" aria-current="page"{% endif %}>Pubblicazioni</a>
+  <span class="grow"></span>
+  <a href="/settings" {% if active == 'settings' %}class="on" aria-current="page"{% endif %}>Impostazioni</a>
+  <div class="who">
+    <span>{{ caller.name }} · {{ {'owner': 'owner', 'editor': 'editor', 'viewer': 'lettura'}[caller.role] }}</span>
+    <form method="post" action="/logout"><button class="link" type="submit">Esci</button></form>
+  </div>
+</nav>
+<main class="main">
+  {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+  {% block main %}{% endblock %}
+</main>
+</div>
+</body>
+</html>

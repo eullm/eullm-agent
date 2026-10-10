@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
+.env
+
+# Handcrafted recorded API responses for tests (no corpus data); the
+# repository root ignores *.json.
+!tests/fixtures/*.json

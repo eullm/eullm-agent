@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="{{ b.language }}"><head><meta charset="utf-8"><title>{{ t.title }} {{ b.day.isoformat() }}</title></head>
+<body style="font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 16px; color: #1a1a1a;">
+<h1 style="font-size: 22px;">{{ t.title }} · {{ b.day.isoformat() }}</h1>
+{% for s in b.sites %}
+<h2 style="font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">{{ s.name }} <small style="color:#666">{{ s.domain }}</small></h2>
+{% if s.profile_pending %}
+<p style="background:#fff4e5; padding:8px;"><strong>{{ t.approve_profile }}</strong> (v{{ s.profile_pending.version }})
+{% if s.profile_pending.subtopics %}: {{ s.profile_pending.subtopics | join(", ") }}{% endif %}</p>
+{% if s.profile_pending.gaps %}<ul>{% for g in s.profile_pending.gaps %}<li>{{ t.gaps }}: {{ g }}</li>{% endfor %}</ul>{% endif %}
+{% endif %}
+{% if s.line_change %}
+<p style="background:#e8f1ff; padding:8px;"><strong>{{ t.line_change }}</strong> (v{{ s.line_change.version }})</p>
+<ul>{% for c in s.line_change.changes %}<li>{% if c.kind == "sector" or c.kind == "language" %}{{ t[c.kind] }}: {{ c["from"] }} → {{ c.to }}{% else %}{{ c.subtopic }}: {{ t[c.kind] }}{% endif %}</li>{% endfor %}</ul>
+{% endif %}
+<h3 style="font-size: 16px;">{{ t.proposals }}</h3>
+{% for p in s.proposals %}
+<div style="margin-bottom: 14px;">
+<p style="margin:0"><strong>{{ p.title }}</strong> <small>· {{ p.format }} · {{ t.opportunity }} {{ p.opportunity }}</small></p>
+{% if p.angle %}<p style="margin:4px 0">{{ t.angle }}: {{ p.angle }}</p>{% endif %}
+{% if p.why_now %}<p style="margin:4px 0">{{ t.why }}: {{ p.why_now }}</p>{% endif %}
+<ul style="margin:4px 0">{% for c in p.sources %}<li><a href="{{ c.url }}">{{ c.title }}</a> <small>({{ c.source }})</small></li>{% endfor %}</ul>
+</div>
+{% else %}
+<p>{{ t.none }}</p>
+{% endfor %}
+{% if s.trends %}
+<h3 style="font-size: 16px;">{{ t.trends }}</h3>
+<ul>{% for tr in s.trends %}<li>{{ tr.label }} <small>· {{ t.opportunity }} {{ tr.opportunity }}{% if tr.hype is not none %} · {{ t.hype }} {{ tr.hype }}{% endif %}</small></li>{% endfor %}</ul>
+{% endif %}
+{% if s.suspended %}
+<h3 style="font-size: 16px;">{{ t.suspended }}</h3>
+<ul>{% for x in s.suspended %}<li>{{ x.name }}: {{ x.reason }}</li>{% endfor %}</ul>
+{% endif %}
+{% endfor %}
+</body></html>

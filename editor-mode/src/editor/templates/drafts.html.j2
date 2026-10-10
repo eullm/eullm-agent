@@ -1,0 +1,35 @@
+{% extends "base.html.j2" %}
+{% block title %}Bozze{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">Bozze{% if site %} · {{ site.domain }}{% endif %}</span>
+    <h1>Bozze scritte dall'agente</h1>
+    <p class="lead">Ogni frase porta le sue fonti. Le bozze con controlli non superati restano da rivedere a mano.</p>
+  </div>
+  <a class="btn" href="/trends">Torna al piano</a>
+</header>
+
+<section class="card" aria-label="Elenco bozze">
+  {% if rows %}
+  <div class="scroll">
+    <table style="min-width: 640px;">
+      <thead><tr><th>Titolo</th><th>Frasi con fonte</th><th>Controlli</th><th>Creata</th><th>Stato</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr {% if r.status == 'rejected' %}class="off"{% endif %}>
+        <td style="max-width: 380px;"><a href="/drafts/{{ r.id }}"><strong>{{ r.title }}</strong></a>{% if r.version > 1 %}<small>versione {{ r.version }}</small>{% endif %}</td>
+        <td class="num">{{ r.claims }}</td>
+        <td>{% if r.flags %}<span class="chip amber">{{ r.flags|length }} frasi da rivedere</span>{% else %}<span class="chip green">Superati</span>{% endif %}</td>
+        <td>{{ when(r.created_at) }}</td>
+        <td>{% set st = {'draft': ('blue', 'Pronta'), 'needs_review': ('amber', 'Da rivedere'), 'approved': ('green', 'Approvata'), 'rejected': ('', 'Rifiutata')}.get(r.status, ('', r.status)) %}<span class="chip {{ st[0] }}">{{ st[1] }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">Nessuna bozza ancora. Accetta una proposta da <a href="/trends">Trend e piano</a> e l'agente la scrive.</p>
+  {% endif %}
+</section>
+{% endblock %}

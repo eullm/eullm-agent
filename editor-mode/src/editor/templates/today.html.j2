@@ -1,0 +1,156 @@
+{% extends "base.html.j2" %}
+{% block title %}Oggi{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">{{ days[now.weekday()] }} {{ now.day }} {{ months[now.month - 1] }}{% if site %} · {{ site.domain }}{% endif %}</span>
+    <h1>Oggi</h1>
+  </div>
+  <div class="row">
+    {% if briefing and (briefing.sent_email_at or briefing.sent_telegram_at) %}
+      <span class="chip green">Briefing inviato alle {{ when(briefing.sent_email_at or briefing.sent_telegram_at, 'time') }}</span>
+    {% elif briefing %}
+      <span class="chip amber">Briefing pronto, non inviato</span>
+    {% else %}
+      <span class="chip">Briefing di oggi non ancora pronto</span>
+    {% endif %}
+    <a class="btn" href="/trends">Trend e piano</a>
+  </div>
+</header>
+
+{% if not sites %}
+<section class="card pad">
+  <h2>Inizia da un dominio</h2>
+  <p class="lead">Editor Mode analizza il sito, propone un profilo editoriale con le prove e cerca le fonti da solo. Nulla parte prima della tua approvazione.</p>
+  {% if caller.can('owner') %}
+  <form method="post" action="/ui/sites" class="form-grid">
+    <label class="field">Dominio<input name="domain" placeholder="esempio.it" required></label>
+    <div><button class="btn pri" type="submit">Analizza il sito</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="stats" aria-label="Riepilogo">
+  <div class="card stat">
+    <span class="label">Da decidere</span>
+    <span class="value">{{ decisions }}</span>
+    <span class="note {% if decisions %}warn{% endif %}">{{ profile_drafts|length|plural('profilo', 'profili') }} · {{ proposed|length|plural('proposta', 'proposte') }} · {{ pending_pubs|length|plural('pubblicazione', 'pubblicazioni') }} · {{ stopped|length|plural('fonte', 'fonti') }}</span>
+  </div>
+  <div class="card stat">
+    <span class="label">Proposte nel piano</span>
+    <span class="value">{{ proposed|length }}</span>
+    <span class="note">{{ new_today|plural('nuova', 'nuove') }} da stamattina</span>
+  </div>
+  <div class="card stat">
+    <span class="label">Bozze pronte</span>
+    <span class="value">{{ drafts_ready }}</span>
+    <span class="note">{% if needs_review %}{{ needs_review }} da rivedere a mano{% else %}tutte con i controlli superati{% endif %}</span>
+  </div>
+  <div class="card stat">
+    {% set cost = (usage.used.get('llm_cost_month') or 0) if usage else 0 %}
+    {% set cap = usage.plan.get('max_llm_cost_month') if usage else none %}
+    <span class="label">Costo modello nel mese</span>
+    <span class="value">€ {{ cost|num }}{% if cap %} <small>/ {{ cap|num(0) }}</small>{% endif %}</span>
+    {% if cap %}
+    <div class="bar thin" role="img" aria-label="{{ (100 * cost / cap)|round|int }}% della quota mensile"><i style="width: {{ [100, 100 * cost / cap]|min }}%"></i></div>
+    {% else %}<span class="note">nessun tetto nel piano</span>{% endif %}
+  </div>
+</section>
+
+<div class="cols">
+  <section class="card col-wide" aria-labelledby="h-decide" style="gap: 0;">
+    <div class="card-head"><h2 id="h-decide">Da decidere</h2><span class="hint">Nulla esce senza il tuo sì</span></div>
+
+    {% for p in profile_drafts %}
+    <div class="item">
+      <span class="chip amber">Profilo</span>
+      <div class="what">
+        {% if p.origin == 'reanalysis' %}
+        <strong>La linea di {{ p.domain }} si sta spostando</strong>
+        <span>La rianalisi propone la versione {{ p.version }} del profilo{% if p.changes %} con {{ p.changes|length }} cambiamenti{% endif %}.</span>
+        {% else %}
+        <strong>Profilo editoriale di {{ p.domain }} da approvare</strong>
+        <span>Versione {{ p.version }} · {{ {'analysis': 'prima analisi', 'manual': 'modifica manuale'}.get(p.origin, p.origin) }}</span>
+        {% endif %}
+      </div>
+      <a class="btn pri" href="/switch?site={{ p.site_id }}&amp;back=/site">Vedi il profilo</a>
+    </div>
+    {% endfor %}
+
+    {% for p in pending_pubs %}
+    <div class="item">
+      <span class="chip blue">Pubblicazione</span>
+      <div class="what">
+        <strong>{{ p.title }}</strong>
+        <span>Verso {{ p.target }} · {{ 'come bozza' if p.mode == 'draft' else 'pubblicata subito' }} · chiesta da {{ p.requested_by }}</span>
+      </div>
+      <div class="row">
+        <a class="btn" href="/drafts/{{ p.draft_id }}">Leggi</a>
+        {% if caller.can('owner') %}
+        <form class="inline" method="post" action="/ui/publications/{{ p.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn pri" type="submit">Approva</button></form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% for p in proposed %}
+    <div class="item">
+      <span class="chip">Proposta</span>
+      <div class="what">
+        <strong>{{ p.title }}</strong>
+        <span>Opportunità {{ p.opportunity|s100 }} · Hype {{ p.hype|s100 }} · {{ p.citations|plural('fonte', 'fonti') }}</span>
+      </div>
+      {% if caller.can('editor') %}
+      <div class="row">
+        <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="0"><input type="hidden" name="back" value="/"><button class="btn" type="submit">Scarta</button></form>
+        <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="1"><input type="hidden" name="back" value="/"><button class="btn pri" type="submit">Accetta</button></form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% for x in stopped %}
+    <div class="item">
+      <span class="chip red">Fonte</span>
+      <div class="what">
+        <strong>{{ x.name }} sospesa</strong>
+        <span>{{ x.status_reason or 'Sospesa dalla manutenzione automatica.' }}</span>
+      </div>
+      <a class="btn" href="/sources?status=suspended">Apri il registro</a>
+    </div>
+    {% endfor %}
+
+    {% if not decisions %}<p class="empty">Niente da decidere adesso.</p>{% endif %}
+  </section>
+
+  <div class="col-side">
+    <section class="card pad" aria-labelledby="h-opp">
+      <div class="row" style="justify-content: space-between;"><h2 id="h-opp">Opportunità del giorno</h2><a href="/trends" style="font-size: 14px;">Tutti i trend</a></div>
+      <div class="legend"><span><i></i>Opportunità per il sito</span><span><i class="hype"></i>Hype nel settore</span></div>
+      {% for t in tops %}
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 14px; font-weight: 500;">{{ t.label }}</span>
+        <div class="pair">
+          <div class="bar"><i style="width: {{ t.opportunity|round|int }}%"></i></div><span class="num">{{ t.opportunity|s100 }}</span>
+          <div class="bar"><i class="hype" style="width: {{ (t.hype or 0)|round|int }}%"></i></div><span class="num" style="color: var(--muted);">{{ t.hype|s100 }}</span>
+        </div>
+      </div>
+      {% else %}
+      <p class="hint">Nessun punteggio ancora: serve un profilo approvato e un giro di raccolta.</p>
+      {% endfor %}
+      <p class="hint">Molto hype non vuol dire opportunità: conta quanto il tema è vicino al sito e quanto non l'hai già coperto.</p>
+    </section>
+
+    <section class="card pad" aria-labelledby="h-raccolta">
+      <h2 id="h-raccolta">Raccolta</h2>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div><div class="num" style="font-size: 22px;">{{ usage.used.get('active_sources', 0) if usage else 0 }}</div><div class="hint" style="font-size: 12px;">fonti attive</div></div>
+        <div><div class="num" style="font-size: 22px;">{{ usage.used.get('items_today', 0) if usage else 0 }}</div><div class="hint" style="font-size: 12px;">notizie oggi</div></div>
+        <div><div class="num" style="font-size: 22px;">{{ when(last_fetch, 'time') }}</div><div class="hint" style="font-size: 12px;">ultimo giro</div></div>
+      </div>
+      <span class="hint">Le fonti si rivalutano ogni lunedì; la raccolta gira ogni ora.</span>
+    </section>
+  </div>
+</div>
+{% endblock %}

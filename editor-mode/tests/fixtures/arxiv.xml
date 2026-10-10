@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <title>ArXiv Query</title>
+  <entry>
+    <id>http://arxiv.org/abs/2610.01234v2</id>
+    <published>2026-10-06T17:59:00Z</published>
+    <updated>2026-10-07T10:00:00Z</updated>
+    <title>Distilling Long-Context Reasoning
+      into Small Language Models</title>
+    <summary>We show that a 3B model can match a 70B teacher on long-context retrieval.</summary>
+    <author><name>Maria Rossi</name></author>
+    <author><name>John Smith</name></author>
+    <link href="http://arxiv.org/abs/2610.01234v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2610.01234v2" rel="related" type="application/pdf"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>

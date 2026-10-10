@@ -1,0 +1,94 @@
+{% extends "base.html.j2" %}
+{% block title %}Impostazioni{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">Impostazioni</span>
+    <h1>{{ usage.plan.get('name') if usage else 'Account' }}</h1>
+  </div>
+  {% if usage and usage.plan.get('plan') %}<span class="chip dark">Piano {{ usage.plan.get('plan') }}</span>{% endif %}
+</header>
+
+{% if new_token %}
+<section class="card pad" aria-labelledby="h-token" style="border-color: var(--accent);">
+  <h2 id="h-token">Nuovo accesso creato</h2>
+  <p class="lead">Copialo adesso: non verrà più mostrato.</p>
+  <div class="token">{{ new_token }}</div>
+</section>
+{% endif %}
+
+<div class="cols">
+  <section class="card pad col-wide" aria-labelledby="h-plan">
+    <h2 id="h-plan">Uso del piano</h2>
+    {% for mt in meters %}
+    <div class="meter">
+      <span>{{ mt.label }}</span>
+      {% if mt.limit %}
+      <div class="bar" role="img" aria-label="{{ mt.pct }}%"><i {% if mt.pct >= 90 %}class="hype"{% endif %} style="width: {{ mt.pct }}%"></i></div>
+      {% else %}<span class="hint">senza limite</span>{% endif %}
+      <span class="num" style="text-align: right;">{% if mt.money %}€ {{ mt.used|num }}{% if mt.limit %} / {{ mt.limit|num(0) }}{% endif %}{% else %}{{ mt.used|int }}{% if mt.limit %} / {{ mt.limit|int }}{% endif %}{% endif %}</span>
+    </div>
+    {% else %}
+    <p class="hint">Nessun dato d'uso disponibile.</p>
+    {% endfor %}
+    <p class="hint">Il piano lo imposta chi gestisce il servizio. Quando un limite è raggiunto l'agente si ferma su quella voce e te lo dice, senza costi a sorpresa.</p>
+  </section>
+
+  <section class="card pad col-side" aria-labelledby="h-prefs">
+    <h2 id="h-prefs">Preferenze</h2>
+    {% if usage %}
+    <div class="list-row"><span>Fuso orario</span><span class="num">{{ usage.plan.get('timezone') or 'UTC' }}</span></div>
+    <div class="list-row"><span>Ora del briefing</span><span class="num">{% if usage.plan.get('briefing_hour') is not none %}{{ '%02d'|format(usage.plan.get('briefing_hour')) }}:00{% else %}–{% endif %}</span></div>
+    <div class="list-row"><span>Lingua</span><span class="num">{{ usage.plan.get('language') or '–' }}</span></div>
+    {% endif %}
+    <p class="hint">Si cambiano dal server con il comando <code>editor tenant-plan</code>.</p>
+  </section>
+</div>
+
+<section class="card pad" aria-labelledby="h-rec">
+  <h2 id="h-rec">Chi riceve il briefing</h2>
+  {% for r in recipients %}
+  <div class="list-row">
+    <span><span class="chip">{{ 'Email' if r.channel == 'email' else 'Telegram' }}</span> <span class="num">{{ r.address }}</span>{% if r.enabled is sameas false %} <span class="hint">disattivato</span>{% endif %}</span>
+    {% if caller.can('owner') %}<form class="inline" method="post" action="/ui/recipients/{{ r.id }}/delete"><button class="btn sm" type="submit">Rimuovi</button></form>{% endif %}
+  </div>
+  {% else %}
+  <p class="hint">Nessun destinatario: il briefing si prepara ma non parte.</p>
+  {% endfor %}
+  {% if caller.can('owner') %}
+  <form method="post" action="/ui/recipients" class="form-grid" style="margin-top: 8px;">
+    <label class="field">Canale<select name="channel"><option value="email">Email</option><option value="telegram">Telegram</option></select></label>
+    <label class="field">Indirizzo o chat id<input name="address" required placeholder="redazione@esempio.it"></label>
+    <div><button class="btn" type="submit">Aggiungi</button></div>
+  </form>
+  {% endif %}
+</section>
+
+{% if caller.can('owner') %}
+<section class="card pad" aria-labelledby="h-tok">
+  <h2 id="h-tok">Accessi</h2>
+  <p class="hint">Ogni persona o integrazione ha il suo accesso: lettura vede, editor decide le proposte e le bozze, owner approva profili, fonti e pubblicazioni.</p>
+  <div class="scroll">
+    <table style="min-width: 520px;">
+      <thead><tr><th>Nome</th><th>Ruolo</th><th>Creato</th><th>Stato</th><th><span class="sr">Azioni</span></th></tr></thead>
+      <tbody>
+      {% for t in tokens %}
+      <tr {% if t.revoked_at %}class="off"{% endif %}>
+        <td>{{ t.name }}</td>
+        <td>{{ {'owner': 'owner', 'editor': 'editor', 'viewer': 'lettura'}.get(t.role, t.role) }}</td>
+        <td>{{ when(t.created_at, 'day') }}</td>
+        <td>{% if t.revoked_at %}<span class="chip">Revocato {{ when(t.revoked_at, 'day') }}</span>{% else %}<span class="chip green">Attivo</span>{% endif %}</td>
+        <td style="text-align: right;">{% if not t.revoked_at %}<form class="inline" method="post" action="/ui/tokens/{{ t.id }}/revoke"><button class="btn sm" type="submit">Revoca</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="/ui/tokens" class="form-grid" style="margin-top: 8px;">
+    <label class="field">Nome<input name="name" required placeholder="Giulia, redazione"></label>
+    <label class="field">Ruolo<select name="role"><option value="viewer">Lettura</option><option value="editor" selected>Editor</option><option value="owner">Owner</option></select></label>
+    <div><button class="btn" type="submit">Crea accesso</button></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

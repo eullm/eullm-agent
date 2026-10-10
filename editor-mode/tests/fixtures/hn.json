@@ -1,0 +1,5 @@
+{"hits":[
+ {"objectID":"45100001","title":"Show HN: A 4-bit quantized 70B model running on a single ARM laptop","url":"https://example.org/arm-70b?ref=hn","author":"alice","points":412,"num_comments":180,"created_at_i":1791446400},
+ {"objectID":"45100002","title":"Ask HN: How do you run RAG over private PDFs?","url":null,"story_text":"<p>We have 2M documents...</p>","author":"bob","points":95,"num_comments":60,"created_at_i":1791450000},
+ {"objectID":"45100003","title":null,"url":"https://example.org/x","points":1,"num_comments":0,"created_at_i":1791450000}
+],"nbHits":3,"page":0}
