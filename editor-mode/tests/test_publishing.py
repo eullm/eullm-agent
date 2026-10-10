@@ -146,3 +146,25 @@ def test_unapproved_drafts_cannot_be_queued(db, tenant, monkeypatch):
     target = pub.add_target(db, tenant, site_id, "webhook", "h", {"url": "https://hooks.example/in"}, "X")
     with pytest.raises(pub.PublishError, match="approved drafts"):
         pub.request(db, tenant, did, target, "draft", "redazione")
+
+
+def test_a_send_cut_short_is_never_repeated_on_its_own(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "HOOK"), "s")
+    target = pub.add_target(db, tenant, site_id, "webhook", "h", {"url": "https://hooks.example/in"}, "HOOK")
+    pid = pub.request(db, tenant, did, target, "publish", "redazione")
+    pub.decide(db, tenant, pid, True, "francesco")
+    # A worker died after claiming the send: the outcome is unknown.
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.publications SET status = 'sending' WHERE id = :p"), {"p": pid})
+    with respx.mock(assert_all_called=False) as router:
+        hook = router.post("https://hooks.example/in").mock(return_value=httpx.Response(200))
+        assert pub.Publisher(resolver=public_resolver).run(db, tenant, pid) == {"status": "sending"}
+    assert not hook.called
+    with pytest.raises(Exception):  # nor can it be requested again while uncertain
+        pub.request(db, tenant, did, target, "publish", "redazione")
+    # A person checks the CMS, finds nothing, and marks it failed: now it can be requested again.
+    assert pub.mark_uncertain_failed(db, tenant, pid, "francesco")
+    assert not pub.mark_uncertain_failed(db, tenant, pid, "francesco")
+    assert pub.request(db, tenant, did, target, "publish", "redazione") != pid

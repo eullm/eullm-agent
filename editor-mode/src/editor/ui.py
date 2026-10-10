@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import auth, drafts, models as m, profile as prof, proposals as props, publishing, quotas
+from . import auth, drafts, jobs, models as m, profile as prof, proposals as props, publishing, quotas
 
 COOKIE = "editor_token"
 SITE_COOKIE = "editor_site"
@@ -282,6 +282,7 @@ def register(app, ctx) -> None:
         return render(request, "site.html.j2", c, s, "site", status_code=status_code, _sites=(sites, site),
                       profiles=profiles, approved=approved, draft=draft, shown=shown, analysis=analysis,
                       rows=rows, evidence=ev, editing=editing, error=error,
+                      jobs=[j for j in jobs.recent(s, 10) if j["status"] != "done"][:5],
                       body_json=json.dumps(shown.body, ensure_ascii=False, indent=2) if shown is not None else "")
 
     @app.get("/site", response_class=HTMLResponse)
@@ -521,7 +522,9 @@ def register(app, ctx) -> None:
             targets = s.execute(select(t).where(t.c.site_id == site.id).order_by(t.c.id)).all() if site else []
             return render(request, "publications.html.j2", c, s, "publications", _sites=(sites, site),
                           pending=[r for r in rows if r.status == "pending_approval"],
-                          history=[r for r in rows if r.status != "pending_approval"],
+                          history=[{**r._mapping, "uncertain": r.status == "sending" and r.decided_at is not None
+                                    and r.decided_at < datetime.now(UTC) - timedelta(minutes=10)}
+                                   for r in rows if r.status != "pending_approval"],
                           targets=targets, kinds=TARGET_KINDS,
                           secret_var=lambda name: _secret_var(c.tenant_id, name))
 
@@ -534,6 +537,12 @@ def register(app, ctx) -> None:
         if ok and ctx.publisher is not None:
             background.add_task(ctx.publisher.run, db, c.tenant_id, pub_id)
         return done("/publications", "Approvata: l'invio parte adesso." if ok else "Pubblicazione rifiutata.")
+
+    @app.post("/ui/publications/{pub_id}/uncertain")
+    def ui_pub_uncertain(pub_id: int, c: auth.Caller = Depends(ctx.need("owner"))):
+        if not publishing.mark_uncertain_failed(db, c.tenant_id, pub_id, c.name):
+            return done("/publications", "Questa pubblicazione non è più in invio.")
+        return done("/publications", "Segnata come non riuscita: puoi chiederla di nuovo.")
 
     def _secret_var(tenant_id, name):
         try:
@@ -589,6 +598,8 @@ def register(app, ctx) -> None:
                          c: auth.Caller = Depends(ctx.need("owner"))):
         address = address.strip()
         if channel not in ("email", "telegram") or not address or len(address) > 200:
+            return done("/settings", "Destinatario non valido.")
+        if any(ch in address for ch in "\r\n\t,;<>"):
             return done("/settings", "Destinatario non valido.")
         if channel == "email" and ("@" not in address or " " in address):
             return done("/settings", "Indirizzo email non valido.")

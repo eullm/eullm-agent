@@ -62,7 +62,7 @@ def test_morning_builds_and_sends_once(db, tenant):
         assert again == {"email": 0, "telegram": 0, "errors": []} and tg.call_count == 1
     assert len(FakeSMTP.sent) == 1
     msg = FakeSMTP.sent[0]
-    assert msg["To"] == "francesco@example.com"
+    assert msg["Bcc"] == "francesco@example.com" and msg["To"] == "editor@i3k.eu"
     with db.tenant(tenant) as s:
         b = s.execute(text("SELECT body_md, body_html, proposal_ids, sent_email_at, sent_telegram_at FROM editor.briefings")).one()
     assert b.sent_email_at and b.sent_telegram_at and len(b.proposal_ids) == 2
@@ -112,3 +112,65 @@ def test_tick_runs_every_tenant_and_briefs_at_eight(db, tenant):
     assert "briefing 2026-10-09" in r2.tenants[tenant]
     r3 = runner.tick(datetime(2026, 10, 9, 7, tzinfo=UTC))
     assert not any(x.startswith("briefing") for x in r3.tenants[tenant])
+
+
+def test_maintenance_and_review_run_when_due_even_if_a_tick_is_late():
+    from zoneinfo import ZoneInfo
+
+    from editor.schedule import maintenance_due, review_due
+
+    rome = ZoneInfo("Europe/Rome")
+    monday_5 = datetime(2026, 10, 12, 5, tzinfo=rome)
+    assert maintenance_due(monday_5, None)
+    assert not maintenance_due(monday_5, datetime(2026, 10, 12, 3, 10, tzinfo=rome))
+    assert maintenance_due(monday_5, datetime(2026, 10, 11, 3, 10, tzinfo=rome))  # the 03:00 tick was missed
+    assert not maintenance_due(datetime(2026, 10, 12, 2, tzinfo=rome), None)
+    assert review_due(monday_5, None)
+    assert not review_due(monday_5, datetime(2026, 10, 12, 4, 30, tzinfo=rome))
+    assert review_due(monday_5, datetime(2026, 10, 5, 4, 30, tzinfo=rome))
+    tuesday = datetime(2026, 10, 13, 9, tzinfo=rome)
+    assert not review_due(tuesday, datetime(2026, 10, 6, 4, 30, tzinfo=rome))  # done last week, wait for Monday
+    assert review_due(tuesday, datetime(2026, 10, 5, 4, 30, tzinfo=rome))  # Monday was missed
+
+
+def test_a_failing_step_does_not_stop_the_briefing_and_is_recorded(db, tenant, monkeypatch):
+    from editor import schedule
+
+    setup_site(db, tenant)
+
+    def broken(*a, **k):
+        raise RuntimeError("feed server down")
+
+    monkeypatch.setattr(schedule, "collect_tenant", broken)
+    runner = Runner(db, Settings(), http_factory=lambda: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))))
+    report = runner.tick(datetime(2026, 10, 9, 6, tzinfo=UTC))
+    assert "briefing 2026-10-09" in report.tenants[tenant]
+    assert "collect failed" in report.errors[tenant]
+    with db.tenant(tenant) as s:
+        job = s.execute(text("SELECT status, error FROM editor.jobs WHERE kind = 'collect'")).one()
+    assert job.status == "failed" and "feed server down" in job.error
+
+
+def test_an_undelivered_briefing_is_sent_again(db, tenant):
+    setup_site(db, tenant)
+    add_recipients(db, tenant)
+
+    class Flaky:
+        calls = 0
+
+        def send(self, db_, tenant_, bid):
+            if tenant_ != tenant:  # the runner visits every tenant in the database
+                return
+            Flaky.calls += 1
+            values = {"send_error": "email: connection refused"} if Flaky.calls == 1 else {"send_error": None}
+            with db_.tenant(tenant_) as s:
+                s.execute(text("UPDATE editor.briefings SET send_error = :e WHERE id = :i"),
+                          {"e": values["send_error"], "i": bid})
+
+    runner = Runner(db, Settings(), sender=Flaky(),
+                    http_factory=lambda: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))))
+    runner.tick(datetime(2026, 10, 9, 6, tzinfo=UTC))
+    r = runner.tick(datetime(2026, 10, 9, 7, tzinfo=UTC))
+    assert "briefing 2026-10-09 resent" in r.tenants[tenant] and Flaky.calls == 2
+    r = runner.tick(datetime(2026, 10, 9, 8, tzinfo=UTC))
+    assert Flaky.calls == 2  # delivered: nothing more to send

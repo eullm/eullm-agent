@@ -45,9 +45,13 @@
         <td>{{ p.requested_by }}<small>{{ when(p.requested_at) }}</small></td>
         <td>{{ p.decided_by or '–' }}{% if p.decided_at %}<small>{{ when(p.decided_at) }}</small>{% endif %}</td>
         <td>
-          {% set ps = {'approved': ('blue', 'In invio'), 'published': ('green', 'Pubblicata'), 'rejected': ('', 'Rifiutata'), 'failed': ('red', 'Non riuscita')}.get(p.status, ('', p.status)) %}
+          {% set ps = {'approved': ('blue', 'In invio'), 'sending': ('blue', 'In invio'), 'published': ('green', 'Pubblicata'), 'rejected': ('', 'Rifiutata'), 'failed': ('red', 'Non riuscita')}.get(p.status, ('', p.status)) %}
           {% if p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
           {% if p.error %}<small>{{ p.error|truncate(120) }}</small>{% endif %}
+          {% if p.status == 'sending' and p.uncertain %}
+          <small>Esito sconosciuto: l'invio si è interrotto. Controlla sul CMS prima di riprovare.</small>
+          {% if caller.can('owner') %}<form class="inline" method="post" action="/ui/publications/{{ p.id }}/uncertain"><button class="btn" type="submit">Non è stata pubblicata</button></form>{% endif %}
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

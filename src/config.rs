@@ -153,6 +153,26 @@ pub struct FetchApiConfig {
     pub min_host_interval_ms: u64,
     #[serde(default = "default_fetch_user_agent")]
     pub user_agent: String,
+    /// Credentials the Core adds for some hosts (e.g. a GitHub token for
+    /// api.github.com), so callers never hold them. Sent on the first request
+    /// only, never after a redirect, and only over https.
+    #[serde(default)]
+    pub credentials: Vec<HostCredential>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HostCredential {
+    /// Exact host name, e.g. api.github.com.
+    pub host: String,
+    #[serde(default = "default_credential_header")]
+    pub header: String,
+    /// Environment variable holding the whole header value, e.g.
+    /// "Bearer github_pat_...".
+    pub value_env: String,
+}
+
+fn default_credential_header() -> String {
+    "Authorization".into()
 }
 
 impl Default for FetchApiConfig {
@@ -165,6 +185,7 @@ impl Default for FetchApiConfig {
             allow_private_networks: false,
             min_host_interval_ms: default_host_interval(),
             user_agent: default_fetch_user_agent(),
+            credentials: Vec::new(),
         }
     }
 }

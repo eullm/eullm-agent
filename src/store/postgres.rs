@@ -533,6 +533,57 @@ impl Store for PgStore {
         Ok(())
     }
 
+    async fn get_approval(&self, tenant: &str, id: &str) -> Result<Option<Approval>> {
+        let Ok(id) = Uuid::parse_str(id) else {
+            return Ok(None);
+        };
+        let q = format!(
+            "SELECT {} FROM core.approvals WHERE id = $1 AND tenant = $2",
+            Self::approval_columns()
+        );
+        sqlx::query(sqlx::AssertSqlSafe(q))
+            .bind(id)
+            .bind(tenant)
+            .fetch_optional(&self.pool)
+            .await?
+            .as_ref()
+            .map(Self::approval_from_row)
+            .transpose()
+    }
+
+    async fn recover_interrupted(&self, source_prefix: &str) -> Result<u64> {
+        let mut tx = self.pool.begin().await?;
+        let runs: Vec<(Uuid, String)> = sqlx::query_as(
+            "UPDATE core.runs SET status = 'failed', finished_at = now(), \
+             error = 'interrupted: the service stopped before the run finished' \
+             WHERE status IN ('queued', 'running', 'waiting_approval') \
+             AND starts_with(source, $1) RETURNING id, tenant",
+        )
+        .bind(source_prefix)
+        .fetch_all(&mut *tx)
+        .await?;
+        let ids: Vec<Uuid> = runs.iter().map(|(id, _)| *id).collect();
+        sqlx::query(
+            "UPDATE core.approvals SET status = 'expired', decided_at = now() \
+             WHERE status = 'pending' AND run_id = ANY($1)",
+        )
+        .bind(&ids)
+        .execute(&mut *tx)
+        .await?;
+        for (id, tenant) in &runs {
+            self.audit(
+                &mut tx,
+                tenant,
+                Some(*id),
+                "run_interrupted",
+                json!({ "reason": "service restart" }),
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(runs.len() as u64)
+    }
+
     async fn list_approvals(
         &self,
         tenant: &str,

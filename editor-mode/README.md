@@ -85,7 +85,8 @@ Screenshots use demo data on fictitious `.example` domains.
    | `EDITOR_TIMEZONE`, `EDITOR_BRIEFING_HOUR` | defaults: Europe/Rome, 8 |
    | `EDITOR_SMTP_HOST`, `EDITOR_SMTP_PORT`, `EDITOR_SMTP_USER`, `EDITOR_SMTP_PASSWORD`, `EDITOR_MAIL_FROM` | briefing by email (STARTTLS) |
    | `EDITOR_TELEGRAM_TOKEN` | briefing by Telegram |
-   | `EDITOR_GITHUB_TOKEN` | optional, raises the GitHub API rate limit |
+   | `EDITOR_SECRET_<TENANT>__<NAME>` | credentials of a publishing target (WordPress application password, webhook signing key, Telegram channel bot token). The tenant names the target's secret `<NAME>`; the tenant id is upper-cased with `-` as `_`, e.g. `EDITOR_SECRET_RAG_ENTERPRISE__WP` |
+   | (Core) `api.fetch.credentials` | optional: a GitHub token for `api.github.com`, set in the Core's config, raises the GitHub API rate limit for source discovery |
 
 4. **First tenant and site.**
 

@@ -936,3 +936,50 @@ async fn usage_reports_the_day_the_month_and_the_limits() {
     let (s, _) = call(&h.app, "GET", "/v1/usage", None, None).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn concurrent_fetches_cannot_slip_under_the_daily_limit() {
+    let base = local_site().await;
+    let config = format!("{FETCH_CONFIG}  tenants:\n    tenant-a:\n      max_fetches_per_day: 2\n");
+    let h = harness_with(&config, vec![]);
+    let page = json!({"url": format!("{base}/page")});
+    let calls = (0..6).map(|_| {
+        let app = h.app.clone();
+        let page = page.clone();
+        tokio::spawn(async move {
+            call(&app, "POST", "/v1/fetch", Some(TOKEN_A), Some(page))
+                .await
+                .0
+        })
+    });
+    let mut ok = 0;
+    for c in calls {
+        if c.await.unwrap() == StatusCode::OK {
+            ok += 1;
+        }
+    }
+    assert_eq!(ok, 2);
+    assert_eq!(h.store.fetches().len(), 2);
+}
+
+#[tokio::test]
+async fn a_long_run_stops_at_the_monthly_budget() {
+    let h = harness_with(
+        "provider:\n  type: eullm\n  model: test\napi:\n  tenants:\n    tenant-a:\n      max_tokens_per_month: 50\n",
+        vec![tool_call("safe", json!({}))],
+    );
+    let (s, v) = call(
+        &h.app,
+        "POST",
+        "/v1/runs",
+        Some(TOKEN_A),
+        Some(json!({"input": "go"})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::ACCEPTED, "{v}");
+    let run = wait_for(&h.app, v["id"].as_str().unwrap(), TOKEN_A, "failed").await;
+    assert!(
+        run["error"].as_str().unwrap().contains("token limit"),
+        "{run}"
+    );
+}

@@ -377,3 +377,16 @@ publications = Table(
     Column("error", Text),
     Column("attempts", Integer),
 )
+
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("kind", Text, nullable=False),
+    Column("subject", Text),
+    Column("status", Text),
+    Column("error", Text),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+)

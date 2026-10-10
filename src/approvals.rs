@@ -3,7 +3,9 @@
 //! When the policy answers `require_approval`, the agent stops at that call
 //! and asks an [`Approver`]. The run waits until a person decides (through
 //! the API, Telegram or the terminal) or the timeout expires, which counts
-//! as a refusal.
+//! as a refusal. The decision is read from the store as well as delivered
+//! in process, so a decision taken through another Core instance (or
+//! straight in the database) still reaches the run.
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -71,6 +73,22 @@ pub fn preview_arguments(v: &Value) -> Value {
     }
 }
 
+/// How often a waiting run re-reads its approval from the store.
+const POLL: Duration = Duration::from_secs(2);
+
+fn outcome_of(a: &Approval) -> Option<Outcome> {
+    let by = a.decided_by.clone().unwrap_or_else(|| "unknown".into());
+    match a.status {
+        ApprovalStatus::Pending => None,
+        ApprovalStatus::Approved => Some(Outcome::Approved { by }),
+        ApprovalStatus::Denied => Some(Outcome::Denied {
+            by,
+            note: a.decision_note.clone(),
+        }),
+        ApprovalStatus::Expired => Some(Outcome::Expired),
+    }
+}
+
 /// Called when an approval is created, e.g. to message someone.
 pub type Notify = Arc<dyn Fn(&Approval) + Send + Sync>;
 
@@ -118,12 +136,35 @@ impl ApprovalQueue {
         if let Some(n) = notify {
             n(&approval);
         }
-        let outcome = match tokio::time::timeout(self.timeout, rx).await {
-            Ok(Ok(outcome)) => outcome,
-            _ => {
-                self.waiters.lock().unwrap().remove(&approval.id);
+        let deadline = tokio::time::Instant::now() + self.timeout;
+        let mut rx = rx;
+        let mut poll = tokio::time::interval_at(tokio::time::Instant::now() + POLL, POLL);
+        let decided = loop {
+            tokio::select! {
+                r = &mut rx => break r.ok(),
+                _ = tokio::time::sleep_until(deadline) => break None,
+                _ = poll.tick() => {
+                    if let Ok(Some(a)) = self.store.get_approval(&approval.tenant, &approval.id).await {
+                        if let Some(o) = outcome_of(&a) {
+                            break Some(o);
+                        }
+                    }
+                }
+            }
+        };
+        self.waiters.lock().unwrap().remove(&approval.id);
+        let outcome = match decided {
+            Some(o) => o,
+            None => {
                 self.store.expire_approval(&approval.id).await?;
-                Outcome::Expired
+                // A decision that landed just before the expiry wins: the
+                // store holds the truth.
+                self.store
+                    .get_approval(&approval.tenant, &approval.id)
+                    .await?
+                    .as_ref()
+                    .and_then(outcome_of)
+                    .unwrap_or(Outcome::Expired)
             }
         };
         Ok((Some(approval.id), outcome))

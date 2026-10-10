@@ -478,6 +478,31 @@ pub async fn serve(core: Arc<Core>, listen: &str, tokens: Vec<ApiToken>) -> Resu
         .await
         .with_context(|| format!("cannot listen on {listen}"))?;
     tracing::info!("API listening on http://{listen}");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
     Ok(())
+}
+
+/// Ctrl-C or SIGTERM: stop accepting requests and let the open ones finish.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let term = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut s) => {
+                s.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let term = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = term => {},
+    }
+    tracing::info!("shutting down: no new requests accepted");
 }

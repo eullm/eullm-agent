@@ -31,7 +31,6 @@ class Settings:
     smtp_password: str = ""
     mail_from: str = ""
     telegram_token: str = ""
-    github_token: str = ""
     extra: dict = field(default_factory=dict)
 
     @classmethod
@@ -52,5 +51,4 @@ class Settings:
             smtp_password=env.get("EDITOR_SMTP_PASSWORD", ""),
             mail_from=env.get("EDITOR_MAIL_FROM", ""),
             telegram_token=env.get("EDITOR_TELEGRAM_TOKEN", ""),
-            github_token=env.get("EDITOR_GITHUB_TOKEN", ""),
         )
