@@ -141,6 +141,38 @@ struct FetchService {
     fetcher: Fetcher,
     interval: Duration,
     next_slot: Mutex<HashMap<String, Instant>>,
+    /// host -> (header, value), read from the environment at startup.
+    credentials: HashMap<String, (String, String)>,
+}
+
+/// The credential for this URL: exact host, https only.
+fn credential_for<'a>(
+    creds: &'a HashMap<String, (String, String)>,
+    url: &Url,
+) -> Option<&'a (String, String)> {
+    if url.scheme() != "https" {
+        return None;
+    }
+    creds.get(&url.host_str()?.to_ascii_lowercase())
+}
+
+fn resolve_credentials(
+    list: &[crate::config::HostCredential],
+) -> HashMap<String, (String, String)> {
+    let mut out = HashMap::new();
+    for c in list {
+        match std::env::var(&c.value_env) {
+            Ok(v) if !v.is_empty() => {
+                out.insert(c.host.to_ascii_lowercase(), (c.header.clone(), v));
+            }
+            _ => tracing::warn!(
+                "api.fetch.credentials: {} is not set, requests to {} go without it",
+                c.value_env,
+                c.host
+            ),
+        }
+    }
+    out
 }
 
 #[derive(Debug)]
@@ -252,6 +284,7 @@ impl Core {
                     ),
                     interval: Duration::from_millis(f.min_host_interval_ms),
                     next_slot: Mutex::new(HashMap::new()),
+                    credentials: resolve_credentials(&f.credentials),
                 }),
             in_flight: Arc::default(),
             limit_gate: Mutex::new(()),
@@ -503,7 +536,7 @@ impl Core {
                 .copied()
                 .filter(|t| *t > now)
                 .unwrap_or(now);
-            slots.insert(host, at + svc.interval);
+            slots.insert(host.clone(), at + svc.interval);
             at - now
         };
         tokio::time::sleep(wait).await;
@@ -511,8 +544,13 @@ impl Core {
         let mut shown = url.clone();
         shown.set_query(None);
         shown.set_fragment(None);
+        let mut headers = headers.to_vec();
+        if let Some((name, value)) = credential_for(&svc.credentials, &url) {
+            headers.retain(|(k, _)| !k.eq_ignore_ascii_case(name));
+            headers.push((name.clone(), value.clone()));
+        }
         let started = Instant::now();
-        let result = svc.fetcher.fetch(Method::GET, url, headers, None).await;
+        let result = svc.fetcher.fetch(Method::GET, url, &headers, None).await;
         let record = FetchRecord {
             url: shown.to_string(),
             status: result.as_ref().ok().map(|f| f.status),
@@ -531,5 +569,37 @@ impl Core {
                 FetchError::Failed(msg)
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::HostCredential;
+
+    #[test]
+    fn credentials_go_only_to_their_host_over_https() {
+        std::env::set_var("EULLM_TEST_GH_AUTH", "Bearer t0k");
+        let creds = resolve_credentials(&[
+            HostCredential {
+                host: "API.github.com".into(),
+                header: "Authorization".into(),
+                value_env: "EULLM_TEST_GH_AUTH".into(),
+            },
+            HostCredential {
+                host: "missing.example".into(),
+                header: "Authorization".into(),
+                value_env: "EULLM_TEST_UNSET_VARIABLE".into(),
+            },
+        ]);
+        let at = |u: &str| credential_for(&creds, &Url::parse(u).unwrap()).cloned();
+        assert_eq!(
+            at("https://api.github.com/search/repositories?q=x"),
+            Some(("Authorization".into(), "Bearer t0k".into()))
+        );
+        assert_eq!(at("http://api.github.com/"), None);
+        assert_eq!(at("https://github.com/"), None);
+        assert_eq!(at("https://api.github.com.evil.example/"), None);
+        assert_eq!(at("https://missing.example/"), None);
     }
 }

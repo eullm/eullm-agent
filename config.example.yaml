@@ -84,6 +84,10 @@ provider:
 #     max_redirects: 5
 #     allow_http: false
 #     min_host_interval_ms: 1000  # pace per host, shared by all callers
+#     credentials:                # added by the Core for these hosts only,
+#       - host: api.github.com    # https only, never after a redirect
+#         header: Authorization
+#         value_env: GITHUB_FETCH_AUTH   # e.g. "Bearer github_pat_..."
 #   tenants:                      # limits per tenant (UTC days and months);
 #     editor-acme:                # over a limit the API answers 429.
 #       max_cost_per_month: 50.0  # model calls and runs
