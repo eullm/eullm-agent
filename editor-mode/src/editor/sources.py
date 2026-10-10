@@ -15,7 +15,6 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from urllib.robotparser import RobotFileParser
 
 import feedparser
 import httpx
@@ -27,7 +26,7 @@ from .collectors import COLLECTORS, Item, SourceSpec
 from .core_client import CoreClient, CoreError
 from .dedup import minhash, similarity
 from .html_extract import parse_html
-from .site import AGENT, FEED_PATHS, NOT_SOURCES
+from .site import FEED_PATHS, NOT_SOURCES, RobotsCache
 from .text import tokens
 
 log = logging.getLogger(__name__)
@@ -141,23 +140,10 @@ class Discoverer:
     def __init__(self, client: httpx.Client, max_domains: int = 15):
         self.client = client
         self.max_domains = max_domains
-        self._robots: dict[str, RobotFileParser] = {}
+        self._robots = RobotsCache(client)
 
     def _allowed(self, url: str) -> bool:
-        host = httpx.URL(url).host
-        rp = self._robots.get(host)
-        if rp is None:
-            rp = RobotFileParser()
-            try:
-                r = self.client.get(f"https://{host}/robots.txt", headers={"Accept": "text/plain"})
-                if r.status_code >= 500:
-                    rp.parse(["User-agent: *", "Disallow: /"])
-                else:
-                    rp.parse(r.text.splitlines() if r.status_code == 200 else [])
-            except httpx.HTTPError:
-                rp.parse(["User-agent: *", "Disallow: /"])
-            self._robots[host] = rp
-        return rp.can_fetch(AGENT, url)
+        return self._robots.allowed(url)
 
     def _get(self, url: str, accept: str) -> httpx.Response | None:
         if not self._allowed(url):

@@ -29,7 +29,9 @@ from .text import tokens
 
 log = logging.getLogger(__name__)
 
-AGENT = "EuLLMAgent"
+# The product token of the User-Agent the Core sends (``eullm-agent/<version>``),
+# so that a site's ``User-agent: eullm-agent`` rules are the ones we obey.
+AGENT = "eullm-agent"
 MIN_POSTS = 5
 GOOD_POSTS = 15
 MAX_SITEMAP_BYTES = 10_000_000
@@ -114,6 +116,31 @@ def gunzip_limited(data: bytes, limit: int) -> bytes | None:
     if len(out) > limit or not d.eof:
         return None
     return out
+
+
+class RobotsCache:
+    """robots.txt per host, read once through the Core. Unreachable or 5xx
+    means "do not read", a missing file means "read"."""
+
+    def __init__(self, client: httpx.Client):
+        self.client = client
+        self._robots: dict[str, RobotFileParser] = {}
+
+    def allowed(self, url: str) -> bool:
+        u = httpx.URL(url)
+        rp = self._robots.get(u.host)
+        if rp is None:
+            rp = RobotFileParser()
+            try:
+                r = self.client.get(f"{u.scheme}://{u.host}/robots.txt", headers={"Accept": "text/plain"})
+                if r.status_code >= 500:
+                    rp.parse(["User-agent: *", "Disallow: /"])
+                else:
+                    rp.parse(r.text.splitlines() if r.status_code == 200 else [])
+            except httpx.HTTPError:
+                rp.parse(["User-agent: *", "Disallow: /"])
+            self._robots[u.host] = rp
+        return rp.can_fetch(AGENT, url)
 
 
 class SiteCrawler:

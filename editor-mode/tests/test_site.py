@@ -138,3 +138,18 @@ def test_gzip_is_inflated_within_a_limit():
     assert gunzip_limited(bomb, 1_000_000) is None
     assert gunzip_limited(gzip.compress(small * 100)[:40], 10_000) is None  # cut by the Core's size limit
     assert gunzip_limited(b"\x1f\x8bnot gzip", 1000) is None
+
+
+def test_robots_rules_for_the_core_user_agent_are_obeyed():
+    from editor.site import RobotsCache
+
+    with respx.mock() as router, httpx.Client() as c:
+        router.get("https://closed.example/robots.txt").mock(return_value=httpx.Response(
+            200, text="User-agent: eullm-agent\nDisallow: /\n"))
+        router.get("https://open.example/robots.txt").mock(return_value=httpx.Response(404))
+        router.get("https://down.example/robots.txt").mock(return_value=httpx.Response(503))
+        robots = RobotsCache(c)
+        assert not robots.allowed("https://closed.example/news/1")
+        assert robots.allowed("https://open.example/news/1")
+        assert not robots.allowed("https://down.example/news/1")
+        assert robots.allowed("https://open.example/news/2") and router.calls.call_count == 3  # read once per host

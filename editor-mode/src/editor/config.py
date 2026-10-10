@@ -32,7 +32,6 @@ class Settings:
     mail_from: str = ""
     telegram_token: str = ""
     github_token: str = ""
-    user_agent: str = "EditorialIntelligence/0.1 (+https://i3k.eu)"
     extra: dict = field(default_factory=dict)
 
     @classmethod
@@ -54,5 +53,4 @@ class Settings:
             mail_from=env.get("EDITOR_MAIL_FROM", ""),
             telegram_token=env.get("EDITOR_TELEGRAM_TOKEN", ""),
             github_token=env.get("EDITOR_GITHUB_TOKEN", ""),
-            user_agent=env.get("EDITOR_USER_AGENT", cls.user_agent),
         )

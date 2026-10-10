@@ -119,3 +119,19 @@ def test_only_accepted_proposals_get_drafts(db, tenant):
         assert "accepted" in str(e)
     else:
         raise AssertionError("draft written for a proposal nobody accepted")
+
+
+def test_article_text_is_not_read_where_robots_forbid_it(db, tenant):
+    _, cited = accepted_proposal(db, tenant)
+    with db.tenant(tenant) as s:
+        url = s.execute(text("SELECT url FROM editor.source_items WHERE id = :i"), {"i": cited[0]}).scalar()
+    host = httpx.URL(url).host
+    with respx.mock(assert_all_called=False) as router, httpx.Client() as c:
+        router.get(f"https://{host}/robots.txt").mock(return_value=httpx.Response(200, text="User-agent: *\nDisallow: /\n"))
+        page = router.get(url).mock(return_value=httpx.Response(200, text=ARTICLE_PAGE, headers={"content-type": "text/html"}))
+        drafts.fetch_contents(db, tenant, cited[:1], c)
+    assert not page.called
+    with db.tenant(tenant) as s:
+        content, at = s.execute(text("SELECT content, content_fetched_at FROM editor.source_items WHERE id = :i"),
+                                {"i": cited[0]}).one()
+    assert content is None and at is not None
