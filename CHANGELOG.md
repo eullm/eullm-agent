@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.1
+
+### Fixed
+
+- With one site chosen in the menu, the Attività box showed the work of
+  every site again a few seconds later: the box refreshed while work runs
+  ignored the choice. It now follows the menu on every page and on the
+  Attività page: one site, its work and the collection; "Tutti i siti",
+  everything.
+
 ## 0.27.0
 
 ### Added
