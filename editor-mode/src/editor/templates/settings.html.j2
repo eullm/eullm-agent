@@ -33,8 +33,8 @@
     <div class="list-row"><span>{{ _('Lingua') }}</span><span class="num">{{ usage.plan.get('language') or '–' }}</span></div>
     {% endif %}
     {% if caller.can('owner') and usage %}
-    <details class="manage">
-      <summary>{{ _('Modifica le preferenze') }}</summary>
+    <details class="act">
+      <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica le preferenze') }}</summary>
       <form method="post" action="/ui/preferences" class="form-grid">
         <label class="field">{{ _('Fuso orario') }}<input name="timezone" value="{{ usage.plan.get('timezone') or 'Europe/Rome' }}" required placeholder="Europe/Rome"></label>
         <label class="field">{{ _('Ora del briefing') }}<select name="briefing_hour">{% for h in range(24) %}<option value="{{ h }}" {% if usage.plan.get('briefing_hour', 8) == h %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>{% endfor %}</select></label>
@@ -70,8 +70,8 @@
     {% if caller.can('owner') %}<form class="inline" method="post" action="/ui/recipients/{{ r.id }}/delete"><button class="btn sm" type="submit">{{ _('Rimuovi') }}</button></form>{% endif %}
   </div>
   {% if caller.can('owner') %}
-  <details class="manage">
-    <summary>{{ _('Modifica {address}', address=r.address) }}</summary>
+  <details class="act sm">
+    <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica {address}', address=r.address) }}</summary>
     <form method="post" action="/ui/recipients/{{ r.id }}" class="form-grid">
       <label class="field">{{ _('Canale') }}<select name="channel"><option value="email" {% if r.channel == 'email' %}selected{% endif %}>{{ _('Email') }}</option><option value="telegram" {% if r.channel == 'telegram' %}selected{% endif %}>Telegram</option></select></label>
       <label class="field">{{ _('Indirizzo o chat id') }}<input name="address" value="{{ r.address }}" required></label>

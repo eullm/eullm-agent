@@ -26,8 +26,8 @@
     </form>
     {% if can_reset %}<a class="hint" href="/forgot">{{ _('Password dimenticata?') }}</a>{% else %}<p class="hint">{{ _('Password dimenticata? Chiedi un nuovo link a chi gestisce il servizio.') }}</p>{% endif %}
   </section>
-  <details class="card pad">
-    <summary class="hint">{{ _('Entra con un token di accesso') }}</summary>
+  <details class="card pad mini">
+    <summary>{{ _('Entra con un token di accesso') }}</summary>
     <form method="post" action="/login" style="display: flex; flex-direction: column; gap: 12px;">
       <label class="field">{{ _('Token') }}<input name="token" type="password" autocomplete="off" required></label>
       <button class="btn" type="submit">{{ _('Entra con il token') }}</button>
