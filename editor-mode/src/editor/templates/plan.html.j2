@@ -28,6 +28,50 @@
   <p class="hint">{{ _("Quando un limite è raggiunto la redazione si ferma su quella voce e te lo dice, senza costi a sorpresa. Il mese riparte il primo giorno del mese.") }}</p>
 </section>
 
+{% if cr and cr.enabled %}
+<section class="card pad" id="crediti" aria-labelledby="h-credits">
+  <h2 id="h-credits">{{ _('Crediti') }}</h2>
+  <div class="meter">
+    <span>{{ _('Crediti del mese') }}</span>
+    {% if cr.month %}<div class="bar" role="img" aria-label="{{ cr.pct }}%"><i {% if cr.pct >= 80 %}class="hype"{% endif %} style="width: {{ cr.pct }}%"></i></div>{% else %}<span></span>{% endif %}
+    <span class="num" style="text-align: right;">{{ cr.month_used }} / {{ cr.month }}</span>
+  </div>
+  <div class="list-row"><span>{{ _('Crediti extra (non scadono)') }}</span><span class="num">{{ cr.extra }}</span></div>
+  <div class="list-row"><span><strong>{{ _('Disponibili adesso') }}</strong></span><span class="num"><strong>{{ cr.left }}</strong></span></div>
+  <p class="hint">{{ _("I crediti pagano solo quello che va oltre il piano. Prima si usano quelli del mese, che ripartono il primo del mese; poi quelli extra. Ti avvisiamo per email all'80% e al 100%.") }}</p>
+
+  <h3>{{ _('Quanto costa') }}</h3>
+  <div class="list-row"><span>{{ _('Un articolo oltre quelli del piano') }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.article) }}</span></div>
+  <div class="list-row"><span>{{ _('Una traduzione oltre gli articoli del piano') }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.translation) }}</span></div>
+  <div class="list-row"><span>{{ _('Una copertina rifatta, dopo le {n} gratuite di ogni articolo', n=free_redraws) }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.image) }}</span></div>
+  <p class="hint">{{ _('La redazione automatica resta negli articoli del piano: i crediti li spendi solo tu, quando chiedi qualcosa in più.') }}</p>
+
+  {% if packs and room and not room.reseller %}
+  <h3>{{ _('Aggiungi crediti') }}</h3>
+  {% if online and room.customer %}
+  <div class="row">
+    {% for k in packs %}
+    <form class="inline" method="post" action="/account/{{ room.tenant_id }}/credits"><input type="hidden" name="pack" value="{{ k.code }}"><input type="hidden" name="back" value="plan"><button class="btn" type="submit">{{ k.name }} · {{ money(k.price_cents, k.currency) }}</button></form>
+    {% endfor %}
+  </div>
+  <p class="hint">{{ _('Pagamento unico, IVA esclusa. I crediti arrivano appena il pagamento è confermato.') }}</p>
+  {% elif online %}
+  <p class="hint">{{ _('Per comprare crediti servono prima i dati di fatturazione, qui sotto in Abbonamento.') }}</p>
+  {% else %}
+  <p class="hint">{{ _('Per aggiungere crediti scrivi a chi ti ha venduto il servizio: li registra dopo il bonifico.') }}</p>
+  {% endif %}
+  {% endif %}
+
+  {% if moves %}
+  <h3>{{ _('Ultimi movimenti') }}</h3>
+  {% set reasons = {'article': _('Articolo oltre il piano'), 'translation': _('Traduzione oltre il piano'), 'image': _('Copertina rifatta'), 'pack': _('Pacchetto'), 'grant': _('Crediti aggiunti')} %}
+  {% for x in moves %}
+  <div class="list-row"><span>{{ reasons.get(x.reason, x.reason) }}{% if x.ref and x.ref.startswith('draft:') %} · <a href="/drafts/{{ x.ref[6:] }}">{{ _('bozza') }}</a>{% endif %}{% if x.note and x.reason in ('pack', 'grant') %} <small class="hint">{{ x.note }}</small>{% endif %} <small class="hint">{{ x.at.strftime('%d/%m') if x.at else '' }}</small></span><span class="num">{{ '+' if x.delta > 0 else '' }}{{ x.delta }}</span></div>
+  {% endfor %}
+  {% endif %}
+</section>
+{% endif %}
+
 {% if room %}
 <section class="card" aria-labelledby="h-sub">
   <div class="card-head"><h2 id="h-sub">{{ _('Abbonamento') }}</h2></div>

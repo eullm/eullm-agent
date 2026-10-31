@@ -19,7 +19,7 @@ from . import accounts, models as m, quotas, repo, tenant_data
 from .publishing import TENANT_ID
 
 LIMITS = ("max_sites", "max_active_sources", "max_items_per_day", "max_llm_cost_month", "max_drafts_month",
-          "max_languages")
+          "max_languages", "credits_month")
 SETTINGS = ("plan", "timezone", "briefing_hour", "language")
 
 

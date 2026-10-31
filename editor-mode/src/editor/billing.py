@@ -27,7 +27,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, func, insert, select, update
 
-from . import accounts, i18n, newsrooms
+from . import accounts, credits, i18n, newsrooms
 from . import models as m
 from .i18n import N_, t
 
@@ -49,7 +49,7 @@ STATUS_LABELS = {
 CUSTOMER_FIELDS = ("kind", "name", "email", "phone", "vat_number", "tax_code", "address", "postal_code", "city",
                    "province", "country", "sdi_code", "pec")
 PLAN_LIMITS = ("max_sites", "max_active_sources", "max_items_per_day", "max_drafts_month", "max_llm_cost_month",
-               "max_languages")
+               "max_languages", "credits_month")
 
 
 class BillingError(ValueError):
@@ -104,7 +104,7 @@ def save_plan(admin, code: str, fields: dict) -> None:
     limits until their plan is applied again (the next payment)."""
     allowed = {"name", "description", "price_month_cents", "price_year_cents", "trial_days", "max_sites",
                "max_languages", "max_active_sources", "max_items_per_day", "max_drafts_month", "max_llm_cost_month",
-               "public", "sort", "autopilot"}
+               "public", "sort", "autopilot", "credits_month"}
     values = {k: v for k, v in fields.items() if k in allowed}
     for k, v in values.items():
         if k not in ("name", "description", "public", "autopilot") and v is not None and (isinstance(v, bool) or v < 0):
@@ -758,6 +758,53 @@ def checkout(admin, gateway, tenant_id: str, plan_code: str, interval: str, redi
     return url
 
 
+def buy_credits(admin, gateway, tenant_id: str, pack_code: str, redirect_url: str, webhook_url: str,
+                now: datetime | None = None) -> str:
+    """Start paying a pack of credits: the address of the gateway's page.
+    The credits are added when the gateway says the payment is paid."""
+    if gateway is None:
+        raise BillingError(t("pagamenti online non configurati: contatta chi ti ha venduto il servizio"))
+    c = customer_of(admin, tenant_id)
+    if c is None:
+        raise BillingError(t("prima servono i dati di fatturazione"))
+    with accounts._read(admin) as conn:
+        pack = credits.get_pack(conn, pack_code)
+    if not pack.active or not pack.price_cents:
+        raise BillingError(t("questo pacchetto non è in vendita"))
+    cust_id = c["provider_customer_id"]
+    if not cust_id:
+        cust_id = gateway.create_customer(c["name"], c["email"], {"customer_id": c["id"]})
+        with admin.engine.begin() as conn:
+            conn.execute(update(m.customers).where(m.customers.c.id == c["id"]).values(provider_customer_id=cust_id))
+    sub = subscription(admin, tenant_id)
+    pay_id, url = gateway.one_off_payment(cust_id, pack.price_cents, pack.currency, f"Redazia {pack.name}",
+                                          redirect_url, webhook_url,
+                                          {"tenant_id": tenant_id, "pack": pack.code, "credits": pack.credits})
+    with admin.engine.begin() as conn:
+        conn.execute(insert(m.payments).values(tenant_id=tenant_id, subscription_id=sub["id"] if sub else None,
+                                               provider=gateway.name, provider_payment_id=pay_id, kind="credits",
+                                               amount_cents=pack.price_cents, currency=pack.currency, status="open",
+                                               note=f"{pack.code}:{pack.credits}", created_at=_now(now)))
+    return url
+
+
+def record_credits(admin, tenant_id: str, credits_n: int, amount_cents: int, by: str, note: str = "",
+                   now: datetime | None = None) -> int:
+    """Credits paid outside the gateway (a bank transfer) or given: the
+    payment row (when there is an amount) and the credits."""
+    if amount_cents < 0:
+        raise BillingError(t("l'importo è un numero di zero o più"))
+    ref = None
+    if amount_cents:
+        with admin.engine.begin() as conn:
+            pid = conn.execute(insert(m.payments).values(
+                tenant_id=tenant_id, provider="manual", kind="credits", amount_cents=amount_cents, currency="EUR",
+                status="paid", note=(note or f"{credits_n} crediti")[:200], created_at=_now(now),
+                paid_at=_now(now)).returning(m.payments.c.id)).scalar_one()
+        ref = f"payment:{pid}"
+    return credits.grant(admin, tenant_id, credits_n, "pack" if amount_cents else "grant", note, by, ref)
+
+
 def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, now: datetime | None = None) -> str:
     """The gateway says a payment changed: read it from the gateway (the
     notice itself carries only its id) and act. Returns what was done."""
@@ -786,6 +833,12 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
     with admin.engine.begin() as conn:
         conn.execute(update(p).where(p.c.id == ours.id).values(status=status, paid_at=now if status == "paid" else None))
     tenant_id = ours.tenant_id
+    if ours.kind == "credits":
+        if status != "paid" or tenant_id is None:
+            return status
+        n = int((pay.get("metadata") or {}).get("credits") or (ours.note or "0").rpartition(":")[2] or 0)
+        credits.grant(admin, tenant_id, n, "pack", ours.note or "", "mollie", f"payment:{ours.id}")
+        return "credits"
     sub = subscription(admin, tenant_id)
     if status == "paid" and ours.kind == "first":
         meta = pay.get("metadata") or {}

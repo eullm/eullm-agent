@@ -86,6 +86,8 @@ tenants = Table(
     Column("autopilot", Boolean),  # the plan includes the automatic newsroom
     Column("proposals_only", _ts()),  # since: trial or period over, proposals only
     Column("weekly_report", Boolean),  # the weekly report by email (on by default)
+    Column("credits_month", Integer),  # credits the plan gives every month (credits.py)
+    Column("credits_alert", Text),  # last alert sent: "YYYY-MM:80" or "YYYY-MM:100"
 )
 
 sites = Table(
@@ -701,6 +703,7 @@ plans = Table(
     Column("public", Boolean, nullable=False),
     Column("sort", Integer, nullable=False),
     Column("autopilot", Boolean, nullable=False),
+    Column("credits_month", Integer),
 )
 
 subscriptions = Table(
@@ -738,6 +741,41 @@ payments = Table(
     Column("note", Text, nullable=False),
     Column("created_at", _ts()),
     Column("paid_at", _ts()),
+)
+
+# Credits (credits.py): the price list and the packs, from the console;
+# every movement of a newsroom's credits.
+credit_prices = Table(
+    "credit_prices",
+    metadata,
+    Column("action", Text, primary_key=True),  # article, translation, image
+    Column("credits", Integer, nullable=False),
+)
+
+credit_packs = Table(
+    "credit_packs",
+    metadata,
+    Column("code", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("credits", Integer, nullable=False),
+    Column("price_cents", Integer, nullable=False),
+    Column("currency", Text, nullable=False),
+    Column("active", Boolean, nullable=False),
+    Column("sort", Integer, nullable=False),
+)
+
+credit_ledger = Table(
+    "credit_ledger",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("at", _ts()),
+    Column("pool", Text, nullable=False),  # month: the plan's credits; extra: packs and grants
+    Column("delta", Integer, nullable=False),  # + added, - spent, 0 a free cover
+    Column("reason", Text, nullable=False),  # article, translation, image, plan, pack, grant
+    Column("ref", Text),  # draft:N, payment:N
+    Column("note", Text, nullable=False, default=""),
+    Column("by_user", Text),
 )
 
 # The free trial, once (trials.py): hashes of the data a trial was given

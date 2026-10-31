@@ -111,19 +111,30 @@ def usage(s, hold: bool = False) -> Usage | None:
     return Usage(dict(t._mapping), _used(s, t))
 
 
-def check(s, what: str, adding: float = 1) -> None:
+def check(s, what: str, adding: float = 1, pay: str | None = None) -> bool:
     """Raise QuotaExceeded when `adding` more would pass the tenant's limit.
     The check holds the tenant's quota lock until the transaction ends: do
-    the insert it guards in the same transaction."""
+    the insert it guards in the same transaction.
+
+    With `pay` (a credits action: article, translation) a newsroom past the
+    limit can still go on with its credits: the check then returns True
+    and the caller pays with credits.spend after its insert, in the same
+    transaction. Without enough credits it raises credits.NoCredits."""
     u = usage(s, hold=True)
     if u is None:
-        return
+        return False
     if what == "drafts" and u.plan.get("proposals_only"):
         raise QuotaExceeded("the trial is over: proposals only until a plan is chosen")
     left = u.remaining(what)
     if left is not None and (left < adding or left <= 0):
         limit_col, used_col = LIMITS[what]
+        if pay is not None and u.plan.get("credits_month") is not None:
+            from . import credits
+
+            credits.need(s, credits.price(s, pay))
+            return True
         raise QuotaExceeded(f"{what} limit reached ({u.used.get(used_col)} of {u.plan[limit_col]}, plan {u.plan.get('plan')})")
+    return False
 
 
 def remaining(s, what: str) -> float | None:

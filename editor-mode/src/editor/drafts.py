@@ -24,7 +24,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
-from . import quotas, repo, seo, usage
+from . import credits, quotas, repo, seo, usage
 from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
 from .i18n import N_
@@ -393,13 +393,16 @@ def expand(db, tenant_id: str, prop, core: CoreClient, messages: list, last, art
     return longer
 
 
-def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None) -> int:
-    """Write and store a draft for an accepted proposal; returns its id."""
+def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
+                pay: bool = True) -> int:
+    """Write and store a draft for an accepted proposal; returns its id.
+    Past the plan's articles of the month it is paid with credits, unless
+    `pay` is False (the automatic newsroom stays within the plan)."""
     with db.tenant(tenant_id) as s:
         prop = s.execute(select(m.proposals).where(m.proposals.c.id == proposal_id)).first()
         if prop is None or prop.status not in ("accepted", "drafted"):
             raise ValueError("drafts are written for accepted proposals only")
-        quotas.check(s, "drafts")
+        quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
         more = list(s.execute(select(m.topic_items.c.item_id).where(m.topic_items.c.topic_id == prop.topic_id)
@@ -456,7 +459,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
         # while this one was with the model.
-        quotas.check(s, "drafts")
+        over = quotas.check(s, "drafts", pay="article" if pay else None)
         quotas.lock(s, f"editor-draft-version:{proposal_id}")
         version = (s.execute(select(func.max(m.drafts.c.version)).where(m.drafts.c.proposal_id == proposal_id)).scalar() or 0) + 1
         did = s.execute(insert(m.drafts).values(
@@ -465,6 +468,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
             seo=sd.as_dict(),
         ).returning(m.drafts.c.id)).scalar_one()
+        if over:  # beyond the plan's articles of the month: paid with credits
+            credits.spend(s, "article", f"draft:{did}")
         for n, c in enumerate(article.claims):
             cid = s.execute(insert(m.draft_claims).values(
                 tenant_id=tenant_id, draft_id=did, ordinal=n, section=c.section, text=c.text,

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.28.0
+
+### Added
+
+- Credits: what goes beyond the plan is paid with credits, never with a
+  surprise on the bill. Every plan gives credits each month (`credits_month`,
+  set in Piani and on each newsroom; trial 30, Solo 100, Starter 250, Pro 800,
+  Business 2500, Agency 8000). They pay for an article or a translation past
+  the plan's articles of the month (25 and 10 credits) and for a cover drawn
+  again after the first one and two free redraws of each article (3
+  credits). The month's credits are used first and start again on the 1st;
+  then the extra credits, which do not expire.
+- Packs of extra credits (500 for 5 €, 2.000 for 18 €, 6.000 for 48 €),
+  bought by the owner in Il mio piano with a single Mollie payment, or
+  recorded by the operator in the console (bank transfer with its amount,
+  a gift, or a negative correction). Prices, packs and each newsroom's
+  credits are edited and deleted from the console (Piani › Crediti and the
+  newsroom's card).
+- Il mio piano shows the month's credits, the extra ones, the price list,
+  the packs and the latest movements; the draft page says how many free
+  covers are left or what the next one costs.
+- The owners get an email at 80% and at 100% of the month's credits.
+- `/api/public/plans` gives each plan's credits, the price list and the packs.
+
+### Changed
+
+- The automatic newsroom stays within the plan's articles: credits are
+  spent only on what a person asks for.
+- A newsroom without monthly credits (the local installation, a newsroom
+  without a plan) works as before: nothing is charged or stopped.
+
 ## 0.27.1
 
 ### Fixed

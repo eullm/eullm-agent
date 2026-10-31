@@ -31,7 +31,7 @@ import httpx
 from sqlalchemy import delete, insert, select, text
 
 from . import models as m
-from . import usage
+from . import credits, usage
 from .core_client import CoreError, extract_json
 from .i18n import N_
 from .progress import step
@@ -272,6 +272,8 @@ def make(db, tenant_id: str, draft_id: int, imager: Imager, core=None) -> str:
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
         if current:
             profile = {**profile, "settings": {**(profile.get("settings") or {}), **(current.get("settings") or {})}}
+        # The first cover and the free redraws are included; then credits.
+        credits.need(s, credits.cover_cost(s, draft_id))
     step(N_("Il modello descrive l'immagine"))
     with usage.tagged(db, tenant_id, "image", site_id=d.site_id, ref=f"draft:{draft_id}"):
         prompt, alt = describe(core, d, profile)
@@ -287,6 +289,7 @@ def make(db, tenant_id: str, draft_id: int, imager: Imager, core=None) -> str:
     token = secrets.token_urlsafe(24)
     width, height = size_of(content)
     with db.tenant(tenant_id) as s:
+        credits.charge_cover(s, draft_id)
         s.execute(delete(m.draft_images).where(m.draft_images.c.draft_id == draft_id))
         s.execute(insert(m.draft_images).values(
             tenant_id=tenant_id, draft_id=draft_id, token=token, prompt=prompt, alt=alt, model=imager.model,
