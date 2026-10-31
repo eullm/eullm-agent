@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.5
+
+### Changed
+
+- Topic names cost less for the same names: every hour the model named
+  again the ten largest topics that got news, even when one headline
+  had joined a topic it had named an hour before. A topic named by the
+  model is now named again only when it has really grown (half again,
+  and at least 5 more items); the size at naming is kept in
+  `topics.labelled_items` (migrations 0035, sqlite 0024).
+
 ## 0.26.4
 
 ### Fixed

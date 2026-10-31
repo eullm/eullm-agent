@@ -175,6 +175,7 @@ topics = Table(
     Column("labelled_by", Text),
     Column("created_at", _ts()),
     Column("updated_at", _ts()),
+    Column("labelled_items", Integer),  # its size when the model named it
 )
 
 topic_items = Table(
