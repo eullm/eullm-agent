@@ -165,8 +165,10 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     them = accounts.create_user(admin, other, password="password operatore", operator=True)
     tid = signup(c, key(db), unique("web"), f"{unique('amm')}@rossi.it").json()["tenant"]["tenant_id"]
     c.post("/login", data={"email": op, "password": "password operatore"})
-    page = c.get("/admin").text
-    assert "Nome, piano e limiti" in page and "Aggiungi un piano" in page and "Modifica o elimina Rossi Media srl" in page
+    assert tid in c.get("/admin").text
+    assert "Nome, piano e limiti" in c.get(f"/admin/newsrooms/{tid}").text
+    assert "Aggiungi un piano" in c.get("/admin/plans").text
+    assert "Modifica o elimina Rossi Media srl" in c.get("/admin/customers").text
 
     c.post(f"/admin/newsrooms/{tid}", data={"name": "Rossi Notizie", "plan": ""})
     assert next(r for r in billing.customers(admin) for r in r["newsrooms"] if r["tenant_id"] == tid)["name"] == "Rossi Notizie"

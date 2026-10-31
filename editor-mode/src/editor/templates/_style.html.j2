@@ -81,6 +81,10 @@ details.manage > summary:hover { border-color: var(--accent); }
 details.manage[open] > summary { margin-bottom: 8px; }
 /* Panels that open on click: a full bar with a coloured badge and a chevron,
    so it reads as something to press, not as a footnote. --tone picks the colour. */
+input.search { width: 100%; min-height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font: 14px var(--sans); color: var(--ink); }
+input.search:focus { background: var(--surface); }
+a.room-name { font-weight: 600; text-decoration: none; }
+a.room-name:hover { text-decoration: underline; }
 details.act { --tone: var(--accent); --tone-soft: var(--accent-soft); margin-top: 10px; border: 1px solid var(--line); border-left: 4px solid var(--tone); border-radius: 10px; background: var(--surface); scroll-margin-top: 16px; }
 details.act[data-tone="green"] { --tone: var(--green); --tone-soft: var(--green-soft); }
 details.act[data-tone="amber"] { --tone: var(--amber); --tone-soft: var(--amber-soft); }

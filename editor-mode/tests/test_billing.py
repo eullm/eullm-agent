@@ -418,10 +418,14 @@ def test_the_console_shows_customers_resellers_and_plans(db, admin):
     tid = signup(c, key(db), unique("web"), f"{unique('amm')}@rossi.it", customer=CUSTOMER | ids).json()["tenant"]["tenant_id"]
     c.post("/login", data={"email": op, "password": "password operatore"})
     page = c.get("/admin")
-    assert page.status_code == 200
-    for words in ("Clienti", "Rossi Media srl", f"P.IVA {ids['vat_number']}", "Seconde prove negate", "SDI ABC1234", "Rivenditori", "Piani",
-                  "Prova · In prova", "Abbonamento"):
-        assert words in page.text, words
+    assert page.status_code == 200 and "Prova · In prova" in page.text
+    for path, words in (("/admin/customers", ("Clienti", "Rossi Media srl", f"P.IVA {ids['vat_number']}",
+                                              "Seconde prove negate", "SDI ABC1234")),
+                        ("/admin/resellers", ("Rivenditori",)), ("/admin/plans", ("Piani", "Aggiungi un piano")),
+                        (f"/admin/newsrooms/{tid}", ("Abbonamento", "Nome, piano e limiti"))):
+        page = c.get(path)
+        for w in words:
+            assert w in page.text, (path, w)
     r = c.post("/admin/plans/starter", data={"name": "Starter", "price_month": "59,00", "price_year": "590",
                                               "trial_days": "0", "max_sites": "1", "max_drafts_month": "40", "public": "1"},
                follow_redirects=False)
@@ -539,7 +543,7 @@ def test_a_second_trial_waits_for_a_plan(db, admin):
     op = f"{unique('op')}@example.com"
     accounts.create_user(admin, op, password="password operatore", operator=True)
     c.post("/login", data={"email": op, "password": "password operatore"})
-    page = c.get("/admin").text
+    page = c.get("/admin/customers").text
     assert "Seconde prove negate" in page and f"…{ids['vat_number'][-4:]}" in page
 
 
@@ -635,7 +639,7 @@ def test_the_console_refunds_an_online_payment(db, admin):
     assert billing.subscription(admin, tid)["status"] == "active"
     c.cookies.clear()
     c.post("/login", data={"email": op, "password": "password lunga"})
-    page = c.get("/admin").text
+    page = c.get(f"/admin/newsrooms/{tid}").text
     assert "Pagamenti e rimborsi" in page and first in page and f"Rimborsa {first}" in page
     pid = billing.payment_by_provider_id(admin, first)["id"]
     # Without the confirmation nothing leaves.
@@ -645,8 +649,8 @@ def test_the_console_refunds_an_online_payment(db, admin):
     r = c.post(f"/admin/payments/{pid}/refund", data={"amount": "5,00", "then": "none", "confirm": "1"},
                follow_redirects=False)
     # Back to the payments of that newsroom, open, with the result inside the card.
-    assert r.headers["location"] == f"/admin#r-{tid}--pay"
-    page = c.get("/admin").text
+    assert r.headers["location"] == f"/admin/newsrooms/{tid}#r-{tid}--pay"
+    page = c.get(f"/admin/newsrooms/{tid}").text
     assert f'id="r-{tid}--pay" open' in page and page.index("Rimborsati") > page.index(f'id="r-{tid}"')
     assert fake.refunds == [(first, 500)] and billing.subscription(admin, tid)["status"] == "active"
     assert any(to == op and "Rimborso" in subject for to, subject, _ in c.told)
@@ -659,7 +663,7 @@ def test_the_console_refunds_an_online_payment(db, admin):
     sub = billing.subscription(admin, tid)
     assert sub["status"] == "expired" and billing.on_hold(admin, tid) and fake.cancelled == [f"sub_{fake.run}1"]
     assert billing.payments_by_tenant(admin)[tid][0]["kind"] == "refund"
-    assert f"Rimborsa {first}" not in c.get("/admin").text
+    assert f"Rimborsa {first}" not in c.get(f"/admin/newsrooms/{tid}").text
     # The renewals are already stopped: the plan can then be changed without a second cancel at Mollie.
     assert "Abbonamento di" in c.post(f"/admin/subscriptions/{tid}", data={"plan": "trial"}).text
     assert billing.subscription(admin, tid)["plan_code"] == "trial"

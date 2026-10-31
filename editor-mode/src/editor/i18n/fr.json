@@ -1593,5 +1593,14 @@
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} est encore l'offre de : {rooms}. Changez-la dans Rédactions › Abonnement, ou retirez-la du site public",
  "fino a {amount}": "jusqu'à {amount}",
  "Apri nella console: {url}": "Ouvrir dans la console : {url}",
- "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "Le panneau s'arrête quelques secondes pendant le redémarrage et revient tout seul quand la {version} répond : inutile de recharger la page. Les travaux en cours retournent dans la file et repartent, les données ne sont pas touchées."
+ "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "Le panneau s'arrête quelques secondes pendant le redémarrage et revient tout seul quand la {version} répond : inutile de recharger la page. Les travaux en cours retournent dans la file et repartent, les données ne sont pas touchées.",
+ "Cerca per nome, id, piano o stato": "Rechercher par nom, id, offre ou état",
+ "Dal": "Depuis",
+ "Ferma": "À l'arrêt",
+ "Nessuna redazione corrisponde alla ricerca.": "Aucune rédaction ne correspond à la recherche.",
+ "Nessuna redazione: creane una da Nuova redazione, oppure lasciala creare al sistema di pagamento con l'API.": "Aucune rédaction : créez-en une depuis Nouvelle rédaction, ou laissez le système de paiement la créer via l'API.",
+ "all'anno": "par an",
+ "{n} giorni di prova": "{n} jours d'essai",
+ "sul sito": "sur le site",
+ "non sul sito": "pas sur le site"
 }

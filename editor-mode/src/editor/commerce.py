@@ -481,9 +481,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             billing.save_plan(admin, code, fields)
         except ValueError as e:
             return back(t("Piano non salvato: {error}.",
-                          error=e if isinstance(e, billing.BillingError) else t("numeri di zero o più")), "piani")
+                          error=e if isinstance(e, billing.BillingError) else t("numeri di zero o più")), f"p-{code}")
         return back(t("Piano {name} salvato. Le redazioni già su questo piano prendono i nuovi limiti al prossimo pagamento.",
-                      name=name.strip()), "piani")
+                      name=name.strip()), f"p-{code}")
 
     @app.post("/admin/plans")
     def ui_new_plan(code: str = Form(...), name: str = Form(...), s=Depends(need_console)):
@@ -492,7 +492,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except billing.BillingError as e:
             return back(t("Piano non creato: {error}.", error=e), "piani")
         return back(t("Piano {name} creato, non ancora sul sito: imposta prezzi e limiti e scegli \"Sul sito: Sì\".",
-                      name=name.strip()), "piani")
+                      name=name.strip()), f"p-{code}")
 
     @app.post("/admin/plans/{code}/delete")
     def ui_delete_plan(code: str, s=Depends(need_console)):
@@ -516,7 +516,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             billing.clean_customer(spec)
             billing.update_customer(admin, cid, spec)
         except LookupError:
-            return back(t("Cliente non trovato."))
+            return back(t("Cliente non trovato."), "clienti")
         except (billing.BillingError, accounts.AccountError) as e:
             return back(t("Cliente non aggiornato: {error}.", error=e), f"c-{cid}")
         return back(t("Cliente {name} aggiornato.", name=name.strip()), f"c-{cid}")
@@ -526,7 +526,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = billing.delete_customer(admin, cid)
         except LookupError:
-            return back(t("Cliente non trovato."))
+            return back(t("Cliente non trovato."), "clienti")
         except billing.BillingError as e:
             return back(t("Cliente non eliminato: {error}.", error=e), f"c-{cid}")
         return back(t("Cliente {name} eliminato.", name=name), "clienti")
@@ -543,7 +543,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                 raise billing.BillingError(t("lo sconto è una percentuale da 0 a 100")) from None
             billing.update_reseller(admin, rid, {"name": name.strip()[:100], "email": email, "discount_pct": pct})
         except LookupError:
-            return back(t("Rivenditore non trovato."))
+            return back(t("Rivenditore non trovato."), "rivenditori")
         except (ValueError, accounts.AccountError) as e:
             return back(t("Rivenditore non aggiornato: {error}.", error=e), f"v-{rid}")
         return back(t("Rivenditore {name} aggiornato.", name=name.strip()), f"v-{rid}")
@@ -553,7 +553,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = billing.delete_reseller(admin, rid)
         except LookupError:
-            return back(t("Rivenditore non trovato."))
+            return back(t("Rivenditore non trovato."), "rivenditori")
         except billing.BillingError as e:
             return back(t("Rivenditore non eliminato: {error}.", error=e), f"v-{rid}")
         return back(t("Rivenditore {name} eliminato con le sue chiavi.", name=name), "rivenditori")
@@ -565,26 +565,26 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             pct = float((discount or "0").replace(",", "."))
             rid = billing.create_reseller(admin, name, email, pct)
         except (ValueError, accounts.AccountError) as e:
-            return page(request, s, 400, error=t("Rivenditore non creato: {error}.", error=e))
+            return page(request, s, 400, view="rivenditori", error=t("Rivenditore non creato: {error}.", error=e))
         key = accounts.create_operator_token(admin, f"rivenditore {name.strip()}", rid)
-        return page(request, s, new={"what": t("Rivenditore {name} creato con la sua chiave API", name=name.strip()), "key": key})
+        return page(request, s, view="rivenditori", new={"what": t("Rivenditore {name} creato con la sua chiave API", name=name.strip()), "key": key})
 
     @app.post("/admin/resellers/{rid}/key", response_class=HTMLResponse)
     def ui_reseller_key(request: Request, rid: int, s=Depends(need_console)):
         r = billing.reseller(admin, rid)
         if r is None or not r.active:
-            return back(t("Rivenditore non trovato o disattivato."))
+            return back(t("Rivenditore non trovato o disattivato."), "rivenditori")
         key = accounts.create_operator_token(admin, f"rivenditore {r.name}", rid)
-        return page(request, s, new={"what": t("Nuova chiave API per {name}", name=r.name), "key": key})
+        return page(request, s, view="rivenditori", new={"what": t("Nuova chiave API per {name}", name=r.name), "key": key})
 
     @app.post("/admin/resellers/{rid}/active")
     def ui_reseller_active(rid: int, active: str = Form(...), s=Depends(need_console)):
         try:
             billing.update_reseller(admin, rid, {"active": active == "1"})
         except LookupError:
-            return back(t("Rivenditore non trovato."))
+            return back(t("Rivenditore non trovato."), "rivenditori")
         return back(t("Rivenditore riattivato.") if active == "1" else
-                    t("Rivenditore disattivato: le sue chiavi non valgono più, i suoi clienti restano."))
+                    t("Rivenditore disattivato: le sue chiavi non valgono più, i suoi clienti restano."), f"v-{rid}")
 
     @app.post("/admin/subscriptions/{tenant_id}")
     def ui_subscription(tenant_id: str, plan: str = Form(...), interval: str = Form("month"),

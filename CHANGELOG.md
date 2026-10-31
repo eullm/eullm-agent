@@ -10,6 +10,14 @@
 
 ### Changed
 
+- The console is split in pages, one for each entry of the menu
+  (/admin/customers, /admin/plans, /admin/resellers, /admin/operators,
+  /admin/keys, /admin/updates, /admin/new) instead of one long page.
+  Redazioni is a compact table, one row per newsroom with plan, status,
+  sites, drafts and model cost, and a search box; "Apri" shows the whole
+  newsroom at /admin/newsrooms/<id>. The plans are closed bars with
+  their prices, and only the one being changed opens. Every form comes
+  back to its page.
 - While an update runs, /admin › Aggiornamenti says the panel stops for
   a few seconds and comes back by itself, and reloads on its own once
   the new version answers (`/api/health` now also gives the version), so

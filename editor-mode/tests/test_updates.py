@@ -47,12 +47,12 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     op = f"{unique('op')}@example.com"
     accounts.create_user(admin, op, password="password operatore", operator=True)
     c.post("/login", data={"email": op, "password": "password operatore"})
-    page = c.get("/admin").text
+    page = c.get("/admin/updates").text
     assert "Aggiornamenti" in page and INSTALLED in page and "Il server è aggiornato" in page
 
     (tmp_path / "available.json").write_text(json.dumps({
         "version": "99.0.0", "url": "https://github.com/r/v99.0.0", "checked_at": datetime.now(UTC).isoformat()}))
-    page = c.get("/admin").text
+    page = c.get("/admin/updates").text
     assert "È disponibile la versione 99.0.0" in page and "Aggiorna alla 99.0.0" in page
     # Only the announced release: nothing else reaches the host.
     c.post("/admin/updates/apply", data={"version": "98.0.0"})
@@ -60,10 +60,10 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     assert not (tmp_path / "request.json").exists()
     r = c.post("/admin/updates/apply", data={"version": "99.0.0"}, follow_redirects=False)
     # Back to the updates section, not to the top of the console.
-    assert r.status_code == 303 and r.headers["location"] == "/admin#aggiornamenti"
+    assert r.status_code == 303 and r.headers["location"] == "/admin/updates#aggiornamenti"
     asked = json.loads((tmp_path / "request.json").read_text())
     assert asked["version"] == "99.0.0" and asked["by"] == op
-    assert "chiesto: il server lo prende entro un minuto" in c.get("/admin").text
+    assert "chiesto: il server lo prende entro un minuto" in c.get("/admin/updates").text
     # A second click while it waits asks nothing more.
     c.post("/admin/updates/apply", data={"version": "99.0.0"})
     assert json.loads((tmp_path / "request.json").read_text())["at"] == asked["at"]
@@ -72,7 +72,7 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     (tmp_path / "status.json").write_text(json.dumps({"state": "failed", "step": "pull", "version": "99.0.0",
                                                       "from": INSTALLED, "at": "2026-10-29T20:00:00Z"}))
     (tmp_path / "update.log").write_text("manifest unknown\nfailed during: pull\n")
-    page = c.get("/admin").text
+    page = c.get("/admin/updates").text
     assert "non riuscito durante: download della versione" in page and "manifest unknown" in page
 
     # Not reachable without the console.
@@ -92,7 +92,7 @@ def test_without_the_folder_the_console_says_how(db):
     op = f"{unique('op')}@example.com"
     accounts.create_user(admin, op, password="password operatore", operator=True)
     c.post("/login", data={"email": op, "password": "password operatore"})
-    assert "update.sh" in c.get("/admin").text
+    assert "update.sh" in c.get("/admin/updates").text
 
 
 def test_the_check_goes_through_redazia_and_counts_the_installation(tmp_path, monkeypatch):
@@ -157,5 +157,5 @@ def test_the_console_counts_the_installations(db, monkeypatch):
     op = f"{unique('op')}@example.com"
     accounts.create_user(admin, op, password="password operatore", operator=True)
     c.post("/login", data={"email": op, "password": "password operatore"})
-    page = c.get("/admin").text
+    page = c.get("/admin/updates").text
     assert "Installazioni di Redazia" in page and "Attive negli ultimi 7 giorni" in page and "versione 0.24.1" in page
