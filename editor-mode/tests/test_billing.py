@@ -53,6 +53,12 @@ class FakeGateway:
     def cancel_subscription(self, customer_id, subscription_id):
         self.cancelled.append(subscription_id)
 
+    def refund(self, payment_id, amount_cents, currency, description):
+        p = self.payments[payment_id]
+        p["remaining_cents"] = p.get("remaining_cents", p["amount_cents"]) - amount_cents
+        self.refunds = getattr(self, "refunds", []) + [(payment_id, amount_cents)]
+        return f"re_{self.run}{len(self.refunds)}", "queued"
+
     def renewal(self, subscription_id, status="paid"):
         self.n += 1
         pid = f"tr_{self.run}{self.n}"
@@ -379,7 +385,10 @@ def test_mollie_client_speaks_the_v2_api():
         assert '"sequenceType":"first"' in body.replace(" ", "") and '"value":"49.90"' in body.replace(" ", "")
         assert m.payment("tr_9") | {} == {"id": "tr_9", "status": "paid", "amount_cents": 14900, "currency": "EUR",
                                          "metadata": {"plan": "pro"}, "mandate_id": "mdt_9", "subscription_id": None,
-                                         "customer_id": "cst_9"}
+                                         "customer_id": "cst_9", "refunded_cents": 0, "remaining_cents": None}
+        refund = mock.post("/payments/tr_9/refunds").respond(201, json={"id": "re_9", "status": "queued"})
+        assert m.refund("tr_9", 100, "EUR", "Redazia: rimborso tr_9") == ("re_9", "queued")
+        assert '"value":"1.00"' in refund.calls.last.request.read().decode().replace(" ", "")
         assert m.payment("cst_nope") is None
         from datetime import date
         assert m.create_subscription("cst_9", 14900, "EUR", "year", date(2027, 10, 21), "Pro", "https://w", "mdt_9", {}) == "sub_9"
@@ -599,3 +608,40 @@ def test_a_plan_change_without_a_date_keeps_the_paid_period(db, admin, tenant):
     billing.start(admin, tenant, "pro", paid_until=datetime.now(UTC) - timedelta(days=1), provider="manual")
     billing.start(admin, tenant, "pro", paid_until=None, provider="manual")
     assert billing.subscription(admin, tenant)["current_period_end"] is None
+
+
+def test_the_console_refunds_an_online_payment(db, admin):
+    fake = FakeGateway()
+    c, sent = client(db, gateway=fake)
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(Database.from_url(db.admin_url), op, "Operatore", "password lunga", operator=True)
+    tid = signup(c, key(db), unique("web"), f"{unique('amm')}@rossi.it").json()["tenant"]["tenant_id"]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
+    c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
+    c.post(f"/account/{tid}/checkout", data={"plan": "pro", "interval": "month"}, follow_redirects=False)
+    first = f"tr_{fake.run}1"
+    fake.payments[first]["status"] = "paid"
+    c.post("/api/billing/mollie/webhook", data={"id": first})
+    assert billing.subscription(admin, tid)["status"] == "active"
+    c.cookies.clear()
+    c.post("/login", data={"email": op, "password": "password lunga"})
+    page = c.get("/admin").text
+    assert "Pagamenti e rimborsi" in page and first in page and f"Rimborsa {first}" in page
+    pid = billing.payment_by_provider_id(admin, first)["id"]
+    # Without the confirmation nothing leaves.
+    c.post(f"/admin/payments/{pid}/refund", data={"amount": "5", "then": "none"})
+    assert not getattr(fake, "refunds", [])
+    # Part of it: the subscription stays; the console hears of it.
+    c.post(f"/admin/payments/{pid}/refund", data={"amount": "5,00", "then": "none", "confirm": "1"})
+    assert fake.refunds == [(first, 500)] and billing.subscription(admin, tid)["status"] == "active"
+    assert any(to == op and "Rimborso" in subject for to, subject, _ in c.told)
+    # More than what is left is refused.
+    c.post(f"/admin/payments/{pid}/refund", data={"amount": "1000", "then": "none", "confirm": "1"})
+    assert len(fake.refunds) == 1
+    # The rest, and the newsroom stops now with its renewals.
+    c.post(f"/admin/payments/{pid}/refund", data={"amount": "", "then": "now", "confirm": "1"})
+    assert fake.refunds[-1] == (first, 14900 - 500)
+    sub = billing.subscription(admin, tid)
+    assert sub["status"] == "expired" and billing.on_hold(admin, tid) and fake.cancelled == [f"sub_{fake.run}1"]
+    assert billing.payments_by_tenant(admin)[tid][0]["kind"] == "refund"
+    assert f"Rimborsa {first}" not in c.get("/admin").text

@@ -2,8 +2,8 @@
 (Stripe, a bank's) can take Mollie's place without touching billing.py.
 
 A gateway creates its customer, opens the first payment (which also
-authorises the renewals), reads a payment back, and starts or cancels the
-recurring subscription. Its notices carry only an id: billing.py always
+authorises the renewals), reads a payment back, starts or cancels the
+recurring subscription, and refunds a payment. Its notices carry only an id: billing.py always
 reads the payment from the gateway before acting, so a forged notice can do
 nothing.
 
@@ -78,7 +78,16 @@ class Mollie:
         return {"id": p["id"], "status": p["status"], "amount_cents": _cents(p.get("amount")),
                 "currency": (p.get("amount") or {}).get("currency", "EUR"), "metadata": p.get("metadata") or {},
                 "mandate_id": p.get("mandateId"), "subscription_id": p.get("subscriptionId"),
-                "customer_id": p.get("customerId")}
+                "customer_id": p.get("customerId"), "refunded_cents": _cents(p.get("amountRefunded")),
+                "remaining_cents": _cents(p.get("amountRemaining")) if p.get("amountRemaining") else None}
+
+    def refund(self, payment_id: str, amount_cents: int, currency: str, description: str) -> tuple[str, str]:
+        """Give back part or all of a paid payment; returns (refund id, status)."""
+        r = self._call("POST", f"/payments/{payment_id}/refunds",
+                       {"amount": _amount(amount_cents, currency), "description": description[:140]})
+        if r is None:
+            raise GatewayError("Mollie 404: payment not found")
+        return r["id"], r.get("status", "queued")
 
     def create_subscription(self, customer_id: str, amount_cents: int, currency: str, interval: str, start: date,
                             description: str, webhook_url: str, mandate_id: str | None, metadata: dict) -> str:
