@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.25.3
+
+### Changed
+
+- Every email from Redazia goes out in HTML as well as plain text: the
+  logo, the subject as a title, the link as a button with the address
+  under it, lists as lists, the company in the footer. The HTML is built
+  from the text, so invitations, password resets, trial reminders and
+  payment emails all change at once.
+- The invitation tells what Redazia does and the three first steps, and
+  no longer reads "in la redazione".
+
+### Fixed
+
+- The payment confirmation goes to the customer in the newsroom's
+  language, and the payment notice to the administrators in the
+  language of `EDITOR_LANGUAGE` (new line in `compose.yaml`, default
+  `en`): a Mollie notice comes with no browser language, so both went
+  out in English.
+- In the form of an invitation the email comes right before the
+  passwords, marked as the username: browsers save the email as the
+  login, not the name.
+
 ## 0.25.2
 
 ### Added

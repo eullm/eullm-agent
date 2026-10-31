@@ -45,8 +45,8 @@ def test_signup_speaks_the_visitors_language(db):
     r = c.post("/api/operator/signup", json=body | {"customer": CUSTOMER | {"email": email}}, headers=headers)
     assert r.status_code == 201, r.text
     to, subject, text = sent[-1]
-    assert to == email and subject == "Einladung in die Redaktion Rossi News"
-    assert "Sie sind herzlich in die Redaktion Rossi News auf Redazia eingeladen" in text
+    assert to == email and subject == "Die Redaktion Rossi News wartet bei Redazia auf Sie"
+    assert "die Redaktion Rossi News ist bereit" in text and "Passwort wählen und anmelden: " in text
     # The language was the request's only: the next one is Italian again (the tests' default).
     r = c.post("/api/operator/signup", json=body | {"language": None}, headers=headers)
     assert r.json()["error"] == "la partita IVA italiana ha 11 cifre"
