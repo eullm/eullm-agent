@@ -632,7 +632,12 @@ def test_the_console_refunds_an_online_payment(db, admin):
     c.post(f"/admin/payments/{pid}/refund", data={"amount": "5", "then": "none"})
     assert not getattr(fake, "refunds", [])
     # Part of it: the subscription stays; the console hears of it.
-    c.post(f"/admin/payments/{pid}/refund", data={"amount": "5,00", "then": "none", "confirm": "1"})
+    r = c.post(f"/admin/payments/{pid}/refund", data={"amount": "5,00", "then": "none", "confirm": "1"},
+               follow_redirects=False)
+    # Back to the payments of that newsroom, open, with the result inside the card.
+    assert r.headers["location"] == f"/admin#r-{tid}--pay"
+    page = c.get("/admin").text
+    assert f'id="r-{tid}--pay" open' in page and page.index("Rimborsati") > page.index(f'id="r-{tid}"')
     assert fake.refunds == [(first, 500)] and billing.subscription(admin, tid)["status"] == "active"
     assert any(to == op and "Rimborso" in subject for to, subject, _ in c.told)
     # More than what is left is refused.

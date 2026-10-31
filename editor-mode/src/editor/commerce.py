@@ -517,8 +517,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except LookupError:
             return back(t("Cliente non trovato."))
         except (billing.BillingError, accounts.AccountError) as e:
-            return back(t("Cliente non aggiornato: {error}.", error=e))
-        return back(t("Cliente {name} aggiornato.", name=name.strip()))
+            return back(t("Cliente non aggiornato: {error}.", error=e), f"c-{cid}")
+        return back(t("Cliente {name} aggiornato.", name=name.strip()), f"c-{cid}")
 
     @app.post("/admin/customers/{cid}/delete")
     def ui_delete_customer(cid: int, s=Depends(need_console)):
@@ -527,8 +527,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except LookupError:
             return back(t("Cliente non trovato."))
         except billing.BillingError as e:
-            return back(t("Cliente non eliminato: {error}.", error=e))
-        return back(t("Cliente {name} eliminato.", name=name))
+            return back(t("Cliente non eliminato: {error}.", error=e), f"c-{cid}")
+        return back(t("Cliente {name} eliminato.", name=name), "clienti")
 
     @app.post("/admin/resellers/{rid}")
     def ui_edit_reseller(rid: int, name: str = Form(...), email: str = Form(...), discount: str = Form("0"),
@@ -544,8 +544,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except LookupError:
             return back(t("Rivenditore non trovato."))
         except (ValueError, accounts.AccountError) as e:
-            return back(t("Rivenditore non aggiornato: {error}.", error=e))
-        return back(t("Rivenditore {name} aggiornato.", name=name.strip()))
+            return back(t("Rivenditore non aggiornato: {error}.", error=e), f"v-{rid}")
+        return back(t("Rivenditore {name} aggiornato.", name=name.strip()), f"v-{rid}")
 
     @app.post("/admin/resellers/{rid}/delete")
     def ui_delete_reseller(rid: int, s=Depends(need_console)):
@@ -554,8 +554,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except LookupError:
             return back(t("Rivenditore non trovato."))
         except billing.BillingError as e:
-            return back(t("Rivenditore non eliminato: {error}.", error=e))
-        return back(t("Rivenditore {name} eliminato con le sue chiavi.", name=name))
+            return back(t("Rivenditore non eliminato: {error}.", error=e), f"v-{rid}")
+        return back(t("Rivenditore {name} eliminato con le sue chiavi.", name=name), "rivenditori")
 
     @app.post("/admin/resellers", response_class=HTMLResponse)
     def ui_reseller(request: Request, name: str = Form(...), email: str = Form(...), discount: str = Form("0"),
@@ -604,21 +604,22 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except LookupError:
             return back(t("Redazione non trovata."))
         except ValueError as e:
-            return back(t("Abbonamento non cambiato: {error}.", error=e))
-        return back(t("Abbonamento di {tenant} aggiornato.", tenant=tenant_id))
+            return back(t("Abbonamento non cambiato: {error}.", error=e), f"r-{tenant_id}--sub")
+        return back(t("Abbonamento di {tenant} aggiornato.", tenant=tenant_id), f"r-{tenant_id}--sub")
 
 
     @app.post("/admin/payments/{pid}/refund")
     def ui_refund(request: Request, pid: int, amount: str = Form(""), then: str = Form("none"),
                   confirm: str = Form(""), s=Depends(need_console)):
+        at = f"r-{billing.payment_tenant(admin, pid)}--pay"
         if confirm != "1":
-            return back(t("Rimborso non fatto: spunta la conferma."))
+            return back(t("Rimborso non fatto: spunta la conferma."), at)
         try:
             done = billing.refund(admin, gateway, pid, _cents(amount), s.email, then)
         except LookupError:
             return back(t("Pagamento non trovato."))
         except ValueError as e:
-            return back(t("Rimborso non fatto: {error}.", error=e))
+            return back(t("Rimborso non fatto: {error}.", error=e), at)
         room = (newsrooms.listing(admin, db, done["tenant_id"]) or [{"name": done["tenant_id"]}])[0]
         amount_text = billing.money(done["amount_cents"], done["currency"])
         after = {"none": t("l'abbonamento resta com'è"),
@@ -630,7 +631,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             t("Rimborso Mollie: {id} ({status})", id=done["refund_id"], status=done["status"]),
         ])
         return back(t("Rimborsati {amount} a {name}: {after}. Sulla carta del cliente arrivano in qualche giorno.",
-                      amount=amount_text, name=room["name"], after=after))
+                      amount=amount_text, name=room["name"], after=after), at)
 
 def _json(value):
     from fastapi.encoders import jsonable_encoder

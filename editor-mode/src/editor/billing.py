@@ -850,6 +850,12 @@ def payments_by_tenant(admin, per_tenant: int = 12) -> dict[str, list[dict]]:
     return out
 
 
+def payment_tenant(admin, payment_row_id: int) -> str:
+    """The newsroom a payment belongs to ("" when there is no such payment)."""
+    with accounts._read(admin) as conn:
+        return conn.execute(select(m.payments.c.tenant_id).where(m.payments.c.id == payment_row_id)).scalar() or ""
+
+
 def refund(admin, gateway, payment_row_id: int, amount_cents: int | None, by: str, then: str = "none",
            now: datetime | None = None) -> dict:
     """Give back a payment made online, all of it (no amount) or part, and

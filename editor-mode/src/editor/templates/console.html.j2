@@ -63,7 +63,8 @@
 {% with page="console" %}{% include "_help.html.j2" %}{% endwith %}
 
   {% for r in rooms %}
-  <section class="card" aria-labelledby="h-{{ r.tenant_id }}">
+  {% set here = 'r-' ~ r.tenant_id %}
+  <section class="card" id="{{ here }}" aria-labelledby="h-{{ r.tenant_id }}">
     <div class="card-head">
       <div style="display: flex; flex-direction: column; gap: 2px;">
         <h2 id="h-{{ r.tenant_id }}">{{ r.name }}</h2>
@@ -81,6 +82,7 @@
       </div>
     </div>
     <div class="pad">
+      {% if notice and notice_at and (notice_at == here or notice_at.startswith(here ~ '--')) %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
       {% for what, u in r.usage.items() %}
       {% set pct = (100 * (u.used or 0) / u.limit)|round|int if u.limit else 0 %}
       <div class="meter">
@@ -90,8 +92,8 @@
         <span class="num" style="text-align: right;">{% if what == 'llm_cost' %}€ {{ (u.used or 0)|num }}{% if u.limit is not none %} / {{ u.limit|num(0) }}{% endif %}{% else %}{{ (u.used or 0)|int }}{% if u.limit is not none %} / {{ u.limit|int }}{% endif %}{% endif %}</span>
       </div>
       {% endfor %}
-      <details>
-        <summary class="hint">{{ _('Abbonamento') }}{% if sub %}: {{ sub.plan_name }}, {{ sub.label|lower }}{% if sub.current_period_end %}, {{ _('pagato fino al {date}', date=sub.current_period_end.strftime('%d/%m/%Y')) }}{% elif sub.trial_ends_at %}, {{ _('prova fino al {date}', date=sub.trial_ends_at.strftime('%d/%m/%Y')) }}{% endif %}{% if sub.provider == 'mollie' %} (Mollie){% elif sub.provider == 'reseller' %} ({{ _('rivenditore') }}){% endif %}{% endif %}</summary>
+      <details class="act" data-tone="green" id="{{ here }}--sub" {% if notice_at == here ~ '--sub' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">€</span>{{ _('Abbonamento') }}<span class="sub">{% if sub %}{{ sub.plan_name }}, {{ sub.label|lower }}{% if sub.current_period_end %}, {{ _('pagato fino al {date}', date=sub.current_period_end.strftime('%d/%m/%Y')) }}{% elif sub.trial_ends_at %}, {{ _('prova fino al {date}', date=sub.trial_ends_at.strftime('%d/%m/%Y')) }}{% endif %}{% if sub.provider == 'mollie' %} (Mollie){% elif sub.provider == 'reseller' %} ({{ _('rivenditore') }}){% endif %}{% endif %}</span></summary>
         <form method="post" action="/admin/subscriptions/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Piano') }}<select name="plan">{% for p in plans %}<option value="{{ p.code }}" {% if sub and sub.plan_code == p.code %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>
           <label class="field">{{ _('Rinnovo') }}<select name="interval"><option value="month">{{ _('Mensile') }}</option><option value="year" {% if sub and sub.billing_interval == 'year' %}selected{% endif %}>{{ _('Annuale') }}</option></select></label>
@@ -103,8 +105,9 @@
       </details>
       {% set pays = payments.get(r.tenant_id, []) %}
       {% if pays %}
-      <details>
-        <summary class="hint">{{ _('Pagamenti e rimborsi') }} ({{ pays|length }})</summary>
+      <details class="act" data-tone="amber" id="{{ here }}--pay" {% if notice_at == here ~ '--pay' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">↺</span>{{ _('Pagamenti e rimborsi') }}<span class="sub">{{ pays|length }}</span></summary>
+        <div style="overflow-x: auto;">
         <table class="tbl" style="margin-top: 8px;">
           <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Tipo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th><th>{{ _('ID Mollie') }}</th></tr></thead>
           <tbody>
@@ -118,8 +121,8 @@
             </tr>
             {% if p.refundable_cents and online %}
             <tr><td colspan="5">
-              <details>
-                <summary class="hint">{{ _('Rimborsa {payment}', payment=p.provider_payment_id) }}</summary>
+              <details class="act sm" data-tone="red">
+                <summary><span class="ico" aria-hidden="true">↺</span>{{ _('Rimborsa {payment}', payment=p.provider_payment_id) }}<span class="sub">{{ _('fino a {amount}', amount=money(p.refundable_cents, p.currency)) }}</span></summary>
                 <form method="post" action="/admin/payments/{{ p.id }}/refund" class="form-grid" style="margin-top: 8px;">
                   <label class="field">{{ _('Importo (€)') }}<input name="amount" inputmode="decimal" placeholder="{{ (p.refundable_cents / 100)|num }}"></label>
                   <label class="field">{{ _('Poi') }}<select name="then">
@@ -128,7 +131,7 @@
                     <option value="now">{{ _('Ferma subito la redazione e i rinnovi') }}</option>
                   </select></label>
                   <label class="field"><span><input type="checkbox" name="confirm" value="1" required> {{ _('Confermo: i soldi tornano al cliente e non si annulla') }}</span></label>
-                  <div><button class="btn" type="submit">{{ _('Rimborsa') }}</button></div>
+                  <div><button class="btn danger" type="submit">{{ _('Rimborsa') }}</button></div>
                 </form>
                 <p class="hint">{{ _('Vuoto rimborsa tutto quello che resta ({amount}). Il rimborso parte da Mollie e arriva sulla carta del cliente in qualche giorno lavorativo; Mollie trattiene la sua commissione.', amount=money(p.refundable_cents, p.currency)) }}</p>
               </details>
@@ -137,10 +140,11 @@
           {% endfor %}
           </tbody>
         </table>
+        </div>
       </details>
       {% endif %}
-      <details>
-        <summary class="hint">{{ _('Nome, piano e limiti') }}</summary>
+      <details class="act" id="{{ here }}--edit" {% if notice_at == here ~ '--edit' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Nome, piano e limiti') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Nome') }}<input name="name" value="{{ r.name }}" maxlength="100" required></label>
           <label class="field">{{ _('Piano') }}<input name="plan" value="{{ r.plan or '' }}" maxlength="60"></label>
@@ -154,19 +158,19 @@
         </form>
         <p class="hint">{{ _('Vuoto vuol dire senza limite. Il costo del modello diventa anche il limite della redazione nel Core.') }}</p>
       </details>
-      <details>
-        <summary class="hint">{{ _('Invita una persona') }}</summary>
+      <details class="act" data-tone="teal" id="{{ here }}--invite" {% if notice_at == here ~ '--invite' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">+</span>{{ _('Invita una persona') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}/invite" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Email') }}<input name="email" type="email" required></label>
           <label class="field">{{ _('Ruolo') }}<select name="role"><option value="owner" selected>{{ _('Direttore') }}</option><option value="editor">{{ _('Redattore') }}</option><option value="viewer">{{ _('Lettura') }}</option></select></label>
           <div><button class="btn" type="submit">{{ _("Crea l'invito") }}</button></div>
         </form>
       </details>
-      <details>
-        <summary class="hint">{{ _('Cancella la redazione') }}</summary>
+      <details class="act" data-tone="red" id="{{ here }}--delete" {% if notice_at == here ~ '--delete' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">✕</span>{{ _('Cancella la redazione') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}/delete" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Scrivi <span class="num">{id}</span> per confermare', id=r.tenant_id) }}<input name="confirm" autocomplete="off" required></label>
-          <div><button class="btn" type="submit">{{ _('Cancella tutto') }}</button></div>
+          <div><button class="btn danger" type="submit">{{ _('Cancella tutto') }}</button></div>
         </form>
         <p class="hint">{{ _('Cancella siti, profili, fonti, articoli, bozze, pubblicazioni e persone della redazione. Non si torna indietro: prima scarica i dati da Impostazioni della redazione.') }}</p>
       </details>
@@ -195,6 +199,7 @@
 
   <section class="card" id="clienti" aria-labelledby="h-customers">
     <div class="card-head"><h2 id="h-customers">{{ _('Clienti') }}</h2><span class="hint">{{ customers|length }}</span></div>
+    {% if notice and notice_at == 'clienti' %}<p class="notice" role="status" style="margin: 12px 16px 0;">{{ notice }}</p>{% endif %}
     {% if customers %}
     <div class="pad" style="overflow-x: auto;">
     <table class="tbl">
@@ -209,8 +214,9 @@
         <td class="hint">{{ reseller_names.get(c.reseller_id) or _('diretto') }}</td>
       </tr>
       <tr><td colspan="5">
-        <details>
-          <summary class="hint">{{ _('Modifica o elimina {name}', name=c.name) }}</summary>
+        <details class="act sm" id="c-{{ c.id }}" {% if notice_at == 'c-' ~ c.id %}open{% endif %}>
+          <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=c.name) }}</summary>
+          {% if notice and notice_at == 'c-' ~ c.id %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
           <form method="post" action="/admin/customers/{{ c.id }}" class="form-grid" style="margin-top: 8px;">
             <label class="field">{{ _('Tipo') }}<select name="kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if c.kind == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
             {% for f, label in [('name', _('Nome o ragione sociale')), ('email', _('Email')), ('phone', _('Telefono')), ('vat_number', _('P.IVA')), ('tax_code', _('Codice fiscale')), ('address', _('Indirizzo')), ('postal_code', _('CAP')), ('city', _('Città')), ('province', _('Provincia')), ('country', _('Paese')), ('sdi_code', _('Codice SDI')), ('pec', 'PEC')] %}
@@ -258,6 +264,7 @@
   <div class="cols">
     <section class="card pad col-wide" id="rivenditori" aria-labelledby="h-resellers">
       <h2 id="h-resellers">{{ _('Rivenditori') }}</h2>
+      {% if notice and notice_at == 'rivenditori' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
       <p class="hint">{{ _('Un rivenditore iscrive e gestisce i suoi clienti con la sua chiave API e li fattura lui: vede solo i suoi.') }}</p>
       {% for x in resellers %}
       <div class="list-row">
@@ -267,8 +274,9 @@
           <form class="inline" method="post" action="/admin/resellers/{{ x.id }}/active"><input type="hidden" name="active" value="{{ '0' if x.active else '1' }}"><button class="btn sm" type="submit">{{ _('Disattiva') if x.active else _('Riattiva') }}</button></form>
         </span>
       </div>
-      <details>
-        <summary class="hint">{{ _('Modifica o elimina {name}', name=x.name) }}</summary>
+      <details class="act sm" id="v-{{ x.id }}" {% if notice_at == 'v-' ~ x.id %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=x.name) }}</summary>
+        {% if notice and notice_at == 'v-' ~ x.id %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
         <form method="post" action="/admin/resellers/{{ x.id }}" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Nome') }}<input name="name" value="{{ x.name }}" required maxlength="100"></label>
           <label class="field">{{ _('Email') }}<input name="email" type="email" value="{{ x.email }}" required></label>
@@ -356,7 +364,7 @@
       {% if st.state == 'done' %}<p class="hint">{{ _('Ultimo aggiornamento: dalla {old} alla {version}, il {date}.', old=st['from'], version=st.version, date=st.at[8:10] ~ '/' ~ st.at[5:7] ~ ' ' ~ st.at[11:16] ~ ' UTC') }}</p>
       {% else %}<p class="error">{{ _('Aggiornamento alla {version} non riuscito durante: {step}.', version=st.version, step={'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(st.step, st.step)) }}
         {% if st.step in ('backup', 'pull') %}{{ _('Non è cambiato niente: il server è ancora alla {old}.', old=st['from']) }}{% else %}{{ _('La {version} è installata ma non risponde come dovrebbe: guarda il registro. Il backup fatto prima è nella cartella backup del server.', version=st.version) }}{% endif %}</p>{% endif %}
-      {% if updates.log %}<details><summary class="hint">{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
+      {% if updates.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
     {% endif %}
     <form method="post" action="/admin/updates/check" style="margin-top: 8px;"><button class="btn sm" type="submit">{{ _('Controlla adesso') }}</button></form>
     {% else %}
@@ -408,5 +416,6 @@
   </div>
 </main>
 </div>
+{% include "_once.html.j2" %}
 </body>
 </html>

@@ -441,11 +441,12 @@ def register(app, ctx) -> None:
                 {"plan": plan.strip()[:60]} if plan.strip() else {}) | (
                 {"name": name.strip()} if name.strip() else {}), ctx.core)
         except ValueError:
-            return back(t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
+            return back(t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."), f"r-{tenant_id}--edit")
         except LookupError:
             return back(t("Redazione non trovata."))
         return back(t("Redazione {tenant} aggiornata.", tenant=tenant_id)
-                    + (" " + t("Attenzione: {warning}", warning=res["warning"]) if res["warning"] else ""))
+                    + (" " + t("Attenzione: {warning}", warning=res["warning"]) if res["warning"] else ""),
+                    f"r-{tenant_id}--edit")
 
     @app.post("/admin/newsrooms/{tenant_id}/active")
     def ui_active(tenant_id: str, active: str = Form(...), s=Depends(need_console)):
@@ -456,7 +457,7 @@ def register(app, ctx) -> None:
             return back(t("Redazione non trovata."))
         return back(t("Redazione {tenant} riattivata.", tenant=tenant_id) if on else
                     t("Redazione {tenant} sospesa: le persone non entrano e il lavoro programmato si ferma, i dati restano.",
-                      tenant=tenant_id))
+                      tenant=tenant_id), f"r-{tenant_id}")
 
     @app.post("/admin/newsrooms/{tenant_id}/invite", response_class=HTMLResponse)
     def ui_invite(request: Request, tenant_id: str, email: str = Form(...), role: str = Form("owner"),
@@ -475,7 +476,8 @@ def register(app, ctx) -> None:
     @app.post("/admin/newsrooms/{tenant_id}/delete")
     def ui_delete(tenant_id: str, confirm: str = Form(""), s=Depends(need_console)):
         if confirm.strip() != tenant_id:
-            return back(t("Per cancellare scrivi l'id della redazione ({tenant}): niente è stato cancellato.", tenant=tenant_id))
+            return back(t("Per cancellare scrivi l'id della redazione ({tenant}): niente è stato cancellato.", tenant=tenant_id),
+                        f"r-{tenant_id}--delete")
         try:
             newsrooms.delete(admin, tenant_id)
         except LookupError:

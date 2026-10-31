@@ -1590,5 +1590,6 @@
  "Rimborso Mollie: {id} ({status})": "Remboursement Mollie : {id} ({status})",
  "Pagamento non trovato.": "Paiement introuvable.",
  "Rimborso non fatto: {error}.": "Remboursement non effectué : {error}.",
- "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} est encore l'offre de : {rooms}. Changez-la dans Rédactions › Abonnement, ou retirez-la du site public"
+ "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} est encore l'offre de : {rooms}. Changez-la dans Rédactions › Abonnement, ou retirez-la du site public",
+ "fino a {amount}": "jusqu'à {amount}"
 }
