@@ -101,6 +101,44 @@
         </form>
         <p class="hint">{{ _('Con un importo registra un pagamento ricevuto (bonifico) e, senza data, allunga di un mese o un anno. Senza importo cambia solo il piano; senza data il piano non scade. I limiti del piano sostituiscono quelli della redazione.') }}</p>
       </details>
+      {% set pays = payments.get(r.tenant_id, []) %}
+      {% if pays %}
+      <details>
+        <summary class="hint">{{ _('Pagamenti e rimborsi') }} ({{ pays|length }})</summary>
+        <table class="tbl" style="margin-top: 8px;">
+          <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Tipo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th><th>{{ _('ID Mollie') }}</th></tr></thead>
+          <tbody>
+          {% for p in pays %}
+            <tr>
+              <td>{{ (p.paid_at or p.created_at).strftime('%d/%m/%Y %H:%M') if (p.paid_at or p.created_at) else '' }}</td>
+              <td>{{ {'first': _('primo pagamento'), 'recurring': _('rinnovo'), 'manual': _('bonifico'), 'refund': _('rimborso')}.get(p.kind, p.kind) }}</td>
+              <td class="num">{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</td>
+              <td>{{ p.status }}</td>
+              <td><code>{{ p.provider_payment_id or '' }}</code></td>
+            </tr>
+            {% if p.refundable_cents and online %}
+            <tr><td colspan="5">
+              <details>
+                <summary class="hint">{{ _('Rimborsa {payment}', payment=p.provider_payment_id) }}</summary>
+                <form method="post" action="/admin/payments/{{ p.id }}/refund" class="form-grid" style="margin-top: 8px;">
+                  <label class="field">{{ _('Importo (€)') }}<input name="amount" inputmode="decimal" placeholder="{{ (p.refundable_cents / 100)|num }}"></label>
+                  <label class="field">{{ _('Poi') }}<select name="then">
+                    <option value="none">{{ _("Solo il rimborso: l'abbonamento resta com'è") }}</option>
+                    <option value="renewals">{{ _('Ferma i rinnovi: la redazione lavora fino a fine periodo') }}</option>
+                    <option value="now">{{ _('Ferma subito la redazione e i rinnovi') }}</option>
+                  </select></label>
+                  <label class="field"><span><input type="checkbox" name="confirm" value="1" required> {{ _('Confermo: i soldi tornano al cliente e non si annulla') }}</span></label>
+                  <div><button class="btn" type="submit">{{ _('Rimborsa') }}</button></div>
+                </form>
+                <p class="hint">{{ _('Vuoto rimborsa tutto quello che resta ({amount}). Il rimborso parte da Mollie e arriva sulla carta del cliente in qualche giorno lavorativo; Mollie trattiene la sua commissione.', amount=money(p.refundable_cents, p.currency)) }}</p>
+              </details>
+            </td></tr>
+            {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endif %}
       <details>
         <summary class="hint">{{ _('Nome, piano e limiti') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">

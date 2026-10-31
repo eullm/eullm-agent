@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.26.0
+
+### Added
+
+- Refunds from the console. In /admin, each newsroom has "Payments and
+  refunds": its latest payments with the Mollie ID, and for a paid
+  online payment a form to give back all of it or part. After the
+  refund, the subscription can stay as it is, stop renewing (the
+  newsroom works until the end of the period) or stop now with the
+  newsroom. The amount still refundable is read from Mollie, so a
+  payment cannot be given back twice. The refund is recorded among the
+  payments and the administrators get an email. Migration 0034 (SQLite
+  0023).
+
 ## 0.25.3
 
 ### Changed

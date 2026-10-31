@@ -817,6 +817,86 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
     return status
 
 
+REFUND_THEN = ("none", "renewals", "now")
+
+
+def payments_by_tenant(admin, per_tenant: int = 12) -> dict[str, list[dict]]:
+    """The latest payments and refunds of each newsroom (the console), with
+    how much of each paid online payment is still refundable."""
+    p = m.payments
+    with accounts._read(admin) as conn:
+        rows = conn.execute(select(p).where(p.c.tenant_id.is_not(None))
+                            .order_by(p.c.created_at.desc(), p.c.id.desc())).all()
+    refunded: dict[str, int] = {}
+    for r in rows:
+        if r.kind == "refund" and r.status not in ("failed", "canceled"):
+            of = (r.note or "").rpartition("tr_")[2].split()[0] if "tr_" in (r.note or "") else ""
+            if of:
+                refunded["tr_" + of] = refunded.get("tr_" + of, 0) + r.amount_cents
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        items = out.setdefault(r.tenant_id, [])
+        if len(items) >= per_tenant:
+            continue
+        d = dict(r._mapping)
+        d["refundable_cents"] = 0
+        if r.provider == "mollie" and r.status == "paid" and r.kind in ("first", "recurring") and r.provider_payment_id:
+            d["refundable_cents"] = max(0, r.amount_cents - refunded.get(r.provider_payment_id, 0))
+        items.append(d)
+    return out
+
+
+def refund(admin, gateway, payment_row_id: int, amount_cents: int | None, by: str, then: str = "none",
+           now: datetime | None = None) -> dict:
+    """Give back a payment made online, all of it (no amount) or part, and
+    then nothing more, no more renewals, or stop the newsroom now. The
+    gateway says how much is still refundable: a payment cannot be given
+    back twice."""
+    now = _now(now)
+    if then not in REFUND_THEN:
+        raise BillingError(t("scelta non valida dopo il rimborso"))
+    if gateway is None:
+        raise BillingError(t("il pagamento online non è configurato"))
+    with accounts._read(admin) as conn:
+        row = conn.execute(select(m.payments).where(m.payments.c.id == payment_row_id)).first()
+    if row is None:
+        raise LookupError(payment_row_id)
+    if row.provider != gateway.name or row.status != "paid" or row.kind not in ("first", "recurring") \
+            or not row.provider_payment_id:
+        raise BillingError(t("si rimborsano solo i pagamenti online andati a buon fine"))
+    pay = gateway.payment(row.provider_payment_id)
+    if pay is None:
+        raise BillingError(t("il pagamento non si trova su Mollie"))
+    left = pay.get("remaining_cents")
+    if left is None:
+        left = max(0, pay["amount_cents"] - (pay.get("refunded_cents") or 0))
+    amount = left if amount_cents is None else amount_cents
+    if amount <= 0 or amount > left:
+        raise BillingError(t("si può rimborsare al massimo {amount}", amount=money(left, row.currency)))
+    try:
+        rid, rstatus = gateway.refund(row.provider_payment_id, amount, row.currency,
+                                      f"Redazia: rimborso {row.provider_payment_id}")
+    except Exception as e:
+        log.exception("refund of %s failed", row.provider_payment_id)
+        raise BillingError(t("Mollie non ha accettato il rimborso: {error}", error=e)) from e
+    with admin.engine.begin() as conn:
+        conn.execute(insert(m.payments).values(
+            tenant_id=row.tenant_id, subscription_id=row.subscription_id, provider=gateway.name,
+            provider_payment_id=rid, kind="refund", amount_cents=amount, currency=row.currency, status=rstatus,
+            note=f"{by}: rimborso di {row.provider_payment_id}"[:500], created_at=now, paid_at=now))
+    log.info("refund %s of %s (%s cents) by %s, then %s", rid, row.provider_payment_id, amount, by, then)
+    sub = subscription(admin, row.tenant_id)
+    if then in ("renewals", "now") and sub is not None and sub["status"] != "canceled":
+        cancel(admin, row.tenant_id, gateway, now)
+    if then == "now" and sub is not None:
+        with admin.engine.begin() as conn:
+            conn.execute(update(m.subscriptions).where(m.subscriptions.c.tenant_id == row.tenant_id)
+                         .values(status="expired", current_period_end=now, updated_at=now))
+            _hold(conn, row.tenant_id)
+    return {"refund_id": rid, "status": rstatus, "amount_cents": amount, "currency": row.currency,
+            "tenant_id": row.tenant_id, "payment_id": row.provider_payment_id}
+
+
 def payment_by_provider_id(admin, payment_id: str) -> dict | None:
     with accounts._read(admin) as conn:
         row = conn.execute(select(m.payments).where(m.payments.c.provider_payment_id == payment_id)).first()

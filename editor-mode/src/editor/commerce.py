@@ -608,6 +608,30 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         return back(t("Abbonamento di {tenant} aggiornato.", tenant=tenant_id))
 
 
+    @app.post("/admin/payments/{pid}/refund")
+    def ui_refund(request: Request, pid: int, amount: str = Form(""), then: str = Form("none"),
+                  confirm: str = Form(""), s=Depends(need_console)):
+        if confirm != "1":
+            return back(t("Rimborso non fatto: spunta la conferma."))
+        try:
+            done = billing.refund(admin, gateway, pid, _cents(amount), s.email, then)
+        except LookupError:
+            return back(t("Pagamento non trovato."))
+        except ValueError as e:
+            return back(t("Rimborso non fatto: {error}.", error=e))
+        room = (newsrooms.listing(admin, db, done["tenant_id"]) or [{"name": done["tenant_id"]}])[0]
+        amount_text = billing.money(done["amount_cents"], done["currency"])
+        after = {"none": t("l'abbonamento resta com'è"),
+                 "renewals": t("i rinnovi sono fermi, la redazione lavora fino alla fine del periodo"),
+                 "now": t("la redazione è ferma da adesso")}[then]
+        tell_operators(request, t("Rimborso: {name} · {amount}", name=room["name"], amount=amount_text), [
+            t("Redazione: {name} ({id})", name=room["name"], id=done["tenant_id"]),
+            t("Rimborso di {payment} fatto da {who}: {after}.", payment=done["payment_id"], who=s.email, after=after),
+            t("Rimborso Mollie: {id} ({status})", id=done["refund_id"], status=done["status"]),
+        ])
+        return back(t("Rimborsati {amount} a {name}: {after}. Sulla carta del cliente arrivano in qualche giorno.",
+                      amount=amount_text, name=room["name"], after=after))
+
 def _json(value):
     from fastapi.encoders import jsonable_encoder
     return jsonable_encoder(value)
