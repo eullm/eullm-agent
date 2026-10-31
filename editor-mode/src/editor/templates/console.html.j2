@@ -10,33 +10,7 @@
 <body>
 {% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'items': _('Notizie oggi'), 'drafts': _('Bozze nel mese'), 'llm_cost': _('Costo modello nel mese')} %}
 <div class="shell">
-<nav class="nav" aria-label="{{ _('Sezioni') }}">
-  <a class="brand" href="/admin"><img class="logo" src="/static/redazia-logo.webp" alt="Redazia" width="111" height="36"><small>{{ _('Amministrazione') }}</small></a>
-<input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="{{ _('Sezioni') }}">
-<label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span><span></span><span></span></label>
-<div class="nav-body">
-  <a href="/admin" {% if view in ('redazioni', 'redazione') %}class="on"{% endif %}>{{ _('Redazioni') }}</a>
-  <a href="/admin/new" {% if view == 'nuova' %}class="on"{% endif %}>{{ _('Nuova redazione') }}</a>
-  <a href="/admin/customers" {% if view == 'clienti' %}class="on"{% endif %}>{{ _('Clienti') }}</a>
-  <a href="/admin/plans" {% if view == 'piani' %}class="on"{% endif %}>{{ _('Piani') }}</a>
-  <a href="/admin/resellers" {% if view == 'rivenditori' %}class="on"{% endif %}>{{ _('Rivenditori') }}</a>
-  <a href="/admin/operators" {% if view == 'operatori' %}class="on"{% endif %}>{{ _('Amministratori') }}</a>
-  <a href="/admin/keys" {% if view == 'api' %}class="on"{% endif %}>{{ _('Chiavi API') }}</a>
-  <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on"{% endif %}>{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal">{{ updates.available.version }}</span>{% endif %}</a>
-  <a href="/admin/usage">{{ _('Consumi') }}</a>
-  {% if mine %}<span class="hint" style="padding: 12px 12px 4px;">{{ _('Le tue redazioni') }}</span>
-  {% for x in mine %}<a href="/admin/enter/{{ x.tenant_id }}">{{ x.name }}</a>{% endfor %}{% endif %}
-  <span class="grow"></span>
-  {% if updates.installed %}<small class="hint" style="font-size: 11px; padding: 0 10px;"><a href="/admin/updates">Redazia {{ updates.installed }}</a></small>{% endif %}
-  <div class="who">
-    <span class="name" title="{{ me.email }}">{{ me.email }}</span>
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <span>{{ _('amministratore') }}</span>
-      <form method="post" action="/logout"><button class="link" type="submit">{{ _('Esci') }}</button></form>
-    </div>
-  </div>
-</div>
-</nav>
+{% include "_admin_nav.html.j2" %}
 <main class="main">
   <div class="topbar">{% include "_lang.html.j2" %}</div>
   {% if notice and (not notice_at or notice_at in ('operatori', 'api', 'nuova')) %}<p class="notice" role="status">{{ notice }}</p>{% endif %}

@@ -22,19 +22,7 @@
 {% endmacro %}
 {% macro head(first) %}<thead><tr><th>{{ first }}</th><th>{{ _('Chiamate') }}</th><th>{{ _('Token in entrata') }}</th><th>{{ _('Token in uscita') }}</th><th>{{ _('Durata media') }}</th><th>{{ _('Costo registrato') }}</th><th>{{ _('Costo stimato') }}</th></tr></thead>{% endmacro %}
 <div class="shell">
-<nav class="nav" aria-label="{{ _('Sezioni') }}">
-  <div class="brand"><img class="logo" src="/static/redazia-logo.webp" alt="Redazia" width="111" height="36"><small>{{ _('Amministrazione') }}</small></div>
-  <a href="/admin">{{ _('Redazioni') }}</a>
-  <a href="/admin/usage" class="on">{{ _('Consumi') }}</a>
-  <a href="#modelli">{{ _('Modello per passo') }}</a>
-  <a href="#prezzi">{{ _('Prezzi di riferimento') }}</a>
-  <a href="#articoli">{{ _('Costo per articolo') }}</a>
-  <span class="grow"></span>
-  <div class="who">
-    <span>{{ me.email }} · {{ _('amministratore') }}</span>
-    <form method="post" action="/logout"><button class="link" type="submit">{{ _('Esci') }}</button></form>
-  </div>
-</nav>
+{% include "_admin_nav.html.j2" %}
 <main class="main">
   <div class="topbar">{% include "_lang.html.j2" %}</div>
   {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
@@ -146,5 +134,6 @@
   </section>
 </main>
 </div>
+{% include "_once.html.j2" %}
 </body>
 </html>

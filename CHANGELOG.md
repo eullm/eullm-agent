@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.4
+
+### Fixed
+
+- /admin/usage (Consumi) kept its old menu: it now has the menu of the
+  rest of the console, with its three sections (model per step,
+  reference prices, cost per article) under Consumi.
+
 ## 0.26.3
 
 ### Fixed
