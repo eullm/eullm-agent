@@ -1592,5 +1592,15 @@
  "Rimborso non fatto: {error}.": "Keine Erstattung: {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} ist noch der Tarif von: {rooms}. Ändern Sie ihn unter Redaktionen › Abonnement oder nehmen Sie ihn von der öffentlichen Website",
  "fino a {amount}": "bis zu {amount}",
- "Apri nella console: {url}": "In der Konsole öffnen: {url}"
+ "Apri nella console: {url}": "In der Konsole öffnen: {url}",
+ "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "Das Panel hält während des Neustarts einige Sekunden an und kommt von selbst zurück, sobald {version} antwortet: Sie müssen die Seite nicht neu laden. Laufende Aufgaben kommen zurück in die Warteschlange und starten neu, die Daten bleiben unberührt.",
+ "Cerca per nome, id, piano o stato": "Nach Name, ID, Tarif oder Status suchen",
+ "Dal": "Seit",
+ "Ferma": "Angehalten",
+ "Nessuna redazione corrisponde alla ricerca.": "Keine Redaktion entspricht der Suche.",
+ "Nessuna redazione: creane una da Nuova redazione, oppure lasciala creare al sistema di pagamento con l'API.": "Keine Redaktionen: Legen Sie eine unter Neue Redaktion an oder lassen Sie sie vom Zahlungssystem über die API anlegen.",
+ "all'anno": "pro Jahr",
+ "{n} giorni di prova": "{n} Testtage",
+ "sul sito": "auf der Website",
+ "non sul sito": "nicht auf der Website"
 }

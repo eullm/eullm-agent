@@ -251,12 +251,15 @@ def register(app, ctx) -> None:
             return None
         return s
 
-    def page(request: Request, s, status_code: int = 200, **data):
+    def page(request: Request, s, status_code: int = 200, view: str = "redazioni", room: str | None = None,
+             **data):
+        """One page of the console: `view` is the section of the menu, `room`
+        the newsroom shown in full (view "redazione")."""
         notice = request.cookies.get(NOTICE_COOKIE)
         notice_at = request.cookies.get(NOTICE_AT_COOKIE) if notice else None
         from urllib.parse import unquote
         resp = pages.TemplateResponse(request, "console.html.j2", {
-            "me": s, "rooms": newsrooms.listing(admin, db), "operators": accounts.operators(admin),
+            "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),
             "roles": ROLES, "notice": unquote(notice) if notice else None, "notice_at": notice_at, "mine": accounts.memberships(admin, s.user_id),
             "customers": billing.customers(admin), "resellers": billing.resellers(admin), "plans": billing.plans(admin),
@@ -273,13 +276,26 @@ def register(app, ctx) -> None:
         return resp
 
     def back(notice: str, at: str = "") -> RedirectResponse:
-        """Back to the console; with `at`, to that section, the notice shown in it."""
+        """Back to the page of the console `at` belongs to (a newsroom
+        r-<id>, a customer c-<id>, a reseller v-<id>, a plan p-<code>, or a
+        section), at that place, the notice shown in it."""
         from urllib.parse import quote
-        resp = RedirectResponse(f"/admin#{at}" if at else "/admin", status_code=303)
+        resp = RedirectResponse(admin_page(at) + (f"#{at}" if at else ""), status_code=303)
         resp.set_cookie(NOTICE_COOKIE, quote(notice), max_age=60, httponly=True, samesite="strict")
         if at:
             resp.set_cookie(NOTICE_AT_COOKIE, at, max_age=60, httponly=True, samesite="strict")
         return resp
+
+    def admin_page(at: str) -> str:
+        from urllib.parse import quote
+        if at.startswith("r-"):
+            return f"/admin/newsrooms/{quote(at[2:].split('--')[0])}"
+        for prefix, path in (("c-", "customers"), ("v-", "resellers"), ("p-", "plans")):
+            if at.startswith(prefix):
+                return f"/admin/{path}"
+        return {"clienti": "/admin/customers", "rivenditori": "/admin/resellers", "piani": "/admin/plans",
+                "aggiornamenti": "/admin/updates", "operatori": "/admin/operators", "api": "/admin/keys",
+                "nuova": "/admin/new"}.get(at, "/admin")
 
     def need_console(request: Request):
         s = console_user(request)
@@ -362,6 +378,30 @@ def register(app, ctx) -> None:
             return RedirectResponse("/login", status_code=303)
         return page(request, s)
 
+    def section(view: str):
+        def show(request: Request):
+            s = console_user(request)
+            if s is None:
+                return RedirectResponse("/login", status_code=303)
+            return page(request, s, view=view)
+        return show
+
+    # Each entry of the menu is a page of its own: the list of newsrooms
+    # stays short however many there are, the rest opens when needed.
+    for path, view in (("new", "nuova"), ("customers", "clienti"), ("resellers", "rivenditori"),
+                       ("plans", "piani"), ("operators", "operatori"), ("keys", "api"),
+                       ("updates", "aggiornamenti")):
+        app.get(f"/admin/{path}", response_class=HTMLResponse)(section(view))
+
+    @app.get("/admin/newsrooms/{tenant_id}", response_class=HTMLResponse)
+    def console_room(request: Request, tenant_id: str):
+        s = console_user(request)
+        if s is None:
+            return RedirectResponse("/login", status_code=303)
+        if not newsrooms.listing(admin, db, tenant_id):
+            return back(t("Redazione non trovata."))
+        return page(request, s, view="redazione", room=tenant_id)
+
     @app.get("/api/public/latest")
     def public_latest(v: str = "", id: str = ""):
         """The latest release for an installation that checks for updates;
@@ -413,12 +453,12 @@ def register(app, ctx) -> None:
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
                       "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages)}
         except ValueError:
-            return page(request, s, 400, error=t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
+            return page(request, s, 400, view="nuova", error=t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
         spec = {"name": name, "owner_email": owner_email, "limits": limits} | ({"plan": plan.strip()[:60]} if plan.strip() else {})
         try:
             res = newsrooms.create(admin, spec, s.email, ctx.core)
         except (newsrooms.NewsroomError, accounts.AccountError) as e:
-            return page(request, s, 400, error=t("Redazione non creata: {error}.", error=e))
+            return page(request, s, 400, view="nuova", error=t("Redazione non creata: {error}.", error=e))
         new = {"what": t("Redazione {name} creata (id {tenant})", name=name.strip(), tenant=res["tenant_id"]),
                "warning": res["warning"]}
         if res["invite"]:
@@ -468,8 +508,9 @@ def register(app, ctx) -> None:
         try:
             token = accounts.create_invite(admin, email, s.email, tenant_id=tenant_id, role=role)
         except accounts.AccountError as e:
-            return page(request, s, 400, error=t("Invito non creato: {error}.", error=e))
-        return page(request, s, new={"what": t("Invito a {newsroom} per {email}", newsroom=rows[0]["name"],
+            return page(request, s, 400, view="redazione", room=tenant_id, error=t("Invito non creato: {error}.", error=e))
+        return page(request, s, view="redazione", room=tenant_id,
+                    new={"what": t("Invito a {newsroom} per {email}", newsroom=rows[0]["name"],
                                                        email=email.strip().lower()),
                                      "link": send(request, token, "invite", email.strip().lower(), rows[0]["name"], s.email)})
 
@@ -503,8 +544,8 @@ def register(app, ctx) -> None:
         try:
             token = accounts.create_invite(admin, email, s.email, operator=True)
         except accounts.AccountError as e:
-            return page(request, s, 400, error=t("Invito non creato: {error}.", error=e))
-        return page(request, s, new={"what": t("Invito come amministratore per {email}", email=email.strip().lower()),
+            return page(request, s, 400, view="operatori", error=t("Invito non creato: {error}.", error=e))
+        return page(request, s, view="operatori", new={"what": t("Invito come amministratore per {email}", email=email.strip().lower()),
                                      "link": send(request, token, "invite", email.strip().lower(), None, s.email)})
 
     @app.post("/admin/operators/{uid}/remove")
@@ -512,27 +553,27 @@ def register(app, ctx) -> None:
         try:
             email = accounts.remove_operator(admin, uid, s.user_id)
         except LookupError:
-            return back(t("Amministratore non trovato."))
+            return back(t("Amministratore non trovato."), "operatori")
         except accounts.AccountError as e:
-            return back(t("Amministratore non tolto: {e}.", e=e))
-        return back(t("{email} non è più amministratore: le sue redazioni restano.", email=email))
+            return back(t("Amministratore non tolto: {e}.", e=e), "operatori")
+        return back(t("{email} non è più amministratore: le sue redazioni restano.", email=email), "operatori")
 
     @app.post("/admin/invites/{sha}/revoke")
     def ui_revoke_operator_invite(sha: str, s=Depends(need_console)):
         return back(t("Invito annullato.") if accounts.revoke_invite(admin, None, sha)
-                    else t("Invito già usato o scaduto."))
+                    else t("Invito già usato o scaduto."), "operatori")
 
     @app.post("/admin/reset", response_class=HTMLResponse)
     def ui_reset(request: Request, email: str = Form(...), s=Depends(need_console)):
         try:
             e = accounts.normalise_email(email)
         except accounts.AccountError as err:
-            return page(request, s, 400, error=f"{err}.")
+            return page(request, s, 400, view="operatori", error=f"{err}.")
         with accounts._read(admin) as conn:
             if accounts.find_user(conn, e) is None:
-                return page(request, s, 400, error=t("Nessun account per {email}.", email=e))
+                return page(request, s, 400, view="operatori", error=t("Nessun account per {email}.", email=e))
         token = accounts.create_invite(admin, e, s.email, kind="reset")
-        return page(request, s, new={"what": t("Link per reimpostare la password di {email}", email=e),
+        return page(request, s, view="operatori", new={"what": t("Link per reimpostare la password di {email}", email=e),
                                      "link": send(request, token, "reset", e, None, s.email)})
 
     @app.post("/admin/keys", response_class=HTMLResponse)
@@ -540,12 +581,13 @@ def register(app, ctx) -> None:
         try:
             key = accounts.create_operator_token(admin, name)
         except accounts.AccountError as e:
-            return page(request, s, 400, error=f"{e}.")
-        return page(request, s, new={"what": t("Chiave API «{name}» creata", name=name.strip()), "key": key})
+            return page(request, s, 400, view="api", error=f"{e}.")
+        return page(request, s, view="api", new={"what": t("Chiave API «{name}» creata", name=name.strip()), "key": key})
 
     @app.post("/admin/keys/{key_id}/revoke")
     def ui_revoke_key(key_id: int, s=Depends(need_console)):
-        return back(t("Chiave revocata.") if accounts.revoke_operator_token(admin, key_id) else t("Chiave già revocata."))
+        return back(t("Chiave revocata.") if accounts.revoke_operator_token(admin, key_id) else t("Chiave già revocata."),
+                    "api")
 
     commerce.register(app, ctx, operator=operator, own=own, no_reseller=no_reseller, send=send,
                       need_console=need_console, page=page, back=back, failed=failed)

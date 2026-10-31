@@ -1592,5 +1592,15 @@
  "Rimborso non fatto: {error}.": "Reembolso no hecho: {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} sigue siendo el plan de: {rooms}. Cámbialo en Redacciones › Suscripción o quítalo del sitio público",
  "fino a {amount}": "hasta {amount}",
- "Apri nella console: {url}": "Abrir en la consola: {url}"
+ "Apri nella console: {url}": "Abrir en la consola: {url}",
+ "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "El panel se detiene unos segundos durante el reinicio y vuelve solo cuando la {version} responde: no hace falta recargar la página. Los trabajos en curso vuelven a la cola y se reanudan, los datos no se tocan.",
+ "Cerca per nome, id, piano o stato": "Buscar por nombre, id, plan o estado",
+ "Dal": "Desde",
+ "Ferma": "Detenida",
+ "Nessuna redazione corrisponde alla ricerca.": "Ninguna redacción coincide con la búsqueda.",
+ "Nessuna redazione: creane una da Nuova redazione, oppure lasciala creare al sistema di pagamento con l'API.": "Ninguna redacción: crea una desde Nueva redacción o deja que la cree el sistema de pago con la API.",
+ "all'anno": "al año",
+ "{n} giorni di prova": "{n} días de prueba",
+ "sul sito": "en el sitio",
+ "non sul sito": "no en el sitio"
 }

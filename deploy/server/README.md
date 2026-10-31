@@ -227,6 +227,29 @@ reach its web interface through an SSH tunnel
 (ufw), so a port on 0.0.0.0 would be open to everyone. Open only 22, 80
 and 443.
 
+### During a restart
+
+An update (or any `docker compose up -d` that recreates the containers)
+stops the dashboard for a few seconds: the new version runs its
+migrations, then starts. Nothing is lost or half written. The
+migrations run in one transaction (they apply in full or not at all), the
+worker stops taking jobs, gives the running ones 20 seconds and puts the
+others back in the queue, where they start again after the restart; a
+form sent in those seconds is simply not received. Restarting twice in a
+row is safe.
+
+In those seconds the reverse proxy answers with its own error page (Apache:
+"Service Unavailable", then "Internal Server Error"). To show a page that
+reloads itself instead, with Apache add to the site's directives (in
+Virtualmin: Web Configuration › Edit Directives, in the HTTPS virtual host):
+
+    ErrorDocument 502 "<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=5><title>Redazia</title><p style='font:16px system-ui;margin:20vh auto;max-width:32em;text-align:center'>Redazia si sta aggiornando: la pagina si ricarica da sola fra qualche secondo.</p>"
+    ErrorDocument 503 "<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=5><title>Redazia</title><p style='font:16px system-ui;margin:20vh auto;max-width:32em;text-align:center'>Redazia si sta aggiornando: la pagina si ricarica da sola fra qualche secondo.</p>"
+
+and reload Apache (`systemctl reload apache2`). These pages replace only
+the errors of the proxy itself, never an answer of the dashboard. With
+Caddy, `handle_errors` does the same.
+
 ## Updating
 
 The release to run is `EULLM_VERSION` in `.env`: `server-init` writes the

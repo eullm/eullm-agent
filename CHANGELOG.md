@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.26.3
+
+### Fixed
+
+- An administrator who entered a newsroom from the console ("Entra") and
+  then deleted it was sent back to the login: the session belonged to
+  that newsroom and went with it. It now goes back to the console.
+
+### Changed
+
+- The console is split in pages, one for each entry of the menu
+  (/admin/customers, /admin/plans, /admin/resellers, /admin/operators,
+  /admin/keys, /admin/updates, /admin/new) instead of one long page.
+  Redazioni is a compact table, one row per newsroom with plan, status,
+  sites, drafts and model cost, and a search box; "Apri" shows the whole
+  newsroom at /admin/newsrooms/<id>. The plans are closed bars with
+  their prices, and only the one being changed opens. Every form comes
+  back to its page.
+- While an update runs, /admin › Aggiornamenti says the panel stops for
+  a few seconds and comes back by itself, and reloads on its own once
+  the new version answers (`/api/health` now also gives the version), so
+  the errors of the reverse proxy during the restart are not seen.
+- deploy/server/README.md, "During a restart": why a restart loses
+  nothing (migrations in one transaction, jobs back in the queue) and an
+  Apache page that reloads itself during those seconds.
+
 ## 0.26.2
 
 ### Fixed

@@ -163,6 +163,7 @@ def test_operator_console_and_entering_a_newsroom(db, tenant, admin):
     assert r.headers["location"] == "/admin"
     page = c.get("/admin")
     assert page.status_code == 200 and tenant in page.text and "Chiavi API" in page.text
+    assert "Crea chiave" in c.get("/admin/keys").text
     key = c.post("/admin/keys", data={"name": "pagamenti"})
     assert "edo_" in key.text
     assert tenant in {t["tenant_id"] for t in c.get("/api/operator/tenants").json()["tenants"]}
