@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.6
+
+### Changed
+
+- The newsroom pages use the same panels as the console: editing a
+  publication, notification preferences and recipients, suspended
+  sources, billing details and cancelling the subscription open as
+  coloured panels with an icon instead of the small grey triangles;
+  the small "more" links in Sources, Trends and the login page share
+  one accented style.
+
 ## 0.26.5
 
 ### Changed

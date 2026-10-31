@@ -50,7 +50,7 @@
           {% elif r.origin == 'model_suggestion' %}{% if evd.get('domain') %}{{ _('indicata dal modello per i temi del sito ({domain}), feed letto e verificato', domain=evd.get('domain')) }}{% else %}{{ _('indicata dal modello per i temi del sito, feed letto e verificato') }}{% endif %}
           {% endif %}</small>
           {% set ex = latest.get(r.id) or (r.evaluation or {}).get('examples') or [] %}
-          {% if ex %}<details><summary class="hint">{{ _('Ultime notizie') if latest.get(r.id) else _('Cosa pubblicava alla valutazione') }}</summary>
+          {% if ex %}<details class="mini"><summary>{{ _('Ultime notizie') if latest.get(r.id) else _('Cosa pubblicava alla valutazione') }}</summary>
             {% for e in ex %}<small style="display: block;"><a href="{{ e.url }}" rel="noopener noreferrer" target="_blank">{{ e.title }}</a></small>{% endfor %}
           </details>{% endif %}
         </td>
@@ -70,8 +70,8 @@
           {% elif r.status == 'rejected' and comp.get('relevance') is not none and comp.get('relevance') < 0.1 %}<small>{{ _('parla poco dei temi del sito') }}</small>
           {% elif r.status == 'rejected' %}<small>{{ _('punteggio sotto 0,35') }}</small>{% endif %}
           {% set err = r.shared_error or r.last_error %}
-          {% if err %}<details><summary class="hint">{{ _('Ultimo errore di lettura') }}</summary><small style="display: block; overflow-wrap: anywhere;">{{ err }}</small></details>{% endif %}
-          {% if comp %}<details><summary class="hint">{{ _('Perché questo punteggio') }}</summary>
+          {% if err %}<details class="mini"><summary>{{ _('Ultimo errore di lettura') }}</summary><small style="display: block; overflow-wrap: anywhere;">{{ err }}</small></details>{% endif %}
+          {% if comp %}<details class="mini"><summary>{{ _('Perché questo punteggio') }}</summary>
             <small style="display: block;">{{ _('pertinenza {relevance} · frequenza {frequency} · freschezza {freshness} · originalità {originality} · qualità {quality} · affidabilità {reliability}', relevance=comp.get('relevance', 0)|num, frequency=comp.get('frequency', 0)|num, freshness=comp.get('freshness', 0)|num, originality=comp.get('originality', 0)|num, quality=comp.get('quality', 0)|num, reliability=comp.get('reliability', 0)|num) }}</small>
           </details>{% endif %}
         </td>

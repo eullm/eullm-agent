@@ -47,8 +47,8 @@
   <p class="empty">{% if snap %}{{ _("Nel trend del momento non c'è un tema abbastanza vicino a questo sito. Il prossimo aggiornamento arriva entro tre ore.") }}{% else %}{{ _("Il primo trend arriva con la prossima raccolta: dalle 7:00, ogni tre ore.") }}{% endif %}</p>
   {% endfor %}
   {% if day %}
-  <details style="padding: 0 20px 16px;">
-    <summary class="hint">{{ _('Il trend di oggi, ora per ora') }}</summary>
+  <details class="mini" style="padding: 0 20px 16px;">
+    <summary>{{ _('Il trend di oggi, ora per ora') }}</summary>
     <ul style="margin: 8px 0; padding-left: 18px;">
       {% for d in day %}<li><strong>{{ local(d.taken_at).strftime('%H:%M') }}</strong> · {{ d.topics[:3]|map(attribute='label')|join(' · ') or _('nessun tema') }}</li>{% endfor %}
     </ul>
@@ -110,7 +110,7 @@
 
 <section class="card" aria-labelledby="h-plan" style="gap: 0;">
   <div class="card-head"><h2 id="h-plan">{{ _('Piano editoriale') }}</h2>{% if caller.can('editor') %}<form class="inline" method="post" action="/ui/proposals/now"><button class="btn" type="submit">{{ _('Proponi adesso') }}</button></form>{% endif %}</div>
-  <details class="hint" style="margin: 0; padding: 0 20px 12px;"><summary>{{ _('Come funziona il piano') }}</summary>{{ _("Ogni riga è l'idea di un articolo, non l'articolo. Le proposte arrivano ogni mattina all'ora del briefing ({hour}:00): prima i temi raccontati da almeno due fonti diverse, poi le notizie singole delle ultime 72 ore più adatte al sito, scelte dal modello; &quot;Proponi adesso&quot; non aspetta la mattina. <strong>Accetta e scrivi la bozza</strong> fa scrivere l'articolo, che rileggi in Bozze; <strong>Scarta</strong> la toglie e l'agente impara cosa non ti interessa. Opportunità (0-100) dice quanto il tema conviene a questo sito, Hype (0-100) quanto se ne parla nel settore. Nulla si pubblica senza il tuo sì.", hour='%02d'|format(briefing_hour or 8)) }}</details>
+  <details class="mini hint" style="margin: 0; padding: 0 20px 12px;"><summary>{{ _('Come funziona il piano') }}</summary>{{ _("Ogni riga è l'idea di un articolo, non l'articolo. Le proposte arrivano ogni mattina all'ora del briefing ({hour}:00): prima i temi raccontati da almeno due fonti diverse, poi le notizie singole delle ultime 72 ore più adatte al sito, scelte dal modello; &quot;Proponi adesso&quot; non aspetta la mattina. <strong>Accetta e scrivi la bozza</strong> fa scrivere l'articolo, che rileggi in Bozze; <strong>Scarta</strong> la toglie e l'agente impara cosa non ti interessa. Opportunità (0-100) dice quanto il tema conviene a questo sito, Hype (0-100) quanto se ne parla nel settore. Nulla si pubblica senza il tuo sì.", hour='%02d'|format(briefing_hour or 8)) }}</details>
   {% for p in plan %}{% set d = explained.get(p.id) %}
   <div class="item line plan-line" id="p-{{ p.id }}">
     {% if p.status == 'proposed' %}<span class="chip">{{ _('Proposta') }}</span>{% elif p.status == 'accepted' and writing.get(p.id, {}).get('status') in ('queued', 'running') %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Bozza in scrittura') }}</span>{% elif p.status == 'accepted' and writing.get(p.id, {}).get('status') == 'failed' %}<span class="chip red">{{ _('Bozza non riuscita') }}</span>{% elif p.status == 'accepted' %}<span class="chip blue">{{ _('Accettata') }}</span>{% else %}<span class="chip green">{{ _('Bozza pronta') }}</span>{% endif %}

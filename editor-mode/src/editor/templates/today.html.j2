@@ -124,8 +124,8 @@
         <span class="note warn">{{ _("L'ultimo giro non ha letto {n} fonti perché la redazione ha finito le letture del giorno: riparte domani, oppure alza il limite delle letture.", n=core_trouble.n) if core_trouble.limit else _("L'ultimo giro non ha letto {n} fonti perché il motore dell'agente non rispondeva: riprova da solo al prossimo giro.", n=core_trouble.n) }}</span>
         {% endif %}
         {% if stopped %}
-        <details class="manage" style="margin: 0;">
-          <summary>{{ _('{n} fonti sospese da sole negli ultimi 7 giorni', n=stopped|length) }}</summary>
+        <details class="act sm" data-tone="amber" style="margin: 0;">
+          <summary><span class="ico" aria-hidden="true">!</span>{{ _('{n} fonti sospese da sole negli ultimi 7 giorni', n=stopped|length) }}</summary>
           {% for x in stopped %}
           <div class="hint"><a href="/switch?site={{ x.site_id }}&amp;back={{ '/sources?status=suspended'|urlencode }}">{{ x.name }}</a>{% if sites|length > 1 %} · {{ x.domain }}{% endif %}: {{ x.status_reason|problem if x.status_reason else _('nessuna notizia recente') }}</div>
           {% endfor %}

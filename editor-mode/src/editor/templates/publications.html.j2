@@ -73,8 +73,8 @@
     <span class="hint num">{{ (t.config or {}).get('url') or (t.config or {}).get('repo') or (t.config or {}).get('chat_id') or '' }}{% if (t.config or {}).get('user') %} · {{ _('utente {user}', user=t.config.user) }}{% endif %}{% if t.secret_env %} · {% if t.secret_env in stored %}{{ _('credenziale {name} salvata cifrata', name=t.secret_env) }}{% else %}{{ _('credenziale in {var}', var=secret_var(t.secret_env)) }}{% endif %}{% endif %}{% if t.enabled is sameas false %} · {{ _('disattivata') }}{% endif %}</span>
   </div>
   {% if caller.can('owner') %}
-  <details class="manage">
-    <summary>{{ _('Modifica o elimina {name}', name=t.name) }}</summary>
+  <details class="act">
+    <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=t.name) }}</summary>
     {% set cf = t.config or {} %}
     <form method="post" action="/ui/targets/{{ t.id }}" class="target-form">
       <div class="cols">

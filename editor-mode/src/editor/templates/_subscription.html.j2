@@ -50,8 +50,8 @@
         </form>
       {% endif %}
 
-      <details {% if not r.customer %}open{% endif %}>
-        <summary><strong>{{ _('Dati di fatturazione') }}</strong></summary>
+      <details class="act" data-tone="green" {% if not r.customer %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">€</span>{{ _('Dati di fatturazione') }}</summary>
         <form method="post" action="/account/{{ r.tenant_id }}/customer" class="form-grid billing" style="margin-top: 8px;">
           {% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
           <label class="field">{{ _('Tipo') }}<select name="kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if c.kind == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
@@ -72,12 +72,12 @@
       </details>
 
       {% if sub and sub.status in ('active', 'past_due', 'trialing') and not r.reseller %}
-      <details>
-        <summary class="hint">{{ _("Disdici l'abbonamento") }}</summary>
+      <details class="act" data-tone="red">
+        <summary><span class="ico" aria-hidden="true">✕</span>{{ _("Disdici l'abbonamento") }}</summary>
         <form method="post" action="/account/{{ r.tenant_id }}/cancel" style="margin-top: 8px;">
           {% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
           <p class="hint">{{ _('Niente più rinnovi. La redazione resta attiva fino alla fine del periodo già pagato (o della prova), poi si ferma; i dati restano.') }}</p>
-          <button class="btn" type="submit">{{ _('Disdici') }}</button>
+          <button class="btn danger" type="submit">{{ _('Disdici') }}</button>
         </form>
       </details>
       {% endif %}

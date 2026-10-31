@@ -73,19 +73,19 @@ p { margin: 0; }
 .btn.pri:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: #FFFFFF; }
 .btn.danger { color: var(--red); border-color: var(--red); }
 .btn.danger:hover { background: var(--red-soft); }
-details.manage { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
-details.manage > summary { list-style: none; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); cursor: pointer; font: 500 13px var(--sans); color: var(--accent); }
-details.manage > summary::-webkit-details-marker { display: none; }
-details.manage > summary::after { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .15s; }
-details.manage[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
-details.manage > summary:hover { border-color: var(--accent); }
-details.manage[open] > summary { margin-bottom: 8px; }
 /* Panels that open on click: a full bar with a coloured badge and a chevron,
    so it reads as something to press, not as a footnote. --tone picks the colour. */
 input.search { width: 100%; min-height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font: 14px var(--sans); color: var(--ink); }
 input.search:focus { background: var(--surface); }
 a.room-name { font-weight: 600; text-decoration: none; }
 a.room-name:hover { text-decoration: underline; }
+/* A small "more" inside a card or a table cell: an accent link with a chevron. */
+details.mini > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: 500 13px var(--sans); color: var(--accent); }
+details.mini > summary::-webkit-details-marker { display: none; }
+details.mini > summary::after { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+details.mini[open] > summary::after { transform: rotate(45deg); }
+details.mini > summary:hover { color: var(--accent-dark); text-decoration: underline; }
+details.mini[open] > summary { margin-bottom: 6px; }
 details.act { --tone: var(--accent); --tone-soft: var(--accent-soft); margin-top: 10px; border: 1px solid var(--line); border-left: 4px solid var(--tone); border-radius: 10px; background: var(--surface); scroll-margin-top: 16px; }
 details.act[data-tone="green"] { --tone: var(--green); --tone-soft: var(--green-soft); }
 details.act[data-tone="amber"] { --tone: var(--amber); --tone-soft: var(--amber-soft); }
