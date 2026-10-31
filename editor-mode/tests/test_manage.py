@@ -182,6 +182,10 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     code = unique("plan").lower()
     assert "Piano Extra creato" in c.post("/admin/plans", data={"code": code, "name": "Extra"}).text
     assert "non eliminato" in c.post("/admin/plans/trial/delete").text
+    c.post(f"/admin/subscriptions/{tid}", data={"plan": code})
+    # The newsroom has the plan in its subscription and in its own row: named once, not counted twice.
+    assert "Extra è ancora il piano di: Rossi Notizie." in c.post(f"/admin/plans/{code}/delete").text
+    c.post(f"/admin/subscriptions/{tid}", data={"plan": "trial"})
     assert "Piano Extra eliminato." in c.post(f"/admin/plans/{code}/delete").text
 
     rid = billing.create_reseller(admin, "Agenzia Blu", f"{unique('blu')}@example.com")

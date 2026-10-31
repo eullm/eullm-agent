@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.26.1
+
+### Fixed
+
+- Deleting a plan counted a newsroom twice (once for its subscription,
+  once for its own row), so a plan used by one newsroom said "2
+  newsrooms". The console now names the newsrooms still on the plan and
+  says where to change it (Newsrooms › Subscription).
+- After an action in the console (a refund, a plan change, an edit of a
+  newsroom, customer or reseller) the page came back at the top with
+  everything closed. It now comes back to the same newsroom, with the
+  panel used still open and the result shown inside the card.
+- A form is sent once: the button is disabled after the first click, so
+  a second click cannot repeat a refund or an invite.
+
+### Changed
+
+- The panels that open in the console (Subscription, Payments and
+  refunds, Name plan and limits, Invite, Delete) are full bars with a
+  coloured badge and a chevron instead of a small grey triangle; the
+  "edit or delete" links in the newsroom pages are buttons.
+
 ## 0.26.0
 
 ### Added

@@ -1,0 +1,14 @@
+<script>
+/* A form is sent once: a second click while the page is loading would repeat
+   the action (a refund, an invite), so the button is disabled after the first. */
+document.addEventListener('submit', function (e) {
+  var f = e.target;
+  if (e.defaultPrevented || f.method.toLowerCase() !== 'post') return;
+  setTimeout(function () {
+    f.querySelectorAll('button[type=submit], button:not([type])').forEach(function (b) { b.disabled = true; });
+  }, 0);
+});
+window.addEventListener('pageshow', function () {
+  document.querySelectorAll('form button[disabled]').forEach(function (b) { b.disabled = false; });
+});
+</script>

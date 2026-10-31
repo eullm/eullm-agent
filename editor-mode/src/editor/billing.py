@@ -142,12 +142,16 @@ def delete_plan(admin, code: str) -> str:
         plan = conn.execute(select(m.plans).where(m.plans.c.code == code)).first()
         if plan is None:
             raise LookupError(code)
-        used = conn.execute(select(func.count()).select_from(m.subscriptions).where(
-            (m.subscriptions.c.plan_code == code) | (m.subscriptions.c.desired_plan == code))).scalar()
-        used += conn.execute(select(func.count()).select_from(m.tenants).where(m.tenants.c.plan == code)).scalar()
-        if used:
-            raise BillingError(t("{n} redazioni usano {name}: spostale su un altro piano, oppure toglilo dal sito "
-                                 "pubblico", n=used, name=plan.name))
+        # A newsroom on the plan has it both in its subscription and in its own row: count it once.
+        rooms = set(conn.execute(select(m.subscriptions.c.tenant_id).where(
+            (m.subscriptions.c.plan_code == code) | (m.subscriptions.c.desired_plan == code))).scalars())
+        rooms |= set(conn.execute(select(m.tenants.c.tenant_id).where(m.tenants.c.plan == code)).scalars())
+        if rooms:
+            names = conn.execute(select(m.tenants.c.name, m.tenants.c.tenant_id).where(
+                m.tenants.c.tenant_id.in_(rooms)).order_by(m.tenants.c.name)).all()
+            raise BillingError(t("{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure "
+                                 "toglilo dal sito pubblico", name=plan.name,
+                                 rooms=", ".join(r.name or r.tenant_id for r in names) or ", ".join(sorted(rooms))))
         conn.execute(delete(m.plans).where(m.plans.c.code == code))
     return plan.name
 
@@ -844,6 +848,12 @@ def payments_by_tenant(admin, per_tenant: int = 12) -> dict[str, list[dict]]:
             d["refundable_cents"] = max(0, r.amount_cents - refunded.get(r.provider_payment_id, 0))
         items.append(d)
     return out
+
+
+def payment_tenant(admin, payment_row_id: int) -> str:
+    """The newsroom a payment belongs to ("" when there is no such payment)."""
+    with accounts._read(admin) as conn:
+        return conn.execute(select(m.payments.c.tenant_id).where(m.payments.c.id == payment_row_id)).scalar() or ""
 
 
 def refund(admin, gateway, payment_row_id: int, amount_cents: int | None, by: str, then: str = "none",
