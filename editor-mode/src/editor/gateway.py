@@ -99,7 +99,15 @@ class Mollie:
         return self._call("POST", f"/customers/{customer_id}/subscriptions", body)["id"]
 
     def cancel_subscription(self, customer_id: str, subscription_id: str) -> None:
-        self._call("DELETE", f"/customers/{customer_id}/subscriptions/{subscription_id}")
+        """Stop the renewals. Already stopped (cancelled earlier, for example
+        by a refund, or completed) counts as done: Mollie refuses a second
+        cancel, and the console would say the renewals are still on."""
+        try:
+            self._call("DELETE", f"/customers/{customer_id}/subscriptions/{subscription_id}")
+        except GatewayError:
+            sub = self._call("GET", f"/customers/{customer_id}/subscriptions/{subscription_id}")
+            if sub is not None and sub.get("status") not in ("canceled", "completed"):
+                raise
 
 
 def from_settings(settings) -> Mollie | None:

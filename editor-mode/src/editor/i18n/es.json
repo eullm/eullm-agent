@@ -1591,5 +1591,6 @@
  "Pagamento non trovato.": "Pago no encontrado.",
  "Rimborso non fatto: {error}.": "Reembolso no hecho: {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} sigue siendo el plan de: {rooms}. Cámbialo en Redacciones › Suscripción o quítalo del sitio público",
- "fino a {amount}": "hasta {amount}"
+ "fino a {amount}": "hasta {amount}",
+ "Apri nella console: {url}": "Abrir en la consola: {url}"
 }
