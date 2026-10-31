@@ -160,10 +160,11 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             log.warning("email to %s not sent: %s", to, subject)
             return False
 
-    def tell_operators(request: Request, subject: str, lines: list[str]) -> None:
+    def tell_operators(request: Request, subject: str, lines: list[str], at: str = "clienti",
+                       lang: str | None = None) -> None:
         """What happens to the business (signups, payments) reaches the
-        people of the console by email."""
-        body = "\n".join(lines) + f"\n\n{base(request)}/admin#clienti\n"
+        people of the console by email, with a button to that newsroom."""
+        body = "\n".join(lines) + "\n\n" + t("Apri nella console: {url}", lang, url=f"{base(request)}/admin#{at}") + "\n"
         for op in accounts.operators(admin):
             mail_to(op.email, f"{OPERATOR_TAG} {subject}", body)
 
@@ -209,7 +210,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                     else t("Piano: {plan} ({status})", plan=res.get("plan") or "", status=res.get("status") or ""),
                     *([t("Prova negata: dati già usati in una prova precedente.")] if res.get("trial_used") else []),
                     *([t("Da un rivenditore.")] if reseller_id(request) is not None else []),
-                ])
+                ], f"r-{res['tenant_id']}")
             return out if res["created"] else JSONResponse(_json(out), status_code=200)
         finally:
             if token is not None:
@@ -348,7 +349,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             t("Piano: {plan} ({status})", ops, plan=sub.get("plan_name") or sub.get("plan_code") or "",
               status=sub.get("label") or ""),
             t("Pagamento Mollie: {id}", ops, id=pay_id),
-        ])
+        ], f"r-{tid}--pay", ops)
         if done in ("activated", "renewed") and cust.get("email"):
             until = sub.get("current_period_end")
             mail_to(cust["email"], t("Pagamento ricevuto: {name} è attiva", lang, name=room["name"]),
@@ -629,7 +630,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             t("Redazione: {name} ({id})", name=room["name"], id=done["tenant_id"]),
             t("Rimborso di {payment} fatto da {who}: {after}.", payment=done["payment_id"], who=s.email, after=after),
             t("Rimborso Mollie: {id} ({status})", id=done["refund_id"], status=done["status"]),
-        ])
+        ], at)
         return back(t("Rimborsati {amount} a {name}: {after}. Sulla carta del cliente arrivano in qualche giorno.",
                       amount=amount_text, name=room["name"], after=after), at)
 

@@ -466,6 +466,9 @@ def _leave_the_gateway(admin, tenant_id: str, sub: dict, values: dict, gateway) 
     period a second time: the customer would pay twice for one period."""
     if sub.get("provider") != "mollie" or not sub.get("provider_subscription_id"):
         return
+    if sub.get("status") == "canceled":  # renewals already stopped at Mollie (a refund, a cancel)
+        values["provider_subscription_id"] = None
+        return
     if gateway is None:
         raise BillingError(t("il pagamento online non è configurato: i rinnovi su Mollie restano attivi"))
     customer = customer_of(admin, tenant_id)

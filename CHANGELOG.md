@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.26.2
+
+### Fixed
+
+- After a refund that stopped the renewals, changing the plan of that
+  newsroom failed with "the automatic renewals on Mollie were not
+  cancelled": the console asked Mollie to cancel them a second time and
+  Mollie refused. Renewals already cancelled (or completed) now count as
+  cancelled.
+- The emails to the administrators (new newsroom, payment, refund) end
+  with an "Open in the console" button that goes to that newsroom, not a
+  bare link to the customers list.
+
 ## 0.26.1
 
 ### Fixed

@@ -1591,5 +1591,6 @@
  "Pagamento non trovato.": "Payment not found.",
  "Rimborso non fatto: {error}.": "Refund not made: {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} is still the plan of: {rooms}. Change it in Newsrooms › Subscription, or take it off the public site",
- "fino a {amount}": "up to {amount}"
+ "fino a {amount}": "up to {amount}",
+ "Apri nella console: {url}": "Open in the console: {url}"
 }

@@ -51,6 +51,8 @@ class FakeGateway:
         return sid
 
     def cancel_subscription(self, customer_id, subscription_id):
+        if subscription_id in self.cancelled:  # like Mollie's client: cancelled already is done
+            return
         self.cancelled.append(subscription_id)
 
     def refund(self, payment_id, amount_cents, currency, description):
@@ -396,6 +398,14 @@ def test_mollie_client_speaks_the_v2_api():
         assert '"interval":"12months"' in body and '"startDate":"2027-10-21"' in body and '"mandateId":"mdt_9"' in body
         m.cancel_subscription("cst_9", "sub_9")
         assert cancel.called
+        # Cancelled already (by a refund): done, not an error; still active: an error.
+        mock.delete("/customers/cst_9/subscriptions/sub_8").respond(422, json={"detail": "already canceled"})
+        mock.get("/customers/cst_9/subscriptions/sub_8").respond(200, json={"id": "sub_8", "status": "canceled"})
+        m.cancel_subscription("cst_9", "sub_8")
+        mock.delete("/customers/cst_9/subscriptions/sub_7").respond(500, json={"detail": "boom"})
+        mock.get("/customers/cst_9/subscriptions/sub_7").respond(200, json={"id": "sub_7", "status": "active"})
+        with pytest.raises(gw.GatewayError):
+            m.cancel_subscription("cst_9", "sub_7")
     with pytest.raises(gw.GatewayError):
         gw.Mollie("sk_wrong")
 
@@ -650,3 +660,6 @@ def test_the_console_refunds_an_online_payment(db, admin):
     assert sub["status"] == "expired" and billing.on_hold(admin, tid) and fake.cancelled == [f"sub_{fake.run}1"]
     assert billing.payments_by_tenant(admin)[tid][0]["kind"] == "refund"
     assert f"Rimborsa {first}" not in c.get("/admin").text
+    # The renewals are already stopped: the plan can then be changed without a second cancel at Mollie.
+    assert "Abbonamento di" in c.post(f"/admin/subscriptions/{tid}", data={"plan": "trial"}).text
+    assert billing.subscription(admin, tid)["plan_code"] == "trial"
