@@ -235,3 +235,22 @@ def test_the_navigation_folds_into_a_hamburger_on_a_narrow_screen(db, tenant):
     assert '<div class="nav-body">' in page
     css = page.split("</style>")[0]
     assert ".nav-toggle:checked ~ .nav-body" in css and "max-width: 820px" in css
+
+
+def test_the_logo_is_an_image_on_every_shell(db, tenant):
+    """The logo is a real <img> in the newsroom and in the console, never
+    markup shown as text."""
+    from editor import accounts
+    from editor.db import Database
+    from test_billing import unique
+
+    page = logged_in(db, tenant, "owner").get("/").text
+    assert '<img class="logo" src="/static/redazia-logo.webp"' in page and "&amp;lt;" not in page and "&lt;img" not in page
+    admin = Database.from_url(db.admin_url)
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(admin, op, password="password operatore", operator=True)
+    c = TestClient(create_app(db))
+    c.post("/login", data={"email": op, "password": "password operatore"})
+    page = c.get("/admin").text
+    assert '<img class="logo" src="/static/redazia-logo.webp"' in page and "&lt;img" not in page
+    assert c.get("/static/redazia-logo.webp").headers["content-type"] == "image/webp"

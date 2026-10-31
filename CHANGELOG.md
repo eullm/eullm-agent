@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.2
+
+### Added
+
+- On a phone the menu folds into a hamburger (below 820 px), opened
+  without scripts.
+
+### Fixed
+
+- The logo in the menu of the newsroom and of the console is an image
+  again (after the hamburger menu it showed as text).
+- Saving a plan without a date keeps the period already paid.
+
 ## 0.25.1
 
 ### Fixed
