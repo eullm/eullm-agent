@@ -336,22 +336,27 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         sub = billing.subscription(admin, tid) or {}
         cust = billing.customer_of(admin, tid) or {}
         amount = billing.money(pay["amount_cents"], pay["currency"])
-        what = {"activated": t("Pagamento ricevuto"), "renewed": t("Rinnovo pagato"),
-                "past_due": t("Rinnovo non riuscito")}.get(done, t("Pagamento non riuscito"))
+        # No reader on the other side of a webhook: the console's language
+        # (EDITOR_LANGUAGE) for the administrators, the newsroom's for the customer.
+        ops = i18n.pick(None, None)
+        lang = room.get("language") if room.get("language") in i18n.LANGS else ops
+        what = {"activated": t("Pagamento ricevuto", ops), "renewed": t("Rinnovo pagato", ops),
+                "past_due": t("Rinnovo non riuscito", ops)}.get(done, t("Pagamento non riuscito", ops))
         tell_operators(request, f"{what}: {room['name']} · {amount}", [
-            t("Cliente: {name} <{email}>", name=cust.get("name") or "", email=cust.get("email") or ""),
-            t("Redazione: {name} ({id})", name=room["name"], id=tid),
-            t("Piano: {plan} ({status})", plan=sub.get("plan_name") or sub.get("plan_code") or "", status=sub.get("label") or ""),
-            t("Pagamento Mollie: {id}", id=pay_id),
+            t("Cliente: {name} <{email}>", ops, name=cust.get("name") or "", email=cust.get("email") or ""),
+            t("Redazione: {name} ({id})", ops, name=room["name"], id=tid),
+            t("Piano: {plan} ({status})", ops, plan=sub.get("plan_name") or sub.get("plan_code") or "",
+              status=sub.get("label") or ""),
+            t("Pagamento Mollie: {id}", ops, id=pay_id),
         ])
         if done in ("activated", "renewed") and cust.get("email"):
             until = sub.get("current_period_end")
-            mail_to(cust["email"], t("Pagamento ricevuto: {name} è attiva", name=room["name"]),
-                    t("Abbiamo ricevuto il pagamento di {amount} per il piano {plan} della redazione {name}.",
+            mail_to(cust["email"], t("Pagamento ricevuto: {name} è attiva", lang, name=room["name"]),
+                    t("Abbiamo ricevuto il pagamento di {amount} per il piano {plan} della redazione {name}.", lang,
                       amount=amount, plan=sub.get("plan_name") or "", name=room["name"])
-                    + ("\n" + t("Il piano è attivo fino al {date}; il rinnovo è automatico e lo puoi disdire dalla pagina "
-                                 "dell'abbonamento.", date=until.strftime("%d/%m/%Y")) if until else "")
-                    + f"\n\n{base(request)}/account\n")
+                    + ("\n" + t("Il piano è attivo fino al {date}; il rinnovo è automatico e lo puoi disdire dalla "
+                                 "pagina dell'abbonamento.", lang, date=until.strftime("%d/%m/%Y")) if until else "")
+                    + "\n\n" + t("Vai al tuo abbonamento", lang) + f": {base(request)}/account\n")
 
     # --- the owner's account page ------------------------------------------------------
 

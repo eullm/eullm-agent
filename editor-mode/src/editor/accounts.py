@@ -510,9 +510,78 @@ def revoke_operator_token(admin, token_id: int) -> bool:
 
 # --- mail ----------------------------------------------------------------------------
 
+_URL = re.compile(r"https?://\S+")
+_BUTTON = re.compile(r"^(?P<label>[^\n:]{2,60}):\s*(?P<url>https?://\S+)$")
+
+
+def mail_html(subject: str, body: str, public_url: str = "") -> str:
+    """The HTML version of an email written as plain text: the Redazia
+    logo, the subject as a title, a paragraph for each block, "Label: URL"
+    alone in a block as a button, a URL alone as a button with its address,
+    lines starting with "- " as a list. One table, styles inline: it reads
+    the same in Gmail, Outlook and Apple Mail."""
+    from html import escape
+
+    def inline(text: str) -> str:
+        out, last = [], 0
+        for mt in _URL.finditer(text):
+            out.append(escape(text[last:mt.start()]))
+            u = mt.group(0).rstrip(".,;)")
+            out.append(f'<a href="{escape(u)}" style="color:#1f6f63">{escape(u)}</a>')
+            last = mt.start() + len(u)
+        out.append(escape(text[last:]))
+        return "".join(out).replace("\n", "<br>")
+
+    def button(label: str, url: str) -> str:
+        return (f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 6px"><tr>'
+                f'<td style="background:#1f6f63;border-radius:8px">'
+                f'<a href="{escape(url)}" style="display:inline-block;padding:13px 26px;color:#ffffff;'
+                f'font-weight:600;font-size:16px;text-decoration:none">{escape(label)}</a></td></tr></table>'
+                f'<p style="margin:0 0 18px;font-size:12px;color:#7a8580;word-break:break-all">{escape(url)}</p>')
+
+    parts = []
+    for block in [b.strip() for b in body.strip().split("\n\n") if b.strip()]:
+        lines = block.split("\n")
+        bm = _BUTTON.match(block)
+        if bm:
+            parts.append(button(bm.group("label").strip(), bm.group("url")))
+        elif _URL.fullmatch(block):
+            shown = re.sub(r"^https?://", "", block).rstrip("/")
+            parts.append(button(shown, block))
+        elif all(x.startswith("- ") for x in lines):
+            items = "".join(f'<li style="margin:0 0 8px">{inline(x[2:])}</li>' for x in lines)
+            parts.append(f'<ul style="margin:0 0 18px;padding-left:20px">{items}</ul>')
+        else:
+            parts.append(f'<p style="margin:0 0 18px">{inline(block)}</p>')
+    base = public_url.rstrip("/")
+    logo = (f'<img src="{escape(base)}/static/redazia-mail.png" width="111" height="36" alt="Redazia" '
+            f'style="display:block;border:0">' if base
+            else '<span style="font-size:22px;font-weight:700;color:#1f6f63">Redazia</span>')
+    return (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        '<body style="margin:0;padding:0;background:#f2f4f3">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f4f3">'
+        '<tr><td align="center" style="padding:28px 12px">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="max-width:560px;background:#ffffff;border-radius:14px;border:1px solid #e1e6e3;'
+        "font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1d2622;"
+        'font-size:16px;line-height:1.55">'
+        f'<tr><td style="padding:26px 32px 10px">{logo}</td></tr>'
+        '<tr><td style="padding:0 32px"><div style="height:3px;width:44px;background:#1f6f63;border-radius:2px">'
+        '</div></td></tr>'
+        f'<tr><td style="padding:18px 32px 8px"><h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">'
+        f'{escape(subject)}</h1>{"".join(parts)}</td></tr>'
+        '<tr><td style="padding:16px 32px 24px;border-top:1px solid #eef1ef;font-size:12px;color:#7a8580">'
+        'Redazia &middot; <a href="https://redazia.com" style="color:#7a8580">redazia.com</a><br>'
+        'I3K Technologies Srl &middot; Via Enrico Cosenz 54, 20158 Milano</td></tr>'
+        '</table></td></tr></table></body></html>')
+
+
 def smtp_mailer(settings, smtp_factory=smtplib.SMTP):
     """A function (to, subject, text) that sends one email, or None when
-    SMTP is not configured: the link is then shown to whoever created it."""
+    SMTP is not configured: the link is then shown to whoever created it.
+    Every email goes as text and as HTML made from the same text."""
     if not settings.smtp_host:
         return None
 
@@ -520,6 +589,7 @@ def smtp_mailer(settings, smtp_factory=smtplib.SMTP):
         msg = EmailMessage()
         msg["Subject"], msg["From"], msg["To"] = subject, settings.mail_from or settings.smtp_user, to
         msg.set_content(body)
+        msg.add_alternative(mail_html(subject, body, getattr(settings, "public_url", "")), subtype="html")
         try:
             with smtp_factory(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
                 smtp.starttls(context=ssl.create_default_context())
@@ -537,23 +607,50 @@ def smtp_mailer(settings, smtp_factory=smtplib.SMTP):
 
 def link_text(kind: str, url: str, newsroom: str | None, by: str, lang: str | None = None) -> tuple[str, str]:
     """Subject and body of the email that carries a link (in `lang`, else
-    the language of the request)."""
+    the language of the request). "Label: URL" alone in a paragraph becomes
+    a button in the HTML version."""
+    steps = "\n".join([
+        "- " + t("aggiungi il tuo sito: Redazia ne ricostruisce settore, pubblico e stile;", lang),
+        "- " + t("approva il profilo editoriale e scegli le fonti da seguire;", lang),
+        "- " + t("ricevi ogni giorno le proposte di articolo e rileggi le bozze prima di pubblicarle.", lang),
+    ])
     if kind == "ready":
         # The owner has an account already: no password to choose, only where to sign in.
         return (t("La redazione {newsroom} è pronta", lang, newsroom=newsroom),
                 t("La redazione {newsroom} è pronta. Entra con il tuo account di sempre: la trovi tra le tue redazioni.",
-                  lang, newsroom=newsroom) + f"\n\n{url}\n")
+                  lang, newsroom=newsroom) + "\n\n" + t("Entra in Redazia", lang) + f": {url}\n")
     if kind == "ready_pay":
         return (t("La redazione {newsroom} è pronta: completa il pagamento", lang, newsroom=newsroom),
                 t("La redazione {newsroom} è pronta. Entra con il tuo account di sempre: ti portiamo subito al "
-                  "pagamento del piano che hai scelto.", lang, newsroom=newsroom) + f"\n\n{url}\n")
+                  "pagamento del piano che hai scelto.", lang, newsroom=newsroom)
+                + "\n\n" + t("Completa il pagamento", lang) + f": {url}\n")
     if kind == "reset":
         return (t("Reimposta la password di Redazia", lang),
-                t("Per scegliere una nuova password apri questo link entro {hours} ore:", lang, hours=RESET_HOURS)
-                + f"\n\n{url}\n\n"
-                + t("Se non l'hai chiesto tu, ignora questa email: la password resta quella di prima.", lang) + "\n")
-    where = t("la redazione {newsroom}", lang, newsroom=newsroom) if newsroom else t("la console di Redazia", lang)
-    return (t("Invito a {where}", lang, where=where),
-            (t("Ti diamo il benvenuto in {where} su Redazia.", lang, where=where) if by == "Redazia"
-             else t("{by} ti ha invitato in {where} su Redazia.", lang, by=by, where=where)) + "\n\n"
-            + t("Apri questo link entro {days} giorni per entrare:", lang, days=INVITE_DAYS) + f"\n\n{url}\n")
+                t("Hai chiesto di cambiare la password del tuo account Redazia.", lang) + "\n\n"
+                + t("Scegli una nuova password", lang) + f": {url}\n\n"
+                + t("Il link vale {hours} ore. Se non l'hai chiesto tu, ignora questa email: la password resta "
+                    "quella di prima.", lang, hours=RESET_HOURS) + "\n")
+    if not newsroom:
+        return (t("Invito alla console di Redazia", lang),
+                t("{by} ti ha invitato come amministratore di Redazia: dalla console gestisci redazioni, piani, "
+                  "clienti e pagamenti.", lang, by=by) + "\n\n"
+                + t("Scegli la tua password ed entra", lang) + f": {url}\n\n"
+                + t("Il link vale {days} giorni. Se non aspettavi questo invito puoi ignorare questa email.", lang,
+                    days=INVITE_DAYS) + "\n")
+    if by == "Redazia":
+        return (t("La redazione {newsroom} ti aspetta su Redazia", lang, newsroom=newsroom),
+                t("Ciao,", lang) + "\n\n"
+                + t("la redazione {newsroom} è pronta. Redazia è una redazione di intelligenza artificiale: segue "
+                    "le notizie del tuo settore, ti propone gli articoli e li scrive nella lingua e nel tono del "
+                    "tuo sito.", lang, newsroom=newsroom) + "\n\n"
+                + t("Scegli la tua password ed entra", lang) + f": {url}\n\n"
+                + t("Dopo il primo accesso ti guidiamo in tre passi:", lang) + "\n\n" + steps + "\n\n"
+                + t("Il link vale {days} giorni. Se non aspettavi questo invito puoi ignorare questa email.", lang,
+                    days=INVITE_DAYS) + "\n")
+    return (t("{by} ti ha invitato nella redazione {newsroom}", lang, by=by, newsroom=newsroom),
+            t("Ciao,", lang) + "\n\n"
+            + t("{by} ti ha invitato a lavorare nella redazione {newsroom} su Redazia, la redazione di intelligenza "
+                "artificiale che propone e scrive gli articoli del sito.", lang, by=by, newsroom=newsroom) + "\n\n"
+            + t("Accetta l'invito", lang) + f": {url}\n\n"
+            + t("Il link vale {days} giorni. Se non aspettavi questo invito puoi ignorare questa email.", lang,
+                days=INVITE_DAYS) + "\n")

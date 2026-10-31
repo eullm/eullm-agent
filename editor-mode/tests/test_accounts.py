@@ -366,3 +366,39 @@ def test_a_failed_email_says_why_in_the_log(caplog):
     with pytest.raises(ConnectionRefusedError):
         send("b@example.com", "s", "b")
     assert "email to b@example.com not sent via mail.example:587: ConnectionRefusedError" in caplog.text
+
+
+def test_every_email_goes_as_text_and_as_html_with_a_button():
+    from types import SimpleNamespace
+
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self, **k): pass
+        def login(self, *a): pass
+        def send_message(self, msg): sent.append(msg)
+
+    st = SimpleNamespace(smtp_host="mail.example", smtp_port=587, smtp_user="", smtp_password="",
+                         mail_from="noreply@example.com", public_url="https://app.example.com")
+    send = accounts.smtp_mailer(st, smtp_factory=FakeSMTP)
+    url = "https://app.example.com/invite/edi_abc"
+    subject, body = accounts.link_text("invite", url, "AiToday", "Redazia", "it")
+    assert subject == "La redazione AiToday ti aspetta su Redazia" and "in la " not in body
+    assert f"Scegli la tua password ed entra: {url}" in body
+    send("b@example.com", subject, body)
+    msg = sent[0]
+    assert msg.get_body(("plain",)).get_content().startswith("Ciao,")
+    page = msg.get_body(("html",)).get_content()
+    assert 'src="https://app.example.com/static/redazia-mail.png"' in page
+    assert f'href="{url}"' in page and ">Scegli la tua password ed entra</a>" in page
+    assert page.count("<li ") == 3
+
+
+def test_the_invite_form_offers_the_email_as_the_login():
+    from pathlib import Path
+    form = (Path(accounts.__file__).parent / "templates" / "invite.html.j2").read_text()
+    assert 'type="hidden" name="email"' not in form
+    assert form.count('autocomplete="username" readonly') == 2

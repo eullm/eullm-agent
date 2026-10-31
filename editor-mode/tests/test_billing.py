@@ -3,6 +3,7 @@ its end, payments (bank transfer and gateway), resellers."""
 
 from datetime import UTC, datetime, timedelta
 
+import re
 import httpx
 import pytest
 import respx
@@ -149,7 +150,7 @@ def test_the_trial_ends_the_owner_pays_by_bank_transfer(db, admin):
     headers = key(db)
     email = f"{unique('amm')}@rossi.it"
     tid = signup(c, headers, unique("web"), email).json()["tenant"]["tenant_id"]
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
     page = c.get("/")
     assert "Prova gratuita: 7 giorni rimasti" in page.text and "Prossimo passo" in page.text
@@ -205,7 +206,7 @@ def test_online_payment_and_renewals_through_the_gateway(db, admin):
     tid = signup(c, key(db), unique("web"), owner).json()["tenant"]["tenant_id"]
     # The console's people hear of every new newsroom.
     assert any(to == op and "Nuova redazione" in subject for to, subject, _ in c.told)
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
     page = c.get("/account")
     assert "Vai al pagamento" in page.text
@@ -257,7 +258,7 @@ def test_the_plan_is_in_the_newsroom_menu(db, admin):
     tid = signup(c, key(db), unique("web"), owner).json()["tenant"]["tenant_id"]
     # The console's people hear of every new newsroom.
     assert any(to == op and "Nuova redazione" in subject for to, subject, _ in c.told)
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
     assert 'href="/plan"' in c.get("/").text
     page = c.get("/plan")
@@ -288,7 +289,7 @@ def test_a_manual_payment_stops_the_automatic_renewals(db, admin):
     tid = signup(c, key(db), unique("web"), owner).json()["tenant"]["tenant_id"]
     # The console's people hear of every new newsroom.
     assert any(to == op and "Nuova redazione" in subject for to, subject, _ in c.told)
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
     c.post(f"/account/{tid}/customer", data={"name": "Rossi", "email": "r@example.com", "kind": "person",
                                             "tax_code": "VRDMRA80A01H501U"})
@@ -317,7 +318,7 @@ def test_billing_data_from_the_account_page(db, admin):
     room = c.post("/api/operator/tenants", json={"name": "Senza dati", "owner_email": f"{unique('o')}@example.com"},
                   headers=key(db)).json()["tenant"]["tenant_id"]
     billing.start(admin, room, "trial")
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"})
     r = c.post(f"/account/{room}/checkout", data={"plan": "starter"}, follow_redirects=False)
     assert "dati di fatturazione" in r.headers["set-cookie"] or "dati%20di%20fatturazione" in r.headers["set-cookie"]
@@ -455,7 +456,7 @@ def test_a_second_newsroom_for_someone_with_an_account_is_announced(db, admin):
     headers = key(db)
     email = f"{unique('amm')}@rossi.it"
     signup(c, headers, unique("web"), email)
-    token = sent[0][2].split("\n")[-2].rsplit("/", 1)[1]
+    token = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0).rsplit("/", 1)[1]
     c.post(f"/invite/{token}", data={"password": "password del capo", "again": "password del capo"})
     out = signup(c, headers, unique("web"), email, newsroom="Rossi Sport").json()
     # No password to choose: the email says where to sign in.
@@ -529,7 +530,7 @@ def test_solo_has_no_automatic_newsroom_and_a_buyer_goes_to_payment(db, admin):
     out = signup(c, key(db), unique("web"), email, plan="solo").json()
     tid = out["tenant"]["tenant_id"]
     # Bought on the site: setting the password leads straight to the payment.
-    invite = sent[0][2].split("\n")[-2]
+    invite = re.search(r"https?://\S+/invite/\S+", sent[0][2]).group(0)
     r = c.post(f"/invite/{invite.rsplit('/', 1)[1]}", data={"password": "password del capo", "again": "password del capo"},
                follow_redirects=False)
     assert r.headers["location"] == "/account"
