@@ -21,6 +21,11 @@ log = logging.getLogger(__name__)
 MATCH = 0.5  # share of an item's terms found in a topic
 MIN_SHARED = 2  # and at least this many shared terms
 LABELS_PER_RUN = 10  # topics the model names in one collection
+RENAME_AFTER = 5  # new items before a topic named by the model is named again
+
+
+def grew(labelled_items: int, size: int) -> bool:
+    return size >= labelled_items + max(RENAME_AFTER, labelled_items // 2)
 
 
 @dataclass
@@ -161,7 +166,13 @@ def detect_topics(
         sizes = dict(s.execute(
             select(ti.c.topic_id, func.count()).where(ti.c.topic_id.in_([c.topic_id for c in clusters if c.item_ids]))
             .group_by(ti.c.topic_id)).all())
-        touched = sorted(sizes, key=lambda t: (-sizes[t], t))[:LABELS_PER_RUN]
+        # A topic the model has named already is named again only when it
+        # has really grown (half again, and at least RENAME_AFTER more
+        # items): one more headline does not change what it is about.
+        named = dict(s.execute(select(m.topics.c.id, m.topics.c.labelled_items).where(
+            m.topics.c.id.in_(list(sizes)), m.topics.c.labelled_by == "model")).all())
+        due = [t for t in sizes if t not in named or not named[t] or grew(named[t], sizes[t])]
+        touched = sorted(due, key=lambda t: (-sizes[t], t))[:LABELS_PER_RUN]
         # Then as many of the week's topics still named by their keywords
         # (written before a model was there, or when it failed), the largest
         # first: in a few hours every topic on the pages has a real name.
@@ -195,6 +206,8 @@ def relabel(db: Database, tenant_id: str, core: CoreClient, topic_id: int, repor
         report.label_errors += 1
         return
     with db.tenant(tenant_id) as s:
-        values = {"label": value["label"], "summary": value["summary"], "labelled_by": "model"}
+        size = s.execute(select(func.count()).where(m.topic_items.c.topic_id == topic_id)).scalar()
+        values = {"label": value["label"], "summary": value["summary"], "labelled_by": "model",
+                  "labelled_items": size}
         s.execute(update(m.topics).where(m.topics.c.id == topic_id).values(**values))
     report.labelled += 1

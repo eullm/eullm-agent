@@ -234,3 +234,41 @@ def test_topics_without_core_use_keyword_labels(db, tenant):
     with db.tenant(tenant) as s:
         by = dict(s.execute(text("SELECT labelled_by, count(*) FROM editor.topics GROUP BY labelled_by")).all())
     assert by == {"model": 2}
+
+
+def test_a_named_topic_is_named_again_only_when_it_has_grown(db, tenant):
+    from conftest import feed
+    from editor.collectors import Item
+    from editor.topics import grew
+
+    assert not grew(2, 6) and grew(2, 7) and not grew(40, 59) and grew(40, 60)
+    with db.tenant(tenant) as s:
+        sid = repo.upsert_source(s, tenant, kind="rss", name="x", url="https://x.example/feed")
+    calls = []
+
+    def answer(request):
+        calls.append(1)
+        return httpx.Response(200, json={"content": '{"label": "Starlink sul telefono in Italia", "summary": "", "keywords": []}',
+                                         "tool_calls": [], "usage": {"input_tokens": 1, "output_tokens": 1}, "cost": 0.0})
+
+    words = ["prezzi", "copertura", "satelliti", "smartphone", "montagna", "emergenze", "operatori", "roaming",
+             "antenne", "velocità", "contratti", "clienti", "rete", "batteria", "messaggi", "chiamate"]
+
+    def news(n, start):
+        return [Item(url=f"https://x.example/{start + i}",
+                     title=f"Starlink direct to cell in Italia: {words[start + i]} e {words[(start + i + 7) % 16]}")
+                for i in range(n)]
+
+    with respx.mock() as router:
+        router.post("http://core.test/v1/llm/chat").mock(side_effect=answer)
+        core = CoreClient("http://core.test", "tok")
+        feed(db, tenant, sid, news(2, 0))
+        detect_topics(db, tenant, core)
+        assert len(calls) == 1
+        feed(db, tenant, sid, news(1, 2))  # one more headline: same topic, same name
+        assert detect_topics(db, tenant, core).assigned == 1 and len(calls) == 1
+        feed(db, tenant, sid, news(4, 3))  # 7 items now: it has grown, named again
+        detect_topics(db, tenant, core)
+        assert len(calls) == 2
+    with db.tenant(tenant) as s:
+        assert s.execute(text("SELECT labelled_items FROM editor.topics")).scalar() == 7
