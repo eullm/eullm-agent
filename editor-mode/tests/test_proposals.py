@@ -69,7 +69,7 @@ def test_opportunity_ranks_relevant_topics_and_skips_others(db, tenant):
         keywords = {o.topic_id: s.execute(text("SELECT keywords FROM editor.topics WHERE id = :i"), {"i": o.topic_id}).scalar() for o in ops}
     assert len(ops) == 2  # fibra and starlink; pizza irrelevant, calcio excluded
     assert ops[0].matched_subtopic == "Fibra" and "bari" in keywords[ops[0].topic_id]
-    assert ops[0].version == "opportunity-v1" and "feedback" in ops[0].missing
+    assert ops[0].version == "opportunity-v2" and "feedback" in ops[0].missing
     assert set(ops[0].components) >= {"relevance", "hype", "freshness", "novelty", "source_quality"}
 
 

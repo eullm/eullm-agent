@@ -6,6 +6,12 @@ which only says how much the topic is being talked about.
 
 Components left unmeasured (no Hype Score yet, no feedback, unrated
 sources) are listed as missing, like in the Hype Score.
+
+With Google Search Console connected (searchconsole.py) a topic that
+matches what people search to reach the site gets up to SEARCH_BONUS
+points more (component "search", 0 to 1). It is a bonus, not a weight: a
+site without Search Console, or a topic no one searches yet, scores as
+before.
 """
 
 from __future__ import annotations
@@ -23,7 +29,8 @@ from . import repo
 from .dedup import minhash, similarity
 from .text import tokens
 
-FORMULA_VERSION = "opportunity-v1"
+FORMULA_VERSION = "opportunity-v2"
+SEARCH_BONUS = 10.0
 WEIGHTS = {
     "relevance": 0.35,  # topic against the site's approved subtopics
     "hype": 0.20,  # latest Hype Score
@@ -123,6 +130,7 @@ def opportunity(
     feedback: list[str],
     source_scores: list[float],
     now: datetime,
+    search: float | None = None,
 ) -> Opportunity:
     comp: dict[str, float] = {}
     comp["relevance"], matched = relevance(topic_terms, profile)
@@ -141,6 +149,9 @@ def opportunity(
     missing = [k for k in WEIGHTS if k not in comp]
     total = sum(WEIGHTS[k] for k in comp)
     score = 100 * sum(WEIGHTS[k] * v for k, v in comp.items()) / total
+    if search is not None:
+        comp["search"] = search
+        score = min(100.0, score + SEARCH_BONUS * search)
     return Opportunity(topic_id, round(score, 2), comp, missing, matched)
 
 
@@ -172,6 +183,8 @@ def score_site(db, tenant_id: str, site_id: int, now: datetime | None = None, da
                 .where(repo.followed_by(site_id)))
         topics = s.execute(select(m.topics).where(m.topics.c.updated_at >= now - timedelta(days=days),
                                                   m.topics.c.id.in_(mine))).all()
+        from .searchconsole import demand, match
+        queries = demand(s, site_id, now.date())
         f = m.sources.alias("f")
         out = []
         for t in topics:
@@ -202,6 +215,7 @@ def score_site(db, tenant_id: str, site_id: int, now: datetime | None = None, da
                 newest=max((x.published_at or x.fetched_at for x in members), default=None),
                 history=history, proposed_recently=t.id in recent_props, feedback=feedback,
                 source_scores=[x.score for x in members if x.score is not None], now=now,
+                search=match(terms, queries) if queries else None,
             )
             if o.components["relevance"] < min_rel:
                 continue

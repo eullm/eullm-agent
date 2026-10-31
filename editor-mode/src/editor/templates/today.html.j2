@@ -23,6 +23,15 @@
 </header>
 {% with page="today" %}{% include "_help.html.j2" %}{% endwith %}
 
+{% if starting and sites %}
+{% set guide = (desk|selectattr('next')|list)[0] if desk else none %}
+<section class="card pad" style="border-left: 4px solid var(--accent);">
+  <h2>{{ _('Primi passi') }}</h2>
+  <p class="lead">{% if guide %}{{ _('{domain}: il prossimo passo è «{step}».', domain=guide.domain, step=guide.next.title) }} {% endif %}{{ _('Il percorso guidato ti porta dal dominio al primo articolo pubblicato, un passo alla volta, con tutto quello che serve nella stessa pagina.') }}</p>
+  <p><a class="btn pri" href="/start">{{ _('Continua i primi passi') }}</a></p>
+</section>
+{% endif %}
+
 {% if not sites %}
 <section class="card pad">
   <h2>{{ _('Inizia da un dominio') }}</h2>

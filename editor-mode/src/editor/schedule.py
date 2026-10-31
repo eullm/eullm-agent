@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 
-from . import briefing, jobs, models as m, news_base, opportunity, proposals, repo, sources, tenant_data, trends
+from . import briefing, jobs, models as m, news_base, opportunity, proposals, repo, searchconsole, sources, tenant_data, trends
 from .i18n import N_
 from .ingest import collect_archive
 from .progress import step as progress
@@ -113,6 +113,15 @@ class Runner:
             "language": (row.language if row else None) or "it",
         }
 
+    def search_console(self):
+        if not hasattr(self, "_gsc"):
+            self._gsc = searchconsole.client_from_env()
+        return self._gsc
+
+    def has_search_console(self, tenant: str) -> bool:
+        with self.db.tenant(tenant) as s:
+            return s.execute(select(m.sites.c.id).where(m.sites.c.gsc_property.is_not(None)).limit(1)).first() is not None
+
     def core_for(self, tenant: str):
         return self.core.for_tenant(self.db, tenant) if self.core is not None else None
 
@@ -149,6 +158,10 @@ class Runner:
                     sources.maintain(self.db, tenant, client, now=now, archive=own_archive)
                     tenant_data.prune(self.db, tenant, now=now)
                 self.step(tenant, "maintain", done, failed, maintain)
+                # Google Search Console: the last days of clicks and searches of every connected site.
+                if (gsc := self.search_console()) is not None and self.has_search_console(tenant):
+                    self.step(tenant, "searchconsole", done, failed,
+                              lambda: searchconsole.sync(self.db, tenant, gsc, today=local.date()))
             self.retry_profiles(tenant, now)
             self.autopilot(tenant, now, tz, done, failed)
             if review_due(local, last_review):

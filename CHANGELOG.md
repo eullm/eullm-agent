@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.27.0
+
+### Added
+
+- Weekly report by email (`editor/weekly.py`): every Monday at the hour
+  of the briefing, the newsroom's week in its own language, per site:
+  articles published with their links, news read, proposals and drafts,
+  clicks and searches from Google, what is waiting for a decision and
+  what comes next week, and the articles of the month against the plan.
+  It goes to the email recipients or, with none, to the directors; a
+  worker that was down sends it until Wednesday and a refused email is
+  tried again every hour. Impostazioni has the list of reports, a preview
+  of the last seven days, "Mandamelo adesso" and the switch in
+  Preferenze (`tenants.weekly_report`, table `weekly_reports`).
+- Google Search Console per site (`editor/searchconsole.py`): one service
+  account for the installation (`EDITOR_GSC_KEY`, base64 of the JSON key,
+  or `EDITOR_GSC_KEY_FILE`); the customer adds its email to the property
+  in Search Console and writes the property in Sito e profilo, where the
+  last 28 days show clicks, impressions, position, the pages and the
+  searches that bring the most visits. Read every night at the
+  maintenance (`search_stats`, sixteen months kept). A topic matching
+  what people search to reach the site gets up to 10 points more in the
+  Opportunity Score (component `search`, a bonus: sites without Search
+  Console score as before; formula `opportunity-v2`).
+- Primi passi (`/start`): the way from a domain to the first published
+  article as a guided path, the current step open with what it needs on
+  the same page (add the domain, approve the profile, activate the
+  candidate sources, collect the news, accept a proposal, read the
+  draft, connect the site). In the menu until the site in view can
+  publish, and as a box on the Desk.
+- Migrations 0036 (PostgreSQL) and 0025 (SQLite).
+
 ## 0.26.6
 
 ### Changed

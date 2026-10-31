@@ -187,6 +187,14 @@ ends without a payment. Its data stay, and its owner can still sign in to
   reachable from the internet. `POST /api/operator/tenants/{id}/checkout`
   gives the payment address to the public site instead. Without a key,
   plans are paid by bank transfer and recorded from the console.
+- **Google Search Console**: create a service account in a Google Cloud
+  project, enable the "Google Search Console API", download its JSON key
+  and put it in `.env` with `echo "EDITOR_GSC_KEY=$(base64 -w0 key.json)"
+  >> .env` (or mount the file and set `EDITOR_GSC_KEY_FILE`). Customers add
+  the account's email to their property in Search Console (permission
+  Restricted) and write the property in Sito e profilo; clicks and searches
+  are then read every night and the topics people search rise in the
+  proposals.
 - **Cover images**: set `EDITOR_IMAGES_API_KEY` in `.env`. An OpenRouter
   key (`sk-or-...`) draws with `openai/gpt-image-2` (about 0.05 $ at
   `EDITOR_IMAGES_QUALITY=medium`, under 0.02 $ at `low`; another model with

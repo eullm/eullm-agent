@@ -210,7 +210,8 @@ def delete_draft(db, tenant_id: str, draft_id: int) -> str:
 LANGUAGES = ("it", "en", "de", "fr", "es")
 
 
-def preferences(admin, tenant_id: str, timezone: str, briefing_hour: str, language: str) -> dict:
+def preferences(admin, tenant_id: str, timezone: str, briefing_hour: str, language: str,
+                weekly: bool | None = None) -> dict:
     """Timezone, briefing hour and language of the newsroom, as its owner
     sets them (the plan and the limits stay with the operator)."""
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -233,4 +234,8 @@ def preferences(admin, tenant_id: str, timezone: str, briefing_hour: str, langua
     if tenant_id == ARCHIVE:
         raise LookupError(tenant_id)
     newsrooms.update_newsroom(admin, tenant_id, {"timezone": tz, "briefing_hour": hour, "language": language})
-    return {"timezone": tz, "briefing_hour": hour, "language": language, "at": datetime.now(UTC)}
+    if weekly is not None:
+        with admin.engine.begin() as conn:
+            conn.execute(update(m.tenants).where(m.tenants.c.tenant_id == tenant_id).values(weekly_report=weekly))
+    return {"timezone": tz, "briefing_hour": hour, "language": language, "weekly_report": weekly,
+            "at": datetime.now(UTC)}
