@@ -1,0 +1,36 @@
+{{ subject }}
+
+{% if w.published %}{{ _('Questa settimana sono usciti {n} articoli.', n=w.published) }}{% else %}{{ _('Questa settimana non è uscito nessun articolo.') }}{% endif %}
+
+{% for s in w.sites %}
+== {{ s.name }} ({{ s.domain }}) ==
+
+{% if s.published %}
+{{ _('Pubblicati') }}:
+{% for a in s.published %}
+- {{ day(a.day) }} · {{ a.title }}{% if a.url %} · {{ a.url }}{% endif %}
+
+{% endfor %}
+{% endif %}
+{{ _('La settimana') }}: {{ _('{n} notizie lette', n=s.numbers.news) }} · {{ _('{n} proposte', n=s.numbers.proposals) }} · {{ _('{n} bozze scritte', n=s.numbers.drafts) }} · {{ _('{n} approvate', n=s.numbers.approved) }}
+{% if s.search %}
+{{ _('Da Google') }}: {{ _('{n} clic', n=s.search.this.clicks) }} ({{ _('la settimana prima {n}', n=s.search.before.clicks) }}) · {{ _('{n} impressioni', n=s.search.this.impressions) }}{% if s.search.this.position %} · {{ _('posizione media {n}', n=s.search.this.position) }}{% endif %}
+
+{% if s.search.queries %}{{ _('Le ricerche che portano più visite') }}: {% for q in s.search.queries %}{{ q.key }} ({{ q.clicks }}){% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% endif %}
+{% if s.search_problem %}{{ _('Search Console') }}: {{ _(s.search_problem) }}
+{% endif %}
+{% if s.waiting.proposals or s.waiting.drafts or s.waiting.publications or s.waiting.profile %}
+{{ _('Ti aspettano') }}:{% if s.waiting.profile %} {{ _('un profilo da approvare') }};{% endif %}{% if s.waiting.proposals %} {{ _('{n} proposte', n=s.waiting.proposals) }};{% endif %}{% if s.waiting.drafts %} {{ _('{n} bozze da rileggere', n=s.waiting.drafts) }};{% endif %}{% if s.waiting.publications %} {{ _('{n} pubblicazioni da approvare', n=s.waiting.publications) }};{% endif %}
+
+{% endif %}
+{{ _('La prossima settimana') }}: {% if s.auto_per_day %}{{ _('la redazione automatica pubblica fino a {n} articoli al giorno.', n=s.auto_per_day) }}{% elif s.proposals_per_day %}{{ _('{n} proposte nuove ogni mattina.', n=s.proposals_per_day) }}{% else %}{{ _('nuove proposte ogni mattina.') }}{% endif %}
+{% if s.coming %}{{ _('In scrittura') }}: {{ s.coming|join('; ') }}
+{% endif %}
+
+{% endfor %}
+{% if w.max_drafts_month %}{{ _('Articoli del mese: {used} su {max} del piano.', used=w.drafts_month, max=w.max_drafts_month) }}
+{% endif %}
+{% if w.link %}{{ _('Apri la redazione') }}: {{ w.link }}
+{% endif %}

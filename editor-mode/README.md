@@ -145,6 +145,7 @@ Two installations, same code:
    | `EDITOR_WORKER_CONCURRENCY` | tenants the worker runs at the same time (default 2, PostgreSQL) |
    | `EDITOR_TIMEZONE`, `EDITOR_BRIEFING_HOUR` | defaults: Europe/Rome, 8 |
    | `EDITOR_IMAGES_API_KEY`, `EDITOR_IMAGES_MODEL`, `EDITOR_IMAGES_QUALITY`, `EDITOR_IMAGES_PROVIDER`, `EDITOR_IMAGES_URL` | cover images: an OpenRouter key (`sk-or-`) draws with `openai/gpt-image-2` at quality `medium`, any other key with FLUX of Black Forest Labs (`flux-2-pro`, EU endpoint); the model, quality, provider (`openrouter` or `bfl`) and endpoint can be changed; no key, no images |
+   | `EDITOR_GSC_KEY`, `EDITOR_GSC_KEY_FILE` | Google Search Console: the JSON key of a Google service account (raw or base64), or its path; customers add its email to their property and write the property in Sito e profilo |
    | `EDITOR_BASE_NEWS` | default on: about 46 general news feeds (world, economy, technology; English, Italian, German, French, Spanish) read for every newsroom in the shared archive, for the news index and the proposals; `0` turns them off |
    | `EDITOR_RETENTION_DAYS` | collected items and finished jobs older than this are deleted at the daily maintenance (default 365, `0` keeps everything); items cited by a proposal or a draft and model usage are kept |
    | `EDITOR_SMTP_HOST`, `EDITOR_SMTP_PORT`, `EDITOR_SMTP_USER`, `EDITOR_SMTP_PASSWORD`, `EDITOR_MAIL_FROM` | email (STARTTLS): briefing, invites, password resets, trial and payment notices; every email goes as text and as HTML with the Redazia logo |

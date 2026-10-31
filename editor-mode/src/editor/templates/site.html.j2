@@ -366,6 +366,61 @@
 </section>
 {% endif %}
 
+{% if site and gsc %}
+<section class="card pad" aria-labelledby="h-gsc-t" id="h-gsc">
+  <h2 id="h-gsc-t">{{ _('Google Search Console') }}</h2>
+  <p class="hint">{{ _('Collegando Search Console la redazione vede cosa cerca la gente su Google per arrivare al sito e quali articoli cliccano: i temi più cercati salgono nelle proposte e i numeri arrivano nel rapporto del lunedì.') }}</p>
+  {% if gsc.property %}
+  <div class="list-row"><span>{{ _('Proprietà') }}</span><span class="num">{{ gsc.property }}</span></div>
+  <div class="list-row"><span>{{ _('Stato') }}</span><span>{% if gsc.status == 'ok' %}<span class="chip green">{{ _('Collegata') }}</span>{% elif gsc.problem %}<span class="chip amber">{{ _('Da sistemare') }}</span> <small>{{ _(gsc.problem) }}</small>{% else %}<span class="chip">{{ _('In attesa della chiave del server') }}</span>{% endif %}{% if gsc.checked %} <small class="hint">{{ _('controllata il {when}', when=when(gsc.checked)) }}</small>{% endif %}</span></div>
+  {% if gsc.data %}
+  <section class="kpis" aria-label="{{ _('Ultimi 28 giorni') }}" style="margin-top: 12px;">
+    <div class="card kpi"><span class="label">{{ _('Clic in 28 giorni') }}</span><span class="value">{{ gsc.data.totals.clicks|num }}</span></div>
+    <div class="card kpi"><span class="label">{{ _('Impressioni') }}</span><span class="value">{{ gsc.data.totals.impressions|num }}</span></div>
+    <div class="card kpi"><span class="label">{{ _('Posizione media') }}</span><span class="value">{{ gsc.data.totals.position or '–' }}</span></div>
+  </section>
+  <div class="cols">
+    <div class="col-wide">
+      <h3>{{ _('Le pagine più cliccate') }}</h3>
+      {% for x in gsc.data.pages %}<div class="list-row"><a href="{{ x.key }}" target="_blank" rel="noopener" style="overflow-wrap: anywhere;">{{ x.key|replace('https://', '')|replace('http://', '') }}</a><span class="num">{{ x.clicks|num }}</span></div>{% endfor %}
+    </div>
+    <div class="col-side">
+      <h3>{{ _('Le ricerche che portano più visite') }}</h3>
+      {% for x in gsc.data.queries %}<div class="list-row"><span>{{ x.key }}</span><span class="num">{{ x.clicks|num }}</span></div>{% endfor %}
+    </div>
+  </div>
+  {% elif gsc.status == 'ok' %}
+  <p class="hint">{{ _('Nessun dato ancora: Google completa i numeri in due o tre giorni.') }}</p>
+  {% endif %}
+  {% endif %}
+  {% if caller.can('owner') %}
+  {% if not gsc.configured %}
+  <p class="hint">{{ _('Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY): chiedila all\'amministratore di Redazia.') }}</p>
+  {% else %}
+  <details class="act" {% if not gsc.property %}open{% endif %} data-tone="teal">
+    <summary><span class="ico" aria-hidden="true">G</span>{{ _('Collega o cambia la proprietà') if gsc.property else _('Collega Search Console') }}<span class="sub">{{ _('due minuti, senza password') }}</span></summary>
+    <ol>
+      <li>{{ _('Apri <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Search Console</a>, scegli la proprietà del sito e vai in Impostazioni › Utenti e autorizzazioni.') }}</li>
+      <li>{{ _('Aggiungi come utente questo indirizzo con autorizzazione Limitata:') }} <input readonly value="{{ gsc.email }}" onclick="this.select()" style="width: 100%; max-width: 520px;"></li>
+      <li>{{ _('Scrivi qui sotto la proprietà: sc-domain:dominio per una proprietà di dominio, oppure l\'indirizzo completo (https://…/) per un prefisso URL.') }}</li>
+    </ol>
+    <form method="post" action="/ui/sites/{{ site.id }}/search-console" class="form-grid">
+      <label class="field">{{ _('Proprietà') }}<input name="prop" value="{{ gsc.property or gsc.suggest }}" required></label>
+      <div><button class="btn pri" type="submit">{{ _('Salva e controlla') }}</button></div>
+    </form>
+    <p class="hint">{{ _("L'accesso si toglie quando vuoi da Search Console. Redazia legge solo i numeri, non cambia nulla.") }}</p>
+  </details>
+  {% if gsc.property %}
+  <div class="row" style="margin-top: 10px;">
+    <form class="inline" method="post" action="/ui/sites/{{ site.id }}/search-console/sync"><button class="btn sm" type="submit">{{ _('Aggiorna adesso') }}</button></form>
+    <form class="inline" method="post" action="/ui/sites/{{ site.id }}/search-console" onsubmit='return confirm({{ _("Scollegare Search Console? I dati già letti vengono cancellati.")|string|tojson }})'><input type="hidden" name="prop" value=""><button class="btn sm danger" type="submit">{{ _('Scollega') }}</button></form>
+  </div>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
 {% if site %}
 <section class="card pad" aria-labelledby="h-delivery-t" id="h-delivery">
   <h2 id="h-delivery-t">{{ _('Come ricevi gli articoli') }}</h2>

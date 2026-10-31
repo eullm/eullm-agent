@@ -1,0 +1,108 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ _('Primi passi') }}{% endblock %}
+{% block main %}
+{# The guided path: every step of first_steps, the current one open with what it needs right here. #}
+<header class="head">
+  <div>
+    <span class="kicker">{{ site.domain if site else _('nuova redazione') }}</span>
+    <h1>{{ _('Primi passi') }}</h1>
+  </div>
+  <a class="btn" href="/">{{ _('Vai al Desk') }}</a>
+</header>
+
+{% if not steps %}
+<section class="card pad">
+  <h2>{{ _('Tutto avviato') }}</h2>
+  <p class="lead">{{ _('{domain} ha profilo, fonti, proposte, bozze e un collegamento per pubblicare. Da qui in poi si lavora dal Desk.', domain=site.domain if site else '') }}</p>
+  {% if autopilot %}<p>{{ _('Il tuo piano comprende la redazione automatica: la accendi in <a href="/site#h-auto">Sito e profilo</a> e scrive e pubblica da sola nei limiti che scegli.') }}</p>{% endif %}
+  <p><a class="btn pri" href="/">{{ _('Vai al Desk') }}</a></p>
+</section>
+{% else %}
+<p class="lead">{{ _('Sette passi dal dominio al primo articolo pubblicato. Ogni passo si fa da qui; quando la redazione lavora da sola lo vedi nel riquadro Attività e la pagina si aggiorna.') }}</p>
+
+<ol class="steps">
+{% for x in steps %}
+  {% set n = loop.index %}
+  <li class="step {% if x.done %}done{% elif x.current %}now{% endif %}">
+    <span class="dot" aria-hidden="true">{% if x.done %}✓{% else %}{{ n }}{% endif %}</span>
+    <div class="body">
+      <h2>{{ x.past if x.done else x.title }}{% if x.current %} <span class="chip {{ 'teal' if x.busy else 'amber' }}">{{ _('In attesa') if x.busy else _('Tocca a te') }}</span>{% endif %}</h2>
+      {% if x.current %}
+      <p>{{ x.wait if x.busy else x.todo }}</p>
+
+      {% if key == 'site' and caller.can('owner') %}
+      <form method="post" action="/ui/sites" class="form-grid">
+        <input type="hidden" name="back" value="/start">
+        <label class="field">{{ _('Dominio') }}<input name="domain" placeholder="{{ _('esempio.it') }}" required></label>
+        <div><button class="btn pri" type="submit">{{ _('Analizza il sito') }}</button></div>
+      </form>
+
+      {% elif key == 'profile' %}
+        {% if profile %}
+        <div class="card pad" style="margin: 10px 0;">
+          {% if profile.sector %}<div class="list-row"><span>{{ _('Settore') }}</span><span>{{ profile.sector }}</span></div>{% endif %}
+          {% if profile.audience %}<div class="list-row"><span>{{ _('Pubblico') }}</span><span>{{ profile.audience }}</span></div>{% endif %}
+          {% if profile.subtopics %}<p style="margin: 10px 0 4px;">{{ _('Temi') }}</p><p>{% for t in profile.subtopics %}<span class="chip">{{ t }}</span> {% endfor %}</p>{% endif %}
+          {% if profile.gaps %}<p class="hint">{{ _('Analisi incompleta') }}: {% for g in profile.gaps %}{{ g|problem }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+        </div>
+        <div class="row">
+          {% if caller.can('owner') %}
+          <form class="inline" method="post" action="/ui/sites/{{ site.id }}/approve/{{ profile.version }}"><input type="hidden" name="back" value="/start"><button class="btn pri" type="submit">{{ _('Approva il profilo') }}</button></form>
+          {% endif %}
+          <a class="btn" href="/site">{{ _('Rivedi o correggi nel dettaglio') }}</a>
+        </div>
+        {% endif %}
+
+      {% elif key == 'sources' %}
+        {% for src in candidates %}
+        <div class="list-row">
+          <span>{{ src.name }} <small class="hint">{{ src.kind }}{% if src.score is not none %} · {{ _('punteggio {n}', n=src.score|s100) }}{% endif %}</small></span>
+          {% if caller.can('owner') %}<form class="inline" method="post" action="/ui/sources/{{ src.id }}/status"><input type="hidden" name="status" value="active"><input type="hidden" name="back" value="/start"><button class="btn sm pri" type="submit">{{ _('Attiva') }}</button></form>{% endif %}
+        </div>
+        {% else %}
+        {% if not x.busy %}<p class="hint">{{ _('Nessuna fonte candidata per ora.') }}</p>{% endif %}
+        {% endfor %}
+        <div class="row" style="margin-top: 10px;">
+          <a class="btn" href="/sources?status=candidate">{{ _('Tutte le candidate') }}</a>
+          {% if caller.can('owner') and not x.busy %}<form class="inline" method="post" action="/ui/sites/{{ site.id }}/discover?back=/start"><button class="btn" type="submit">{{ _('Cerca altre fonti') }}</button></form>{% endif %}
+        </div>
+
+      {% elif key == 'news' and caller.can('editor') %}
+        <form class="inline" method="post" action="/ui/collect"><input type="hidden" name="back" value="/start"><button class="btn pri" type="submit">{{ _('Raccogli le notizie adesso') }}</button></form>
+
+      {% elif key == 'proposal' %}
+        {% for p in proposed %}
+        <div class="card pad" style="margin: 10px 0;">
+          {% include "_proposal.html.j2" %}
+          {% if caller.can('editor') %}
+          <div class="row" style="margin-top: 8px;">
+            <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="1"><input type="hidden" name="back" value="/start"><button class="btn pri" type="submit">{{ _('Accetta e scrivi la bozza') }}</button></form>
+            <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="0"><input type="hidden" name="back" value="/start"><button class="btn" type="submit">{{ _('Scarta') }}</button></form>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% if caller.can('editor') %}
+        <form class="inline" method="post" action="/ui/proposals/now?site={{ site.id }}&amp;back=/start"><button class="btn{% if not proposed %} pri{% endif %}" type="submit">{{ _('Proponi adesso') }}</button></form>
+        {% endif %}
+
+      {% elif key == 'draft' %}
+        {% for d in drafts %}
+        <div class="list-row"><a href="/drafts/{{ d.id }}">{{ d.title }}</a>{% if d.status == 'needs_review' %}<span class="chip amber">{{ _('da rivedere a mano') }}</span>{% else %}<span class="chip">{{ _('pronta') }}</span>{% endif %}</div>
+        {% endfor %}
+        <p><a class="btn" href="/drafts">{{ _('Apri le bozze') }}</a></p>
+
+      {% elif key == 'target' %}
+        <p><a class="btn pri" href="/publications">{{ _('Collega il sito') }}</a></p>
+        {% if autopilot %}<p class="hint">{{ _('Con il sito collegato puoi accendere la redazione automatica in <a href="/site#h-auto">Sito e profilo</a>.') }}</p>{% endif %}
+      {% endif %}
+
+      {% elif not x.done %}
+      <p class="hint">{{ x.todo or x.wait }}</p>
+      {% endif %}
+    </div>
+  </li>
+{% endfor %}
+</ol>
+{% endif %}
+{% endblock %}

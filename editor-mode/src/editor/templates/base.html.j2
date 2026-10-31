@@ -37,6 +37,7 @@
     <noscript><button class="btn sm" type="submit">{{ _('Vai') }}</button></noscript>
   </form>
   {% endif %}
+  {% if starting or active == 'start' %}<a href="/start" {% if active == 'start' %}class="on" aria-current="page"{% endif %}>{{ _('Primi passi') }}</a>{% endif %}
   <a href="/" {% if active == 'today' %}class="on" aria-current="page"{% endif %}>{{ _('Desk') }}</a>
   <a href="/site" {% if active == 'site' %}class="on" aria-current="page"{% endif %}>{{ _('Sito e profilo') }}</a>
   <a href="/sources" {% if active == 'sources' %}class="on" aria-current="page"{% endif %}>{{ _('Fonti') }}</a>

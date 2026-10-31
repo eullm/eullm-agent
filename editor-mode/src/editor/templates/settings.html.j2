@@ -39,6 +39,7 @@
         <label class="field">{{ _('Fuso orario') }}<input name="timezone" value="{{ usage.plan.get('timezone') or 'Europe/Rome' }}" required placeholder="Europe/Rome"></label>
         <label class="field">{{ _('Ora del briefing') }}<select name="briefing_hour">{% for h in range(24) %}<option value="{{ h }}" {% if usage.plan.get('briefing_hour', 8) == h %}selected{% endif %}>{{ '%02d'|format(h) }}:00</option>{% endfor %}</select></label>
         <label class="field">{{ _('Lingua') }}<select name="language">{% for code, label in [('it', 'Italiano'), ('en', 'English'), ('de', 'Deutsch'), ('fr', 'Français'), ('es', 'Español')] %}<option value="{{ code }}" {% if usage.plan.get('language') == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="field" style="flex-direction: row; align-items: center; gap: 8px;"><input type="checkbox" name="weekly_report" value="1" {% if usage.plan.get('weekly_report') is not sameas false %}checked{% endif %}> {{ _('Rapporto settimanale per email') }}</label>
         <div><button class="btn" type="submit">{{ _('Salva') }}</button></div>
       </form>
       <p class="hint">{{ _('La lingua è quella dei briefing e delle email della redazione.') }}</p>
@@ -60,6 +61,21 @@
   <p class="hint">{{ _("L'analisi parte in coda; quando finisce il profilo arriva da approvare in Sito e profilo.") }}</p>
 </section>
 {% endif %}
+
+<section class="card pad" aria-labelledby="h-weekly-t" id="h-weekly">
+  <h2 id="h-weekly-t">{{ _('Rapporto settimanale') }}</h2>
+  <p class="hint">{% if usage and usage.plan.get('weekly_report') is sameas false %}{{ _('Spento: si riaccende in Preferenze.') }}{% else %}{{ _('Ogni lunedì all\'ora del briefing: articoli pubblicati, numeri della settimana, clic da Google, cosa ti aspetta e cosa arriva. Va ai destinatari email qui sotto o, se non ce ne sono, ai direttori.') }}{% endif %}</p>
+  <div class="row">
+    <a class="btn" href="/reports/preview" target="_blank" rel="noopener">{{ _('Anteprima degli ultimi sette giorni') }}</a>
+    {% if caller.can('owner') %}<form class="inline" method="post" action="/ui/weekly/send-me"><button class="btn" type="submit">{{ _('Mandamelo adesso') }}</button></form>{% endif %}
+  </div>
+  {% for r in reports %}
+  <div class="list-row">
+    <a href="/reports/{{ r.id }}" target="_blank" rel="noopener">{{ _('Settimana dal {day}', day=when(r.week_start, 'day')) }}</a>
+    <span>{% if r.sent_at %}<span class="chip green">{{ _('Inviato') }}</span> <small class="hint">{{ when(r.sent_at) }}</small>{% elif r.send_error %}<span class="chip amber">{{ _('Non inviato') }}</span> <small class="hint">{{ r.send_error }}</small>{% else %}<span class="chip">{{ _('Pronto') }}</span>{% endif %}</span>
+  </div>
+  {% endfor %}
+</section>
 
 <section class="card pad" aria-labelledby="h-rec">
   <h2 id="h-rec">{{ _('Chi riceve il briefing') }}</h2>

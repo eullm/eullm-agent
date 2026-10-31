@@ -21,7 +21,7 @@ from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from . import opportunity as oppo, queue
-from . import activity as act, accounts, auth, autopilot, billing, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault
+from . import activity as act, accounts, auth, autopilot, billing, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
 
@@ -234,10 +234,15 @@ def register(app, ctx) -> None:
             return f"{day} {value:%H:%M}" if part == "full" and isinstance(value, datetime) else day
 
         notice = request.cookies.get(NOTICE_COOKIE)
+        # "Primi passi" in the menu until the site in view can publish.
+        starting = site is None or not s.execute(select(m.publish_targets.c.id).where(
+            m.publish_targets.c.site_id == site.id).limit(1)).first() or not s.execute(
+            select(m.editorial_profiles.c.id).where(m.editorial_profiles.c.site_id == site.id,
+                                                    m.editorial_profiles.c.status == "approved").limit(1)).first()
         rooms = [x for x in accounts.memberships(admin, c.user_id) if x.active] if c.user_id else []
         resp = pages.TemplateResponse(request, name, {
             "caller": c, "sites": sites, "site": site, "active": active, "newsrooms": rooms,
-            "all_sites": whole(request),
+            "all_sites": whole(request), "starting": starting,
             "plan_state": billing.subscription(admin, c.tenant_id) if c.can("owner") else None,
             "plan_name": plan_name(s),
             "activity": data.pop("activity", None) or act.recent(s, tz, problem),
@@ -774,6 +779,49 @@ def register(app, ctx) -> None:
             x["current"] = i == current
         return steps
 
+    @app.get("/start", response_class=HTMLResponse)
+    def start_view(request: Request, c: auth.Caller = Depends(viewer)):
+        """The guided path: from a domain to the first published article,
+        one step at a time, with what each step needs right on the page."""
+        with db.tenant(c.tenant_id) as s:
+            sites, site = current_site(s, request)
+            p = m.editorial_profiles
+            lines = dict(s.execute(select(p.c.site_id, p.c.version).where(p.c.status == "approved")).all())
+            steps = first_steps(s, sites, lines, site.id if site else None) if site else first_steps(s, sites, lines)
+            current = next((i for i, x in enumerate(steps) if x["current"]), None) if steps else None
+            data = {}
+            if steps:
+                data["key"] = key = ["site", "profile", "sources", "news", "proposal", "draft", "target"][current]
+            if site is not None and steps:
+                if key == "profile":
+                    draft = s.execute(select(p).where(p.c.site_id == site.id, p.c.status == "draft")
+                                      .order_by(p.c.version.desc()).limit(1)).first()
+                    if draft is not None:
+                        b = draft.body
+                        data["profile"] = {
+                            "version": draft.version,
+                            "sector": (b.get("sector") or {}).get("value") if isinstance(b.get("sector"), dict) else b.get("sector"),
+                            "audience": (b.get("audience") or {}).get("value") if isinstance(b.get("audience"), dict) else b.get("audience"),
+                            "subtopics": [x.get("name") for x in b.get("subtopics", [])][:10],
+                            "gaps": b.get("gaps", [])[:4]}
+                elif key == "sources":
+                    src = m.sources.c
+                    data["candidates"] = s.execute(
+                        select(src.id, src.name, src.kind, src.score, src.url).where(
+                            src.site_id == site.id, src.status == "candidate")
+                        .order_by(src.score.desc().nulls_last()).limit(8)).all()
+                elif key == "proposal":
+                    rows = proposal_rows(s, site.id, ("proposed",), limit=3)
+                    data["proposed"], data["explained"] = rows, proposal_details(s, rows)
+                elif key == "draft":
+                    dr = m.drafts.c
+                    data["drafts"] = s.execute(select(dr.id, dr.title, dr.status).where(
+                        dr.site_id == site.id, dr.status.in_(("draft", "needs_review")), dr.translation_of.is_(None))
+                        .order_by(dr.id.desc()).limit(3)).all()
+            auto = bool(s.execute(select(m.tenants.c.autopilot)).scalar())
+            return render(request, "start.html.j2", c, s, "start", _sites=(sites, site), steps=steps,
+                          current=current, autopilot=auto, **data)
+
     # --- Sito e profilo -------------------------------------------------------------
 
     def site_numbers(s, site) -> dict:
@@ -868,7 +916,25 @@ def register(app, ctx) -> None:
                       site_langs=tr.site_languages(s, site.id) if site else [], max_languages=tr.allowed(s),
                       feed_token=delivery.current_token(s, site.id) if site else None,
                       feed_base=(getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/"),
-                      body_json=json.dumps(shown.body, ensure_ascii=False, indent=2) if shown is not None else "")
+                      body_json=json.dumps(shown.body, ensure_ascii=False, indent=2) if shown is not None else "",
+                      gsc=search_panel(s, site) if site else None)
+
+    def search_panel(s, site) -> dict:
+        """Google Search Console on the site's page: the property, its
+        state, the last 28 days and the account to add in Search Console."""
+        key = searchconsole.load_key()
+        out = {"configured": key is not None, "email": key.client_email if key else "",
+               "property": site.gsc_property, "status": site.gsc_status,
+               "problem": searchconsole.problem(site.gsc_status), "checked": site.gsc_checked_at,
+               "suggest": f"sc-domain:{site.domain}", "data": None}
+        if site.gsc_property:
+            end = datetime.now(zone(s)).date() - timedelta(days=1)
+            start = end - timedelta(days=27)
+            tot = searchconsole.totals(s, site.id, start, end)
+            if tot["impressions"]:
+                out["data"] = {"totals": tot, "pages": searchconsole.top(s, site.id, "page", start, end, 5),
+                               "queries": searchconsole.top(s, site.id, "query", start, end, 8)}
+        return out
 
     @app.get("/site", response_class=HTMLResponse)
     def site_view(request: Request, edit: int = 0, c: auth.Caller = Depends(viewer)):
@@ -877,7 +943,7 @@ def register(app, ctx) -> None:
             return site_page(request, c, s, sites, site, editing=bool(edit) and c.can("owner"))
 
     @app.post("/ui/sites")
-    def ui_add_site(request: Request, domain: str = Form(...),
+    def ui_add_site(request: Request, domain: str = Form(...), back: str = Form("/"),
                     c: auth.Caller = Depends(ctx.need("owner"))):
         from .api import normalise_domain
         d = normalise_domain(domain)
@@ -889,7 +955,7 @@ def register(app, ctx) -> None:
             return done("/settings#h-sites", t("Il piano non ha posto per un altro sito: scegline uno più grande in Abbonamento."))
         with db.tenant(c.tenant_id) as s:
             sid = s.execute(select(m.sites.c.id).where(m.sites.c.domain == d)).scalar()
-        resp = done("/", t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività.", domain=d))
+        resp = done(safe_path(back, "/"), t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività.", domain=d))
         if sid is not None:
             choose_site(resp, sid)
         return resp
@@ -905,12 +971,12 @@ def register(app, ctx) -> None:
                     t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività.", domain=domain))
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
-    def ui_approve(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_approve(site_id: int, version: int, back: str = Form("/site"), c: auth.Caller = Depends(ctx.need("owner"))):
         with db.tenant(c.tenant_id) as s:
             if not prof.approve(s, site_id, version, c.name):
                 raise HTTPException(404, "version not found")
         ctx.run_discovery(c.tenant_id, site_id)
-        return done("/site", t("Versione {version} approvata: è la linea del sito da ora. Cerco le fonti adatte.", version=version))
+        return done(safe_path(back, "/site"), t("Versione {version} approvata: è la linea del sito da ora. Cerco le fonti adatte.", version=version))
 
     @app.post("/ui/sites/{site_id}/per-day")
     def ui_per_day(site_id: int, n: int = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
@@ -983,6 +1049,32 @@ def register(app, ctx) -> None:
             if not prof.set_sources_style(s, site_id, style):
                 return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
         return done("/site", t("Fonti negli articoli salvate: valgono dalla prossima pubblicazione."))
+
+    @app.post("/ui/sites/{site_id}/search-console")
+    def ui_search_console(site_id: int, prop: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+        client = searchconsole.client_from_env()
+        try:
+            status = searchconsole.set_property(db, c.tenant_id, site_id, prop, client)
+        except LookupError:
+            raise HTTPException(404, "site not found") from None
+        if status is None:
+            return done("/site#h-gsc", t("Search Console scollegata: i suoi dati sono stati cancellati."))
+        if client is None:
+            return done("/site#h-gsc", t("Proprietà salvata. Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY): i dati arrivano quando c'è."))
+        if status != "ok":
+            return done("/site#h-gsc", t(searchconsole.problem(status) or status))
+        searchconsole.sync(db, c.tenant_id, client, site_id=site_id)
+        return done("/site#h-gsc", t("Search Console collegata: clic e ricerche degli ultimi giorni sono arrivati, poi si aggiornano ogni notte."))
+
+    @app.post("/ui/sites/{site_id}/search-console/sync")
+    def ui_search_console_sync(site_id: int, c: auth.Caller = Depends(ctx.need("owner"))):
+        client = searchconsole.client_from_env()
+        if client is None:
+            return done("/site#h-gsc", t("Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY)."))
+        got = searchconsole.sync(db, c.tenant_id, client, site_id=site_id).get(site_id)
+        if isinstance(got, str):
+            return done("/site#h-gsc", t(searchconsole.problem(got) or got))
+        return done("/site#h-gsc", t("Dati di Search Console aggiornati: {n} righe.", n=got or 0))
 
     @app.post("/ui/sites/{site_id}/discard/{version}")
     def ui_discard(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -1219,10 +1311,10 @@ def register(app, ctx) -> None:
                     t("Proposte per {domain} in preparazione: le segui nel riquadro Attività.", domain=site.domain))
 
     @app.post("/ui/collect")
-    def ui_collect(c: auth.Caller = Depends(ctx.need("editor"))):
+    def ui_collect(back: str = Form("/"), c: auth.Caller = Depends(ctx.need("editor"))):
         """Read the sources now, then topics, Hype, the trend of the moment and Opportunity."""
         ctx.run_collect(c.tenant_id)
-        return done("/", t("Raccolta partita: la segui passo per passo nel riquadro Attività."))
+        return done(safe_path(back, "/"), t("Raccolta partita: la segui passo per passo nel riquadro Attività."))
 
     @app.post("/ui/proposals/{proposal_id}")
     def ui_decide(proposal_id: int, accept: str = Form(...), back: str = Form("/trends"), reason: str = Form(""),
@@ -1578,7 +1670,11 @@ def register(app, ctx) -> None:
         tokens = s.execute(select(t.c.id, t.c.name, t.c.role, t.c.created_at, t.c.revoked_at)
                            .order_by(t.c.revoked_at.is_not(None), t.c.created_at)).all() if c.can("owner") else []
         owner = c.can("owner")
+        w = m.weekly_reports.c
+        reports = s.execute(select(w.id, w.week_start, w.sent_at, w.sent_to, w.send_error)
+                            .order_by(w.week_start.desc()).limit(8)).all()
         return render(request, "settings.html.j2", c, s, "settings", status_code=status_code, usage=usage,
+                      reports=reports,
                       recipients=recipients, tokens=tokens, new_token=new_token, new_link=new_link,
                       error=error, people=accounts.members(admin, c.tenant_id) if owner else [],
                       invited=accounts.pending_invites(admin, c.tenant_id) if owner else [])
@@ -1632,6 +1728,50 @@ def register(app, ctx) -> None:
             s.execute(text("INSERT INTO editor.recipients (tenant_id, channel, address) VALUES (:t, :c, :a) "
                            "ON CONFLICT DO NOTHING"), {"t": c.tenant_id, "c": channel, "a": address})
         return done("/settings", t("Destinatario aggiunto: riceve il prossimo briefing."))
+
+    def weekly_settings():
+        st = getattr(ctx, "settings", None)
+        if st is None:
+            from .runtime import settings as from_env
+            st = from_env()
+        return st
+
+    def last_week_start(s):
+        return datetime.now(zone(s)).date() - timedelta(days=7)
+
+    @app.get("/reports/preview", response_class=HTMLResponse)
+    def weekly_preview(c: auth.Caller = Depends(viewer)):
+        """The report of the last seven days, as it would arrive now."""
+        with db.tenant(c.tenant_id) as s:
+            start = last_week_start(s)
+        _, _, (_, _, page) = weekly.build(db, c.tenant_id, start, weekly_settings(), store=False)
+        return HTMLResponse(page)
+
+    @app.get("/reports/{rid}", response_class=HTMLResponse)
+    def weekly_report(rid: int, c: auth.Caller = Depends(viewer)):
+        with db.tenant(c.tenant_id) as s:
+            page = s.execute(select(m.weekly_reports.c.body_html).where(m.weekly_reports.c.id == rid)).scalar()
+        if page is None:
+            raise HTTPException(404, "report not found")
+        return HTMLResponse(page)
+
+    @app.post("/ui/weekly/send-me")
+    def weekly_send_me(c: auth.Caller = Depends(ctx.need("owner"))):
+        st = weekly_settings()
+        if not st.smtp_host:
+            return done("/settings#h-weekly", t("Il server non ha la posta configurata: guarda l'anteprima."))
+        with accounts._read(admin) as conn:
+            email = conn.execute(select(m.users.c.email).where(m.users.c.id == c.user_id)).scalar() if c.user_id else None
+        if not email:
+            return done("/settings#h-weekly", t("Questo accesso non ha un'email: guarda l'anteprima."))
+        with db.tenant(c.tenant_id) as s:
+            start = last_week_start(s)
+        _, _, (subject, body, page) = weekly.build(db, c.tenant_id, start, st, store=False)
+        try:
+            weekly.send_mail(st, [email], subject, body, page)
+        except Exception as e:
+            return done("/settings#h-weekly", t("Email non partita: {e}.", e=f"{type(e).__name__}"))
+        return done("/settings#h-weekly", t("Rapporto degli ultimi sette giorni mandato a {email}.", email=email))
 
     @app.post("/ui/recipients/{rid}/delete")
     def ui_del_recipient(rid: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -1811,9 +1951,9 @@ def register(app, ctx) -> None:
 
     @app.post("/ui/preferences")
     def ui_preferences(timezone: str = Form(...), briefing_hour: str = Form(...), language: str = Form(...),
-                       c: auth.Caller = Depends(ctx.need("owner"))):
+                       weekly_report: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
         try:
-            manage.preferences(admin, c.tenant_id, timezone, briefing_hour, language)
+            manage.preferences(admin, c.tenant_id, timezone, briefing_hour, language, weekly=weekly_report == "1")
         except manage.ManageError as e:
             return done("/settings#h-prefs", str(e))
         return done("/settings#h-prefs", t("Preferenze salvate: il prossimo briefing segue i nuovi orari."))

@@ -64,6 +64,11 @@ def populate(db, tenant, monkeypatch):
                        "VALUES (:t, :d, 'tok-x', 'p', 'flux', 'image/jpeg', :c)"), {"t": tenant, "d": did, "c": b"jpg"})
     from editor import delivery  # the site's feed
     delivery.feed_token(db, tenant, site_id)
+    with db.tenant(tenant) as s:  # Search Console numbers and a weekly report
+        s.execute(text("INSERT INTO editor.search_stats (tenant_id, site_id, day, kind, key, clicks, impressions) "
+                       "VALUES (:t, :s, '2026-10-20', 'query', 'fibra bari', 3, 40)"), {"t": tenant, "s": site_id})
+        s.execute(text("INSERT INTO editor.weekly_reports (tenant_id, week_start, body_md, body_html) "
+                       "VALUES (:t, '2026-10-19', 'x', '<p>x</p>')"), {"t": tenant})
 
 
 @pytest.mark.postgres

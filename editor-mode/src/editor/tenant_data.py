@@ -29,7 +29,7 @@ DELETE_ORDER = [
     "draft_images", "draft_claim_sources", "draft_claims", "drafts",
     "proposal_citations", "proposals", "opportunity_scores",
     "feedback", "profile_reviews", "editorial_profiles", "site_analyses", "site_posts",
-    "briefings", "recipients",
+    "briefings", "weekly_reports", "recipients", "search_stats",
     "trend_snapshots", "trend_scores", "topic_items", "topics",
     "observations", "source_items", "sources", "sites",
     "llm_usage", "jobs", "access_tokens", "secrets",

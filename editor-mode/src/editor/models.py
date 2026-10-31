@@ -85,6 +85,7 @@ tenants = Table(
     Column("hold", Text),
     Column("autopilot", Boolean),  # the plan includes the automatic newsroom
     Column("proposals_only", _ts()),  # since: trial or period over, proposals only
+    Column("weekly_report", Boolean),  # the weekly report by email (on by default)
 )
 
 sites = Table(
@@ -96,6 +97,9 @@ sites = Table(
     Column("name", Text, nullable=False),
     Column("language", Text),
     Column("languages", JSONB),  # the languages it also publishes in, by translation
+    Column("gsc_property", Text),  # Google Search Console: sc-domain:example.com or https://example.com/
+    Column("gsc_status", Text),  # the last check or reading: "ok" or what went wrong
+    Column("gsc_checked_at", _ts()),
 )
 
 sources = Table(
@@ -334,6 +338,34 @@ briefings = Table(
     Column("sent_email_at", _ts()),
     Column("sent_telegram_at", _ts()),
     Column("send_error", Text),
+)
+
+weekly_reports = Table(
+    "weekly_reports",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("week_start", Date, nullable=False),
+    Column("body_md", Text, nullable=False),
+    Column("body_html", Text, nullable=False),
+    Column("sent_to", JSONB),
+    Column("sent_at", _ts()),
+    Column("send_error", Text),
+    Column("created_at", _ts()),
+)
+
+search_stats = Table(
+    "search_stats",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("site_id", BigInteger, nullable=False),
+    Column("day", Date, nullable=False),
+    Column("kind", Text, nullable=False),  # page or query
+    Column("key", Text, nullable=False),
+    Column("clicks", Integer, nullable=False),
+    Column("impressions", Integer, nullable=False),
+    Column("position", REAL),
 )
 
 recipients = Table(
