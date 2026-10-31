@@ -23,7 +23,7 @@ from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from . import accounts, billing, i18n, newsrooms
+from . import accounts, billing, credits, i18n, newsrooms
 from .gateway import GatewayError
 from .i18n import t
 
@@ -178,9 +178,15 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         """The plans the public site shows, with prices and limits."""
         out = [{k: p[k] for k in ("code", "name", "description", "price_month_cents", "price_year_cents", "currency",
                                   "trial_days", "max_sites", "max_languages", "max_active_sources",
-                                  "max_drafts_month", "autopilot")} for p in billing.plans(admin, public_only=True)]
+                                  "max_drafts_month", "autopilot", "credits_month")}
+               for p in billing.plans(admin, public_only=True)]
         trial = next((p for p in billing.plans(admin) if p["code"] == billing.TRIAL_PLAN), None)
-        return JSONResponse({"plans": out, "trial_days": trial["trial_days"] if trial else 0},
+        with accounts._read(admin) as conn:
+            prices = credits.prices(conn)
+        packs = [{k: x[k] for k in ("code", "name", "credits", "price_cents", "currency")}
+                 for x in credits.packs(admin, active_only=True)]
+        return JSONResponse({"plans": out, "trial_days": trial["trial_days"] if trial else 0,
+                             "credits": {"prices": prices, "free_redraws": credits.FREE_REDRAWS, "packs": packs}},
                             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300"})
 
     # --- operator and resellers (API) --------------------------------------------------
@@ -446,6 +452,25 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             return to_account(t("Pagamento non avviato: errore interno, riprova tra poco."), tenant_id, back)
         return RedirectResponse(url, status_code=303)
 
+    @app.post("/account/{tenant_id}/credits")
+    def account_credits(tenant_id: str, request: Request, pack: str = Form(...), back: str = Form(""),
+                        s=Depends(person)):
+        owned(s, tenant_id)
+        paid = f"{base(request)}/account/{tenant_id}/credits-paid" + ("?back=plan" if back == "plan" else "")
+        try:
+            url = billing.buy_credits(admin, gateway, tenant_id, pack, paid, webhook_url(request))
+        except (GatewayError, billing.BillingError, credits.CreditsError) as e:
+            return to_account(t("Pagamento non avviato: {error}.", error=e), tenant_id, back)
+        except Exception:
+            log.exception("credits checkout of %s failed", tenant_id)
+            return to_account(t("Pagamento non avviato: errore interno, riprova tra poco."), tenant_id, back)
+        return RedirectResponse(url, status_code=303)
+
+    @app.get("/account/{tenant_id}/credits-paid")
+    def account_credits_paid(tenant_id: str, request: Request, back: str = ""):
+        return to_account(t("Grazie. I crediti arrivano appena il circuito conferma il pagamento, di solito entro un "
+                            "minuto."), tenant_id, back)
+
     @app.get("/account/{tenant_id}/paid")
     def account_paid(tenant_id: str, request: Request, back: str = ""):
         return to_account(t("Grazie. Il pagamento è in verifica: la redazione si attiva appena il circuito lo conferma, "
@@ -469,14 +494,15 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
     def ui_plan(code: str, name: str = Form(...), description: str = Form(""), price_month: str = Form(""),
                 price_year: str = Form(""), trial_days: str = Form("0"), max_sites: str = Form(""),
                 max_languages: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
-                max_drafts_month: str = Form(""), public: str = Form(""), autopilot: str = Form("1"),
-                s=Depends(need_console)):
+                max_drafts_month: str = Form(""), credits_month: str = Form(""), public: str = Form(""),
+                autopilot: str = Form("1"), s=Depends(need_console)):
         try:
             fields = {"name": name.strip(), "description": description.strip(), "price_month_cents": _cents(price_month),
                       "price_year_cents": _cents(price_year), "trial_days": _int(trial_days) or 0,
                       "max_sites": _int(max_sites), "max_languages": _int(max_languages),
                       "max_active_sources": _int(max_active_sources), "max_items_per_day": _int(max_items_per_day),
-                      "max_drafts_month": _int(max_drafts_month), "public": public == "1",
+                      "max_drafts_month": _int(max_drafts_month), "credits_month": _int(credits_month),
+                      "public": public == "1",
                       "autopilot": autopilot == "1"}
             billing.save_plan(admin, code, fields)
         except ValueError as e:
@@ -503,6 +529,69 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         except billing.BillingError as e:
             return back(t("Piano non eliminato: {error}.", error=e), "piani")
         return back(t("Piano {name} eliminato.", name=name), "piani")
+
+    # --- credits: price list, packs, credits of a newsroom ----------------------------
+
+    @app.post("/admin/credits/prices")
+    def ui_credit_prices(article: str = Form(""), translation: str = Form(""), image: str = Form(""),
+                         s=Depends(need_console)):
+        try:
+            values = {k: _int(v) for k, v in (("article", article), ("translation", translation), ("image", image))
+                      if v.strip()}
+            credits.set_prices(admin, values)
+        except ValueError as e:
+            return back(t("Listino non salvato: {error}.",
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+        return back(t("Listino dei crediti salvato."), "crediti")
+
+    @app.post("/admin/credits/packs")
+    def ui_new_pack(code: str = Form(...), name: str = Form(...), credits_n: str = Form(..., alias="credits"),
+                    price: str = Form(...), s=Depends(need_console)):
+        try:
+            credits.create_pack(admin, code, name, _int(credits_n) or 0, _cents(price) or 0)
+        except ValueError as e:
+            return back(t("Pacchetto non creato: {error}.",
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+        return back(t("Pacchetto {name} creato.", name=name.strip()), "crediti")
+
+    @app.post("/admin/credits/packs/{code}")
+    def ui_pack(code: str, name: str = Form(...), credits_n: str = Form(..., alias="credits"), price: str = Form(...),
+                active: str = Form("1"), sort: str = Form("0"), s=Depends(need_console)):
+        try:
+            credits.save_pack(admin, code, name, _int(credits_n) or 0, _cents(price) or 0, active == "1",
+                              _int(sort) or 0)
+        except ValueError as e:
+            return back(t("Pacchetto non salvato: {error}.",
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+        return back(t("Pacchetto {name} salvato.", name=name.strip()), "crediti")
+
+    @app.post("/admin/credits/packs/{code}/delete")
+    def ui_delete_pack(code: str, s=Depends(need_console)):
+        try:
+            name = credits.delete_pack(admin, code)
+        except LookupError:
+            return back(t("Pacchetto non trovato."), "crediti")
+        return back(t("Pacchetto {name} eliminato: i crediti già comprati restano.", name=name), "crediti")
+
+    @app.post("/admin/newsrooms/{tenant_id}/credits")
+    def ui_grant(tenant_id: str, credits_n: str = Form(..., alias="credits"), amount: str = Form(""),
+                 note: str = Form(""), s=Depends(need_console)):
+        at = f"r-{tenant_id}--credits"
+        try:
+            n = int((credits_n or "").strip().replace(".", ""))
+            cents = _cents(amount) or 0
+            billing.record_credits(admin, tenant_id, n, cents, s.email, note.strip()[:200])
+        except LookupError:
+            return back(t("Redazione non trovata."))
+        except (credits.CreditsError, billing.BillingError) as e:
+            return back(t("Crediti non registrati: {error}.", error=e), at)
+        except ValueError:
+            return back(t("Crediti non registrati: {error}.", error=t("i crediti sono un numero intero diverso da zero")), at)
+        if n > 0:
+            msg = t("{n} crediti aggiunti a {tenant}.", n=n, tenant=tenant_id)
+        else:
+            msg = t("{n} crediti tolti a {tenant}.", n=-n, tenant=tenant_id)
+        return back(msg + (" " + t("Pagamento di {amount} registrato.", amount=billing.money(cents)) if cents else ""), at)
 
     @app.post("/admin/customers/{cid}")
     def ui_customer(cid: int, kind: str = Form("company"), name: str = Form(""), email: str = Form(""),

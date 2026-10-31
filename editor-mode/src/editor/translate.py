@@ -19,7 +19,7 @@ import json
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from . import drafts, images, quotas, seo, usage
+from . import credits, drafts, images, quotas, seo, usage
 from . import models as m
 from .core_client import CoreClient, CoreError, extract_json
 from .i18n import N_
@@ -135,8 +135,9 @@ def _parse(value, n_headings: int, n_sentences: int) -> dict:
             "image_alt": " ".join(str(value.get("image_alt") or "").split())[:300]}
 
 
-def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient) -> int:
-    """Write the translation of a draft into `language`; returns the new draft's id."""
+def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient, pay: bool = True) -> int:
+    """Write the translation of a draft into `language`; returns the new draft's id.
+    Past the plan's articles it is paid with credits, unless `pay` is False."""
     language = language.strip().lower()[:2]
     if language not in LANGUAGES:
         raise LanguageError(f"unknown language: {language}")
@@ -145,11 +146,11 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
     if d is None:
         raise LookupError(draft_id)
     if d.translation_of is not None:  # translate the original, not a translation
-        return translate(db, tenant_id, d.translation_of, language, core)
+        return translate(db, tenant_id, d.translation_of, language, core, pay)
     if (d.language or "")[:2] == language:
         raise LanguageError("the article is already in this language")
     with db.tenant(tenant_id) as s:
-        quotas.check(s, "drafts")
+        quotas.check(s, "drafts", pay="translation" if pay else None)
         claims = drafts.stored_claims(s, draft_id)
         sources = drafts._sources(s, list({i for c in claims for i in c["sources"]}))
         image = images.of(s, draft_id)
@@ -199,7 +200,8 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
                  if x["key"] != "internal_links"]
     body = drafts.render(article, sources, language, [])
     with db.tenant(tenant_id) as s:
-        quotas.check(s, "drafts")  # again: other drafts may have been written meanwhile
+        # Again: other drafts may have been written meanwhile.
+        over = quotas.check(s, "drafts", pay="translation" if pay else None)
         quotas.lock(s, f"editor-draft-version:{d.proposal_id}")
         version = (s.execute(select(func.max(m.drafts.c.version)).where(
             m.drafts.c.proposal_id == d.proposal_id)).scalar() or 0) + 1
@@ -209,6 +211,8 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
             seo=sd.as_dict(), translation_of=draft_id,
         ).returning(m.drafts.c.id)).scalar_one()
+        if over:  # beyond the plan's articles of the month: paid with credits
+            credits.spend(s, "translation", f"draft:{did}")
         for n, c in enumerate(article.claims):
             cid = s.execute(insert(m.draft_claims).values(
                 tenant_id=tenant_id, draft_id=did, ordinal=n, section=c.section, text=c.text,

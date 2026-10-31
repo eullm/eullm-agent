@@ -69,6 +69,14 @@ class Mollie:
             "sequenceType": "first", "redirectUrl": redirect_url, "webhookUrl": webhook_url, "metadata": metadata})
         return p["id"], p["_links"]["checkout"]["href"]
 
+    def one_off_payment(self, customer_id: str, amount_cents: int, currency: str, description: str,
+                        redirect_url: str, webhook_url: str, metadata: dict) -> tuple[str, str]:
+        """A single payment (a pack of credits); returns (id, checkout address)."""
+        p = self._call("POST", "/payments", {
+            "amount": _amount(amount_cents, currency), "description": description[:255], "customerId": customer_id,
+            "sequenceType": "oneoff", "redirectUrl": redirect_url, "webhookUrl": webhook_url, "metadata": metadata})
+        return p["id"], p["_links"]["checkout"]["href"]
+
     def payment(self, payment_id: str) -> dict | None:
         if not payment_id.startswith("tr_"):
             return None

@@ -21,7 +21,7 @@ from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from . import opportunity as oppo, queue
-from . import activity as act, accounts, auth, autopilot, billing, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
+from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
 
@@ -123,6 +123,12 @@ PROBLEMS = [
     (r"(\d+) failed fetches in a row", N_(r"\1 letture fallite di fila: la riprovo da sola ogni giorno.")),
     (r"off topic \(relevance ([\d.]+) on the last (\d+) items\)",
      N_(r"Fuori tema: pertinenza \1 sulle ultime \2 notizie. Ritorna in valutazione tra due settimane.")),
+    (r"not enough credits: (\d+) needed, (\d+) left",
+     N_(r"Crediti insufficienti: ne servono \1 e ne restano \2. Puoi aggiungerne in Il mio piano.")),
+    (r"drafts limit reached \((\d+) of (\d+), plan .*\)",
+     N_(r"Articoli del piano finiti per questo mese (\1 di \2).")),
+    (r"the trial is over: proposals only until a plan is chosen",
+     N_("La prova è finita: solo proposte finché non scegli un piano.")),
     (r"replaced by GitHub Trending",
      N_("Sostituita da GitHub Trending: conta quali repository gli sviluppatori premiano oggi, non quali contengono una parola.")),
 ]
@@ -1420,12 +1426,15 @@ def register(app, ctx) -> None:
             img_busy = any(a and a.get("draft_id") == root for a in s.execute(select(j.args).where(
                 j.kind == "image", j.status.in_(("queued", "running")))).scalars())
             image = images.of(s, d.id)
+            cover = {"cost": credits.cover_cost(s, root), "free": credits.free_covers_left(s, root),
+                     "credits": credits.state(s)}
             have = {x.language for x in family}
             wanted = [x for x in tr.site_languages(s, d.site_id) if x not in have]
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
+                          cover=cover,
                           body_html=to_html(delivery.body_md(d.body_md)),
                           sources=[{"n": refs[i], **items[i]._mapping} for i in order if i in items],
                           flags=flags, checks=checks, targets=targets, pubs=pubs, kinds=TARGET_KINDS,
@@ -1506,6 +1515,13 @@ def register(app, ctx) -> None:
             return done(f"/drafts/{draft_id}", t("Immagini non configurate: serve EDITOR_IMAGES_API_KEY sul server."))
         with db.tenant(c.tenant_id) as s:
             d = s.execute(select(m.drafts.c.translation_of).where(m.drafts.c.id == draft_id)).first()
+            if d is not None:
+                cost = credits.cover_cost(s, d.translation_of or draft_id)
+                left = credits.state(s).get("left", 0)
+                if cost and cost > left:
+                    return done(f"/drafts/{draft_id}", t("Crediti insufficienti: una nuova copertina costa {n} crediti e "
+                                                         "ne restano {left}. Puoi aggiungerne in Il mio piano.",
+                                                         n=cost, left=left))
         if d is None:
             raise HTTPException(404, "draft not found")
         ctx.run_image(c.tenant_id, d.translation_of or draft_id)
@@ -1712,7 +1728,11 @@ def register(app, ctx) -> None:
                         "subscription": billing.subscription(admin, c.tenant_id),
                         "customer": billing.customer_of(admin, c.tenant_id),
                         "reseller": billing.reseller_of_tenant(admin, c.tenant_id) is not None}
-            return render(request, "plan.html.j2", c, s, "plan", usage=usage,
+            cr = credits.state(s)
+            moves = credits.ledger(s, 15) if cr["enabled"] else []
+            return render(request, "plan.html.j2", c, s, "plan", usage=usage, cr=cr, moves=moves,
+                          credit_prices=credits.prices(s), free_redraws=credits.FREE_REDRAWS,
+                          packs=credits.packs(admin, active_only=True, s=s) if cr["enabled"] else [],
                           meters=meters_of(usage, money=c.operator), room=room, me_email=email,
                           plans=billing.plans(admin, public_only=True), money=billing.money,
                           online=ctx.gateway is not None)

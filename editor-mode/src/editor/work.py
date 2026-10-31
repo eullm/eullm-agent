@@ -84,11 +84,13 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         """One article of the automatic newsroom, from the accepted proposal
         to the publication: draft, cover, editor-in-chief, then the site."""
         need(core, "model (Core)")
+        # The automatic newsroom stays within the plan's articles: credits
+        # are spent only on what a person asks for.
         if http_factory is None:
-            did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None)
+            did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=False)
         else:
             with http_factory() as client:
-                did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client)
+                did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=False)
         if imager is not None:
             step(N_("Immagine di copertina"))
             try:
@@ -123,7 +125,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         return {"draft_id": args["draft_id"], "title": d.title if d else "", "site_id": d.site_id if d else None}
 
     def translation(tenant: str, subject: str, args: dict) -> dict:
-        did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"))
+        did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"),
+                           pay=not args.get("auto"))
         if args.get("auto"):
             return autopilot.finish_translation(db, tenant, did, publish_job(tenant, args.get("site_id")))
         with db.tenant(tenant) as s:

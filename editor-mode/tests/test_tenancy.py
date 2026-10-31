@@ -69,6 +69,8 @@ def populate(db, tenant, monkeypatch):
                        "VALUES (:t, :s, '2026-10-20', 'query', 'fibra bari', 3, 40)"), {"t": tenant, "s": site_id})
         s.execute(text("INSERT INTO editor.weekly_reports (tenant_id, week_start, body_md, body_html) "
                        "VALUES (:t, '2026-10-19', 'x', '<p>x</p>')"), {"t": tenant})
+        s.execute(text("INSERT INTO editor.credit_ledger (tenant_id, pool, delta, reason) "
+                       "VALUES (:t, 'extra', 500, 'grant')"), {"t": tenant})
 
 
 @pytest.mark.postgres

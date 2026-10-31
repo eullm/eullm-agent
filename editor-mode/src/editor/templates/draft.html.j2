@@ -114,6 +114,9 @@
         {% if image %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/image/delete"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
       </div>
       {% endif %}
+      {% if images_on and cover and cover.credits.enabled and not img_busy %}
+      <p class="hint">{% if cover.cost %}{{ _('Le copertine gratuite di questo articolo sono finite: una nuova costa {n} crediti (te ne restano {left}).', n=cover.cost, left=cover.credits.left) }}{% elif image %}{{ _('Ancora {n} nuove copertine gratuite per questo articolo, poi si pagano in crediti.', n=cover.free) }}{% endif %}</p>
+      {% endif %}
       <p class="hint">{{ _("Disegnata per l'articolo, mai presa dalle notizie di origine (hanno i diritti dei loro editori). Alla pubblicazione va al sito come immagine in evidenza.") }}</p>
     </section>
     {% endif %}

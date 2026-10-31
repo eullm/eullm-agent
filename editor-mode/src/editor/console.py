@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
-from . import accounts, billing, commerce, installs, newsrooms, repo, trials, updates, usage
+from . import accounts, billing, commerce, credits, installs, newsrooms, repo, trials, updates, usage
 from . import models as m
 from .auth import ROLES
 from .i18n import t
@@ -41,6 +41,7 @@ class LimitsIn(BaseModel):
     max_llm_cost_month: float | None = Field(None, ge=0)
     max_drafts_month: int | None = Field(None, ge=0)
     max_languages: int | None = Field(None, ge=1)
+    credits_month: int | None = Field(None, ge=0)
 
 
 class _Settings(BaseModel):
@@ -119,6 +120,10 @@ def register(app, ctx) -> None:
     def refusals() -> list[dict]:
         with accounts._read(admin) as conn:
             return trials.refusals(conn)
+
+    def credit_prices() -> dict:
+        with accounts._read(admin) as conn:
+            return credits.prices(conn)
 
     def link(request: Request, token: str) -> str:
         base = (ctx.public_url or str(request.base_url)).rstrip("/")
@@ -264,6 +269,7 @@ def register(app, ctx) -> None:
             "roles": ROLES, "notice": unquote(notice) if notice else None, "notice_at": notice_at, "mine": accounts.memberships(admin, s.user_id),
             "customers": billing.customers(admin), "resellers": billing.resellers(admin), "plans": billing.plans(admin),
             "subs": billing.subscriptions(admin), "payments": billing.payments_by_tenant(admin),
+            "credits": credits.balances(admin), "credit_prices": credit_prices(), "packs": credits.packs(admin),
             "reseller_names": {r["id"]: r["name"] for r in billing.resellers(admin)},
             "statuses": billing.STATUS_LABELS, "money": billing.money, "online": ctx.gateway is not None,
             "refusals": refusals(), "trial_kinds": trials.LABELS,
@@ -294,6 +300,7 @@ def register(app, ctx) -> None:
             if at.startswith(prefix):
                 return f"/admin/{path}"
         return {"clienti": "/admin/customers", "rivenditori": "/admin/resellers", "piani": "/admin/plans",
+                "crediti": "/admin/plans",
                 "aggiornamenti": "/admin/updates", "operatori": "/admin/operators", "api": "/admin/keys",
                 "nuova": "/admin/new"}.get(at, "/admin")
 
@@ -448,12 +455,13 @@ def register(app, ctx) -> None:
     def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(...), plan: str = Form(""),
                   max_sites: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
-                  s=Depends(need_console)):
+                  credits_month: str = Form(""), s=Depends(need_console)):
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
                       "max_items_per_day": _num(max_items_per_day),
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
-                      "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages)}
+                      "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
+                      "credits_month": _num(credits_month)}
         except ValueError:
             return page(request, s, 400, view="nuova", error=t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
         spec = {"name": name, "owner_email": owner_email, "limits": limits} | ({"plan": plan.strip()[:60]} if plan.strip() else {})
@@ -473,12 +481,13 @@ def register(app, ctx) -> None:
     def ui_update(tenant_id: str, name: str = Form(""), plan: str = Form(""), max_sites: str = Form(""),
                   max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
-                  s=Depends(need_console)):
+                  credits_month: str = Form(""), s=Depends(need_console)):
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
                       "max_items_per_day": _num(max_items_per_day),
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
-                      "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages)}
+                      "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
+                      "credits_month": _num(credits_month)}
             res = newsrooms.update_newsroom(admin, tenant_id, {"limits": limits} | (
                 {"plan": plan.strip()[:60]} if plan.strip() else {}) | (
                 {"name": name.strip()} if name.strip() else {}), ctx.core)

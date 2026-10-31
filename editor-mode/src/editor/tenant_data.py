@@ -32,7 +32,7 @@ DELETE_ORDER = [
     "briefings", "weekly_reports", "recipients", "search_stats",
     "trend_snapshots", "trend_scores", "topic_items", "topics",
     "observations", "source_items", "sources", "sites",
-    "llm_usage", "jobs", "access_tokens", "secrets",
+    "llm_usage", "credit_ledger", "jobs", "access_tokens", "secrets",
     "tenants",
 ]
 

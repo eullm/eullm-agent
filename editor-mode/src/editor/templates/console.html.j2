@@ -172,6 +172,22 @@
         </div>
       </details>
       {% endif %}
+      {% set cr = credits.get(r.tenant_id) %}
+      <details class="act" id="{{ here }}--credits" {% if notice_at == here ~ '--credits' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">◎</span>{{ _('Crediti') }}<span class="sub">{% if cr and cr.enabled %}{{ _('{left} di {month} del mese', left=cr.month_left, month=cr.month) }} · {{ _('{n} extra', n=cr.extra) }}{% else %}{{ _('crediti non attivi') }}{% endif %}</span></summary>
+        {% if notice and notice_at == here ~ '--credits' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+        {% if cr and cr.enabled %}
+        <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}/credits" class="form-grid" style="margin-top: 8px;">
+          <label class="field">{{ _('Crediti') }}<input name="credits" inputmode="numeric" required placeholder="500"></label>
+          <label class="field">{{ _('Pagati (€)') }}<input name="amount" inputmode="decimal" placeholder="{{ _('vuoto: regalati') }}"></label>
+          <label class="field">{{ _('Nota') }}<input name="note" maxlength="200" placeholder="{{ _('bonifico del 31/10') }}"></label>
+          <div><button class="btn" type="submit">{{ _('Registra') }}</button></div>
+        </form>
+        <p class="hint">{{ _('Crediti extra: non scadono e si usano dopo quelli del mese. Con un importo resta anche il pagamento (un bonifico); un numero negativo corregge un errore.') }}</p>
+        {% else %}
+        <p class="hint">{{ _('Questa redazione non usa i crediti: metti i crediti al mese in "Nome, piano e limiti" (anche 0) per attivarli.') }}</p>
+        {% endif %}
+      </details>
       <details class="act" id="{{ here }}--edit" {% if notice_at == here ~ '--edit' %}open{% endif %}>
         <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Nome, piano e limiti') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">
@@ -182,6 +198,7 @@
           <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ r.max_items_per_day if r.max_items_per_day is not none else '' }}"></label>
           <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ r.max_drafts_month if r.max_drafts_month is not none else '' }}"></label>
           <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" value="{{ r.max_languages if r.max_languages is not none else '' }}"></label>
+          <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ r.credits_month if r.credits_month is not none else '' }}"></label>
           <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" value="{{ (r.max_llm_cost_month|string)|replace('.', ',') if r.max_llm_cost_month is not none else '' }}"></label>
           <div><button class="btn" type="submit">{{ _('Salva') }}</button></div>
         </form>
@@ -221,6 +238,7 @@
       <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
       <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
       <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
+      <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" placeholder="{{ _('senza crediti') }}"></label>
       <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" placeholder="{{ _('senza limite') }}"></label>
       <div><button class="btn pri" type="submit">{{ _('Crea la redazione') }}</button></div>
     </form>
@@ -357,6 +375,7 @@
       <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" value="{{ p.max_active_sources if p.max_active_sources is not none else '' }}"></label>
       <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ p.max_items_per_day if p.max_items_per_day is not none else '' }}"></label>
       <label class="field">{{ _('Articoli al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ p.max_drafts_month if p.max_drafts_month is not none else '' }}"></label>
+      <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ p.credits_month if p.credits_month is not none else '' }}"></label>
       <label class="field">{{ _('Descrizione') }}<input name="description" value="{{ p.description }}"></label>
       <label class="field">{{ _('Redazione automatica') }}<select name="autopilot"><option value="1" {% if p.autopilot is not false %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if p.autopilot is false %}selected{% endif %}>{{ _('No') }}</option></select></label>
       <label class="field">{{ _('Sul sito') }}<select name="public"><option value="1" {% if p.public %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if not p.public %}selected{% endif %}>{{ _('No') }}</option></select></label>
@@ -373,6 +392,44 @@
       <div><button class="btn" type="submit">{{ _('Aggiungi un piano') }}</button></div>
     </form>
     <p class="hint">{{ _('Il sito pubblico legge i piani da <code>/api/public/plans</code>. Il piano "Prova" è quello di chi si iscrive.') }}</p>
+    </div>
+  </section>
+
+  <section class="card" id="crediti" aria-labelledby="h-credits">
+    <div class="card-head"><h2 id="h-credits">{{ _('Crediti') }}</h2>
+    {% if notice and notice_at == 'crediti' %}<p class="notice" role="status" style="margin: 0 16px;">{{ notice }}</p>{% endif %}<span class="hint">{{ _('quello che va oltre il piano') }}</span></div>
+    <div class="pad">
+    <p class="lead">{{ _('Ogni piano dà crediti ogni mese. Si spendono per gli articoli e le traduzioni oltre quelli del piano e per le copertine rifatte dopo le {n} gratuite di ogni articolo. Finiti quelli del mese si usano i crediti extra dei pacchetti, che non scadono.', n=2) }}</p>
+    <h3>{{ _('Listino') }}</h3>
+    <form method="post" action="/admin/credits/prices" class="form-grid" style="margin-bottom: 16px;">
+      <label class="field">{{ _('Articolo oltre il piano') }}<input name="article" inputmode="numeric" value="{{ credit_prices.article }}"></label>
+      <label class="field">{{ _('Traduzione oltre il piano') }}<input name="translation" inputmode="numeric" value="{{ credit_prices.translation }}"></label>
+      <label class="field">{{ _('Copertina rifatta') }}<input name="image" inputmode="numeric" value="{{ credit_prices.image }}"></label>
+      <div><button class="btn" type="submit">{{ _('Salva il listino') }}</button></div>
+    </form>
+    <h3>{{ _('Pacchetti') }}</h3>
+    {% for k in packs %}
+    <details class="act" id="k-{{ k.code }}" {% if k.active %}data-tone="green"{% endif %}>
+      <summary><span class="ico" aria-hidden="true">◎</span>{{ k.name }}<span class="sub">{{ _('{n} crediti', n=k.credits) }} · {{ money(k.price_cents, k.currency) }} · {{ _('in vendita') if k.active else _('non in vendita') }}</span></summary>
+      <form method="post" action="/admin/credits/packs/{{ k.code }}" class="form-grid" style="margin: 12px 16px 16px;">
+        <label class="field">{{ _('Nome') }} <span class="num">({{ k.code }})</span><input name="name" value="{{ k.name }}" required></label>
+        <label class="field">{{ _('Crediti') }}<input name="credits" inputmode="numeric" value="{{ k.credits }}" required></label>
+        <label class="field">{{ _('Prezzo (€)') }}<input name="price" inputmode="decimal" value="{{ '%.2f'|format(k.price_cents / 100) }}" required></label>
+        <label class="field">{{ _('Ordine') }}<input name="sort" inputmode="numeric" value="{{ k.sort }}"></label>
+        <label class="field">{{ _('In vendita') }}<select name="active"><option value="1" {% if k.active %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if not k.active %}selected{% endif %}>{{ _('No') }}</option></select></label>
+        <div><button class="btn" type="submit">{{ _('Salva') }}</button></div>
+      </form>
+      <form method="post" action="/admin/credits/packs/{{ k.code }}/delete" style="margin: -4px 16px 16px;" onsubmit='return confirm({{ _('Eliminare il pacchetto {name}?', name=k.name)|string|tojson }})'><button class="btn sm danger" type="submit">{{ _('Elimina il pacchetto {name}', name=k.name) }}</button></form>
+    </details>
+    {% endfor %}
+    <form method="post" action="/admin/credits/packs" class="form-grid" style="margin: 20px 0 16px;">
+      <label class="field">{{ _('Codice del nuovo pacchetto') }}<input name="code" required maxlength="40" pattern="[a-z0-9-]{1,40}" placeholder="xl"></label>
+      <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('10.000 crediti') }}"></label>
+      <label class="field">{{ _('Crediti') }}<input name="credits" inputmode="numeric" required></label>
+      <label class="field">{{ _('Prezzo (€)') }}<input name="price" inputmode="decimal" required></label>
+      <div><button class="btn" type="submit">{{ _('Aggiungi un pacchetto') }}</button></div>
+    </form>
+    <p class="hint">{{ _("I clienti comprano i pacchetti in Il mio piano con Mollie; un bonifico lo registri nella scheda della redazione, in Crediti. Avvisiamo il direttore per email all'80% e al 100% dei crediti del mese.") }}</p>
     </div>
   </section>
   {% endif %}
