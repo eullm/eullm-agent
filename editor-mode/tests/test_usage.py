@@ -75,6 +75,8 @@ def test_the_console_shows_tokens_per_step_model_site_and_article(db, tenant):
     accounts.create_user(admin, op, password="password operatore", operator=True)
     c.post("/login", data={"email": op, "password": "password operatore"})
     page = c.get("/admin/usage?days=7").text
+    # The same menu as the rest of the console.
+    assert all(w in page for w in ("/admin/customers", "/admin/plans", "/admin/updates", "Modello per passo"))
     assert 'action="/logout"' in page
     assert "Consumi del modello" in page and "Scrittura delle bozze" in page and "6.000" in page
     assert "Bari cablata in fibra" in page and "senza prezzo" in page

@@ -323,7 +323,9 @@ def register(app, ctx) -> None:
         resp = pages.TemplateResponse(request, "usage.html.j2", {
             "me": s, "r": usage.report(admin, db, tenants, days), "names": names, "purposes": usage.PURPOSES,
             "routable": usage.ROUTABLE, "routes": usage.route_list(admin),
-            "notice": unquote(notice) if notice else None})
+            "notice": unquote(notice) if notice else None, "view": "consumi",
+            "updates": updates.state(updates.folder(ctx.updates_dir), INSTALLED),
+            "mine": accounts.memberships(admin, s.user_id)})
         if notice:
             resp.delete_cookie(NOTICE_COOKIE)
         return resp
