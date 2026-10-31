@@ -198,4 +198,9 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     assert "non puoi togliere te stesso" in c.post(f"/admin/operators/{me}/remove").text
     assert "non è più amministratore" in c.post(f"/admin/operators/{them}/remove").text
     assert not any(o.id == them for o in accounts.operators(admin))
+
+    # Entered from the console, then deleted: the administrator stays signed in, back on the console.
+    c.get(f"/admin/enter/{tid}")
+    page = c.post(f"/admin/newsrooms/{tid}/delete", data={"confirm": tid})
+    assert "cancellata con tutti i suoi dati" in page.text and "/login" not in str(page.url)
     admin.engine.dispose()

@@ -367,6 +367,30 @@
       {% if updates.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
     {% endif %}
     <form method="post" action="/admin/updates/check" style="margin-top: 8px;"><button class="btn sm" type="submit">{{ _('Controlla adesso') }}</button></form>
+    {% if updates.pending or st.state == 'running' %}
+    {% set target = (updates.pending or {}).version or st.version %}
+    <p class="notice" role="status" id="update-wait" data-target="{{ target }}">{{ _('Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.', version=target) }}</p>
+    <script>
+    /* Waits for the new version: errors while the server restarts (503, 500,
+       no answer) are expected and ignored; the page reloads once /api/health
+       answers with the target version. */
+    (function () {
+      var box = document.getElementById('update-wait');
+      var target = box.dataset.target, tries = 0;
+      function poll() {
+        fetch('/api/health', {cache: 'no-store'})
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (h) {
+            // The new version answers, or ten minutes went by (the panel then shows what happened).
+            if ((h && h.version === target) || ++tries > 200) location.replace('/admin?updated=' + Date.now() + '#aggiornamenti');
+            else setTimeout(poll, 3000);
+          })
+          .catch(function () { setTimeout(poll, 3000); });
+      }
+      setTimeout(poll, 3000);
+    })();
+    </script>
+    {% endif %}
     {% else %}
     <p class="hint">{{ _('Per aggiornare da qui serve lo script update.sh sul server: vedi deploy/server/README.md, "Updating from the console". Senza, si aggiorna dal terminale.') }}</p>
     {% endif %}

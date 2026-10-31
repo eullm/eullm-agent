@@ -1592,5 +1592,6 @@
  "Rimborso non fatto: {error}.": "Remboursement non effectué : {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} est encore l'offre de : {rooms}. Changez-la dans Rédactions › Abonnement, ou retirez-la du site public",
  "fino a {amount}": "jusqu'à {amount}",
- "Apri nella console: {url}": "Ouvrir dans la console : {url}"
+ "Apri nella console: {url}": "Ouvrir dans la console : {url}",
+ "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "Le panneau s'arrête quelques secondes pendant le redémarrage et revient tout seul quand la {version} répond : inutile de recharger la page. Les travaux en cours retournent dans la file et repartent, les données ne sont pas touchées."
 }

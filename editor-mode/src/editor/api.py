@@ -249,7 +249,9 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok"}
+        from importlib import metadata
+        # The version lets the console see when an update has finished.
+        return {"status": "ok", "version": metadata.version("eullm-editor-mode")}
 
     @app.get("/api/sites")
     def list_sites(c: auth.Caller = Depends(caller)):

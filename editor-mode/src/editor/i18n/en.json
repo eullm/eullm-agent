@@ -1592,5 +1592,6 @@
  "Rimborso non fatto: {error}.": "Refund not made: {error}.",
  "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} is still the plan of: {rooms}. Change it in Newsrooms › Subscription, or take it off the public site",
  "fino a {amount}": "up to {amount}",
- "Apri nella console: {url}": "Open in the console: {url}"
+ "Apri nella console: {url}": "Open in the console: {url}",
+ "Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.": "The panel stops for a few seconds during the restart and comes back by itself when {version} answers: no need to reload the page. Running jobs go back in the queue and start again; the data are not touched."
 }

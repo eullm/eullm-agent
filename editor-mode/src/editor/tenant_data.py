@@ -84,6 +84,10 @@ def delete_tenant(admin_db, tenant_id: str) -> dict[str, int]:
             conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": tenant_id})
         if not conn.execute(text("SELECT 1 FROM editor.tenants WHERE tenant_id = :t"), {"t": tenant_id}).first():
             raise LookupError(f"no tenant {tenant_id}")
+        # An administrator who entered this newsroom from the console is
+        # still signed in after deleting it: back to the console, not to the login.
+        conn.execute(text("UPDATE editor.sessions SET tenant_id = NULL WHERE tenant_id = :t AND user_id IN "
+                          "(SELECT id FROM editor.users WHERE operator)"), {"t": tenant_id})
         for name in DELETE_ORDER:
             counts[name] = conn.execute(text(f"DELETE FROM editor.{name} WHERE tenant_id = :t"), {"t": tenant_id}).rowcount
     return counts
