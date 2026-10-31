@@ -203,6 +203,11 @@ def register(app, ctx) -> None:
         """Is the Desk showing every site ("Tutti i siti" in the menu)?"""
         return request.cookies.get(SCOPE_COOKIE) != "site"
 
+    def scoped(request: Request, sites, site) -> int | None:
+        """The site the menu is on, when one is chosen instead of "Tutti i
+        siti": the Attività box then shows only its work (and the collection)."""
+        return site.id if site is not None and len(sites) > 1 and not whole(request) else None
+
     def choose_site(resp, site_id: int) -> None:
         resp.set_cookie(SITE_COOKIE, str(site_id), httponly=True, samesite="strict", max_age=365 * 86400)
         resp.set_cookie(SCOPE_COOKIE, "site", httponly=True, samesite="strict", max_age=365 * 86400)
@@ -245,7 +250,7 @@ def register(app, ctx) -> None:
             "all_sites": whole(request), "starting": starting,
             "plan_state": billing.subscription(admin, c.tenant_id) if c.can("owner") else None,
             "plan_name": plan_name(s),
-            "activity": data.pop("activity", None) or act.recent(s, tz, problem),
+            "activity": data.pop("activity", None) or act.recent(s, tz, problem, site=scoped(request, sites, site)),
             "notice": unquote(notice) if notice else None, "now": datetime.now(tz), "when": when, "days": i18n.DAYS[i18n.current()], "months": i18n.MONTHS[i18n.current()], **data,
         }, status_code=status_code)
         if notice:
@@ -565,7 +570,9 @@ def register(app, ctx) -> None:
         """The Attività box alone, fetched again while work runs: as on every
         page (recent), on the Desk (desk) or on the Attività page (page)."""
         with db.tenant(c.tenant_id) as s:
-            data = act.recent(s, zone(s), problem, full=mode in ("desk", "page"), compact=mode != "page")
+            sites, site = current_site(s, request)
+            data = act.recent(s, zone(s), problem, full=mode in ("desk", "page"), compact=mode != "page",
+                              site=scoped(request, sites, site))
         return pages.TemplateResponse(request, "_activity.html.j2", {"activity": data},
                                       headers={"Cache-Control": "no-store"})
 
@@ -575,7 +582,8 @@ def register(app, ctx) -> None:
         with db.tenant(c.tenant_id) as s:
             sites, site = current_site(s, request)
             return render(request, "activity.html.j2", c, s, "today", _sites=(sites, site),
-                          activity=act.recent(s, zone(s), problem, full=True, compact=False))
+                          activity=act.recent(s, zone(s), problem, full=True, compact=False,
+                                              site=scoped(request, sites, site)))
 
     @app.get("/", response_class=HTMLResponse)
     def today(request: Request, c: auth.Caller = Depends(viewer)):

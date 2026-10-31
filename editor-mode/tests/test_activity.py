@@ -75,3 +75,20 @@ def test_desk_shows_every_site_and_the_activity(db, tenant):
     assert r.status_code == 303 and r.headers["location"] == "/"
     # Every page carries the box while work runs.
     assert "Analisi del sito" in c.get("/sources").text
+
+
+def test_the_box_follows_the_site_chosen_in_the_menu(db, tenant):
+    from sqlalchemy import text
+    _, site_id = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        other = s.execute(text("INSERT INTO editor.sites (tenant_id, domain, name) VALUES (:t, 'altro.example', 'Altro') "
+                               "RETURNING id"), {"t": tenant}).scalar()
+    queue.enqueue(db, tenant, "proposals", f"site {other}", {"site_id": other}, priority=queue.PRIORITY_PERSON)
+    c = logged_in(db, tenant, "owner")
+    assert "altro.example" in c.get("/ui/activity?mode=desk").text  # every site
+    c.get(f"/switch?site={site_id}&back=/", follow_redirects=False)
+    for path in ("/ui/activity?mode=desk", "/ui/activity", "/sources"):
+        page = c.get(path).text
+        assert "Proposte di articoli" not in page, path
+    c.get(f"/switch?site={other}&back=/", follow_redirects=False)
+    assert "Proposte di articoli" in c.get("/ui/activity?mode=desk").text

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.27.1
+
+### Fixed
+
+- Covers with a FLUX model on OpenRouter (`EDITOR_IMAGES_MODEL=
+  black-forest-labs/...`) failed with "does not support: quality": the
+  quality is now sent only to OpenAI's image models, and an option a
+  model refuses is dropped and the image asked again.
+- With one site chosen in the menu, the Attività box showed the work of
+  every site again a few seconds later: the box refreshed while work runs
+  ignored the choice. It now follows the menu on every page and on the
+  Attività page: one site, its work and the collection; "Tutti i siti",
+  everything.
+
 ## 0.27.0
 
 ### Added
