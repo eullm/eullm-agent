@@ -99,9 +99,19 @@ class OpenRouterImager:
         self.http = http or httpx.Client(timeout=180)
 
     def draw(self, prompt: str) -> tuple[bytes, str, float | None]:
-        r = self.http.post(f"{self.url}/images", headers={"Authorization": f"Bearer {self.key}"}, json={
-            "model": self.model, "prompt": prompt, "aspect_ratio": "16:9", "resolution": "1K",
-            "quality": self.quality, "output_format": "jpeg", "n": 1})
+        body = {"model": self.model, "prompt": prompt, "aspect_ratio": "16:9", "resolution": "1K",
+                "output_format": "jpeg", "n": 1}
+        if self.model.startswith("openai/"):  # quality is OpenAI's: FLUX and others refuse it
+            body["quality"] = self.quality
+        r = self.http.post(f"{self.url}/images", headers={"Authorization": f"Bearer {self.key}"}, json=body)
+        if r.status_code == 400 and "support" in r.text.lower():
+            # A model that refuses one of the options: once more with the prompt
+            # and the shape only, then with the prompt alone.
+            for keep in (("model", "prompt", "n", "aspect_ratio"), ("model", "prompt", "n")):
+                r = self.http.post(f"{self.url}/images", headers={"Authorization": f"Bearer {self.key}"},
+                                   json={k: v for k, v in body.items() if k in keep})
+                if not (r.status_code == 400 and "support" in r.text.lower()):
+                    break
         if r.status_code >= 400:
             raise ImageError(f"image service answered {r.status_code}: {r.text[:200]}")
         body = r.json()

@@ -1,6 +1,7 @@
 """Cover images: drawn for the article (never taken from the news), kept
 here, served by token, shared by the translations and sent to the sites."""
 
+import base64
 import json
 import socket
 
@@ -176,3 +177,17 @@ def test_redoing_the_image_keeps_the_translations_own_alt(db, tenant):
         assert images.of(s, did).alt  # the new image of the original
         # Not the old text, which described the old image: the translation's own title.
         assert images.of(s, tid).alt == ENGLISH["title"]
+
+
+def test_flux_on_openrouter_gets_no_quality_and_a_refused_option_is_dropped():
+    jpeg = b"\xff\xd8\xff\xe0rest"
+    ok = httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(jpeg).decode()}]})
+    with respx.mock() as router:
+        route = router.post("https://openrouter.ai/api/v1/images").mock(side_effect=[
+            httpx.Response(400, json={"error": {"message": "Black Forest Labs FLUX 3 Image does not support: resolution"}}),
+            ok])
+        im = images.OpenRouterImager("sk-or-x", images.OPENROUTER, "black-forest-labs/flux-3-image-klein")
+        content, mime, _ = im.draw("a cable")
+    first, second = (json.loads(c.request.content) for c in route.calls)
+    assert "quality" not in first and "resolution" in first
+    assert set(second) == {"model", "prompt", "n", "aspect_ratio"} and content == jpeg and mime == "image/jpeg"
