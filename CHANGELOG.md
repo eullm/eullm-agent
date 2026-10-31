@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.1
+
+### Fixed
+
+- Deleting a plan counted a newsroom twice (once for its subscription,
+  once for its own row), so a plan used by one newsroom said "2
+  newsrooms". The console now names the newsrooms still on the plan and
+  says where to change it (Newsrooms › Subscription).
+
 ## 0.26.0
 
 ### Added

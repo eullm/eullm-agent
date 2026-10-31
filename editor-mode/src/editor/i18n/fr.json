@@ -1317,7 +1317,6 @@
  "{n} min": "{n} min",
  "{n} pagine lette": "{n} pages lues",
  "{n} proposte nuove da decidere.": "{n} nouvelles propositions à décider.",
- "{n} redazioni usano {name}: spostale su un altro piano, oppure toglilo dal sito pubblico": "{n} rédactions utilisent {name} : déplacez-les vers une autre offre, ou retirez-la du site public",
  "{n} s": "{n} s",
  "{n} siti": "{n} sites",
  "{n} sito": "{n} site",
@@ -1590,5 +1589,6 @@
  "Rimborso di {payment} fatto da {who}: {after}.": "Remboursement de {payment} effectué par {who} : {after}.",
  "Rimborso Mollie: {id} ({status})": "Remboursement Mollie : {id} ({status})",
  "Pagamento non trovato.": "Paiement introuvable.",
- "Rimborso non fatto: {error}.": "Remboursement non effectué : {error}."
+ "Rimborso non fatto: {error}.": "Remboursement non effectué : {error}.",
+ "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} est encore l'offre de : {rooms}. Changez-la dans Rédactions › Abonnement, ou retirez-la du site public"
 }

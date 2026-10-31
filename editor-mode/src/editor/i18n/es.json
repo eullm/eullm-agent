@@ -1317,7 +1317,6 @@
  "{n} min": "{n} min",
  "{n} pagine lette": "{n} páginas leídas",
  "{n} proposte nuove da decidere.": "{n} propuestas nuevas por decidir.",
- "{n} redazioni usano {name}: spostale su un altro piano, oppure toglilo dal sito pubblico": "{n} redacciones usan {name}: pásalas a otro plan o quítalo del sitio público",
  "{n} s": "{n} s",
  "{n} siti": "{n} sitios",
  "{n} sito": "{n} sitio",
@@ -1590,5 +1589,6 @@
  "Rimborso di {payment} fatto da {who}: {after}.": "Reembolso de {payment} hecho por {who}: {after}.",
  "Rimborso Mollie: {id} ({status})": "Reembolso de Mollie: {id} ({status})",
  "Pagamento non trovato.": "Pago no encontrado.",
- "Rimborso non fatto: {error}.": "Reembolso no hecho: {error}."
+ "Rimborso non fatto: {error}.": "Reembolso no hecho: {error}.",
+ "{name} è ancora il piano di: {rooms}. Cambialo in Redazioni › Abbonamento, oppure toglilo dal sito pubblico": "{name} sigue siendo el plan de: {rooms}. Cámbialo en Redacciones › Suscripción o quítalo del sitio público"
 }
