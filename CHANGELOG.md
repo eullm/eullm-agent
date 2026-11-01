@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.4
+
+### Changed
+
+- Nuova redazione: with an existing customer chosen, the director's email
+  can stay empty and the customer's email is used.
+
 ## 0.28.3
 
 ### Added

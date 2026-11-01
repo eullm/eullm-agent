@@ -1807,5 +1807,7 @@
  "Cliente scollegato.": "Kundenverknüpfung aufgehoben.",
  "Nuovo cliente": "Neuer Kunde",
  "Cliente non collegato: {error}.": "Kunde nicht verknüpft: {error}.",
- "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Mit \"Neuer Kunde\" öffnet sich nach dem Anlegen die Karte der Redaktion mit den Kundendaten zum Ausfüllen."
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Mit \"Neuer Kunde\" öffnet sich nach dem Anlegen die Karte der Redaktion mit den Kundendaten zum Ausfüllen.",
+ "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Geben Sie die E-Mail des Chefredakteurs ein oder wählen Sie einen Kunden, der eine hat.",
+ "vuota: l'email del cliente scelto": "leer: E-Mail des gewählten Kunden"
 }

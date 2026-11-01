@@ -230,7 +230,9 @@ def test_a_new_newsroom_opens_on_its_new_customer_or_takes_an_existing_one(db, a
     cid = billing.customer_of(admin, tid)["id"]
     if db.sqlite:  # one newsroom per local installation: the second one is a server matter
         return
-    r = c.post("/admin/newsrooms", data={"name": unique("Seconda"), "owner_email": "capo@example.com",
-                                         "customer": str(cid)})
+    assert "Scrivi l&#39;email del direttore" in c.post("/admin/newsrooms", data={"name": unique("Senza")}).text
+    # An existing customer: its email is the director's when none is written.
+    r = c.post("/admin/newsrooms", data={"name": unique("Seconda"), "customer": str(cid)})
     second = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
+    assert "capo@example.com" in r.text
     assert billing.customer_of(admin, second)["id"] == cid and "--customer\" open" not in r.text

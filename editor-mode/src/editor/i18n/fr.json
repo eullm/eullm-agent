@@ -1807,5 +1807,7 @@
  "Cliente scollegato.": "Client délié.",
  "Nuovo cliente": "Nouveau client",
  "Cliente non collegato: {error}.": "Client non lié : {error}.",
- "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Avec \"Nouveau client\", après la création la fiche de la rédaction s'ouvre avec les données du client à remplir."
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Avec \"Nouveau client\", après la création la fiche de la rédaction s'ouvre avec les données du client à remplir.",
+ "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Saisissez l'e-mail du directeur, ou choisissez un client qui en a un.",
+ "vuota: l'email del cliente scelto": "vide : l'e-mail du client choisi"
 }
