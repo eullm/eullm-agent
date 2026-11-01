@@ -323,6 +323,21 @@ def set_tenant_customer(admin, tenant_id: str, spec: dict) -> int:
         return cid
 
 
+def link_customer(admin, tenant_id: str, customer_id: int | None) -> None:
+    """The console ties a newsroom to a customer it already has (one made
+    before billing existed, or a second newsroom of the same customer), or
+    unties it (None)."""
+    with admin.engine.begin() as conn:
+        if customer_id is not None and conn.execute(select(m.customers.c.id).where(
+                m.customers.c.id == customer_id)).first() is None:
+            raise BillingError(t("cliente sconosciuto"))
+        if not conn.execute(update(m.tenants).where(m.tenants.c.tenant_id == tenant_id)
+                            .values(customer_id=customer_id)).rowcount:
+            raise LookupError(tenant_id)
+        conn.execute(update(m.subscriptions).where(m.subscriptions.c.tenant_id == tenant_id)
+                     .values(customer_id=customer_id))
+
+
 def reseller_of_tenant(admin, tenant_id: str) -> int | None:
     with accounts._read(admin) as conn:
         return conn.execute(select(m.customers.c.reseller_id).join(m.tenants, m.tenants.c.customer_id == m.customers.c.id)

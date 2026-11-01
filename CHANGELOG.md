@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.2
+
+### Added
+
+- The console's newsroom card has "Persone e cliente": who works in the
+  newsroom (email, role, invitation still to accept) and its customer. A
+  newsroom made before billing, or without one, gets its customer here:
+  link one the console already has, or fill in the billing details to
+  create it. Clienti lists the newsrooms without a customer.
+
 ## 0.28.1
 
 ### Fixed

@@ -189,3 +189,28 @@ def test_the_console_edits_prices_packs_and_credits(db, admin):
     pub = c.get("/api/public/plans").json()
     assert pub["credits"]["prices"]["article"] == 25 and pub["credits"]["free_redraws"] == 2
     assert pub["plans"] and all("credits_month" in p for p in pub["plans"])  # other tests change the plans
+
+
+def test_the_console_ties_an_old_newsroom_to_a_customer(db, admin, tenant):
+    """A newsroom made before billing has people but no customer: the
+    console shows who works in it and creates or links its customer."""
+    from editor.accounts import ensure_user, set_member
+    c, _ = client(db)
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(admin, op, "Operatore", "password lunga", operator=True)
+    owner = f"{unique('capo')}@example.com"
+    with admin.engine.begin() as conn:
+        set_member(conn, ensure_user(conn, owner, "Capo"), tenant, "owner")
+    c.post("/login", data={"email": op, "password": "password lunga"})
+    assert tenant in c.get("/admin/customers").text  # among the newsrooms without a customer
+    page = c.get(f"/admin/newsrooms/{tenant}").text
+    assert "Persone e cliente" in page and owner in page and "invito non ancora accettato" in page
+    r = c.post(f"/admin/newsrooms/{tenant}/customer", data={"kind": "person", "name": "Capo", "email": owner,
+                                                           "tax_code": "VRDMRA80A01H501U"}, follow_redirects=False)
+    assert r.status_code == 303
+    cust = billing.customer_of(admin, tenant)
+    assert cust["name"] == "Capo" and f"#c-{cust['id']}" in c.get(f"/admin/newsrooms/{tenant}").text
+    c.post(f"/admin/newsrooms/{tenant}/customer/link", data={"customer_id": ""})
+    assert billing.customer_of(admin, tenant) is None
+    c.post(f"/admin/newsrooms/{tenant}/customer/link", data={"customer_id": str(cust["id"])})
+    assert billing.customer_of(admin, tenant)["id"] == cust["id"]

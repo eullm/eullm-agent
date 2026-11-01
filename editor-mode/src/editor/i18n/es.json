@@ -1789,5 +1789,20 @@
  "rimborsato": "reembolsado",
  "annullato": "cancelado",
  "non riuscito": "fallido",
- "scaduto": "caducado"
+ "scaduto": "caducado",
+ "Persone e cliente": "Personas y cliente",
+ "nessun cliente collegato": "ningún cliente vinculado",
+ "Persone": "Personas",
+ "invito non ancora accettato": "invitación aún no aceptada",
+ "Nessuna persona.": "Ninguna persona.",
+ "scheda cliente": "ficha del cliente",
+ "Questa redazione non ha un cliente: collegane uno esistente o compila i dati qui sotto per crearlo.": "Esta redacción no tiene cliente: vincula uno existente o rellena los datos de abajo para crearlo.",
+ "Cliente esistente": "Cliente existente",
+ "Collega": "Vincular",
+ "Crea il cliente e collegalo": "Crear el cliente y vincularlo",
+ "Redazioni senza cliente": "Redacciones sin cliente",
+ "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Ábrela y, en \"Personas y cliente\", vincula un cliente existente o crea uno.",
+ "cliente sconosciuto": "cliente desconocido",
+ "Cliente collegato.": "Cliente vinculado.",
+ "Cliente scollegato.": "Cliente desvinculado."
 }

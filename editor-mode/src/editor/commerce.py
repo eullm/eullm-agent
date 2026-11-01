@@ -573,6 +573,35 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             return back(t("Pacchetto non trovato."), "crediti")
         return back(t("Pacchetto {name} eliminato: i crediti già comprati restano.", name=name), "crediti")
 
+    @app.post("/admin/newsrooms/{tenant_id}/customer")
+    def ui_room_customer(tenant_id: str, kind: str = Form("company"), name: str = Form(""), email: str = Form(""),
+                         phone: str = Form(""), vat_number: str = Form(""), tax_code: str = Form(""),
+                         address: str = Form(""), postal_code: str = Form(""), city: str = Form(""),
+                         province: str = Form(""), country: str = Form("IT"), sdi_code: str = Form(""),
+                         pec: str = Form(""), s=Depends(need_console)):
+        at = f"r-{tenant_id}--customer"
+        spec = {"kind": kind, "name": name, "email": email, "phone": phone, "vat_number": vat_number,
+                "tax_code": tax_code, "address": address, "postal_code": postal_code, "city": city,
+                "province": province, "country": country, "sdi_code": sdi_code, "pec": pec}
+        try:
+            billing.set_tenant_customer(admin, tenant_id, spec)
+        except LookupError:
+            return back(t("Redazione non trovata."))
+        except (billing.BillingError, accounts.AccountError) as e:
+            return back(t("Dati non salvati: {error}.", error=e), at)
+        return back(t("Dati di fatturazione salvati."), at)
+
+    @app.post("/admin/newsrooms/{tenant_id}/customer/link")
+    def ui_room_link(tenant_id: str, customer_id: str = Form(""), s=Depends(need_console)):
+        at = f"r-{tenant_id}--customer"
+        try:
+            billing.link_customer(admin, tenant_id, int(customer_id) if customer_id.strip() else None)
+        except LookupError:
+            return back(t("Redazione non trovata."))
+        except (billing.BillingError, ValueError) as e:
+            return back(t("Dati non salvati: {error}.", error=e), at)
+        return back(t("Cliente collegato.") if customer_id.strip() else t("Cliente scollegato."), at)
+
     @app.post("/admin/newsrooms/{tenant_id}/credits")
     def ui_grant(tenant_id: str, credits_n: str = Form(..., alias="credits"), amount: str = Form(""),
                  note: str = Form(""), s=Depends(need_console)):

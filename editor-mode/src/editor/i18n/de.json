@@ -1789,5 +1789,20 @@
  "rimborsato": "erstattet",
  "annullato": "storniert",
  "non riuscito": "fehlgeschlagen",
- "scaduto": "abgelaufen"
+ "scaduto": "abgelaufen",
+ "Persone e cliente": "Personen und Kunde",
+ "nessun cliente collegato": "kein Kunde verknüpft",
+ "Persone": "Personen",
+ "invito non ancora accettato": "Einladung noch nicht angenommen",
+ "Nessuna persona.": "Keine Personen.",
+ "scheda cliente": "Kundenkarte",
+ "Questa redazione non ha un cliente: collegane uno esistente o compila i dati qui sotto per crearlo.": "Diese Redaktion hat keinen Kunden: Verknüpfen Sie einen vorhandenen oder füllen Sie die Daten unten aus, um ihn anzulegen.",
+ "Cliente esistente": "Vorhandener Kunde",
+ "Collega": "Verknüpfen",
+ "Crea il cliente e collegalo": "Kunden anlegen und verknüpfen",
+ "Redazioni senza cliente": "Redaktionen ohne Kunden",
+ "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Öffnen Sie sie und verknüpfen Sie unter \"Personen und Kunde\" einen vorhandenen Kunden oder legen Sie einen an.",
+ "cliente sconosciuto": "unbekannter Kunde",
+ "Cliente collegato.": "Kunde verknüpft.",
+ "Cliente scollegato.": "Kundenverknüpfung aufgehoben."
 }

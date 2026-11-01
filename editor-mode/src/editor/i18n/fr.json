@@ -1789,5 +1789,20 @@
  "rimborsato": "remboursé",
  "annullato": "annulé",
  "non riuscito": "échoué",
- "scaduto": "expiré"
+ "scaduto": "expiré",
+ "Persone e cliente": "Personnes et client",
+ "nessun cliente collegato": "aucun client lié",
+ "Persone": "Personnes",
+ "invito non ancora accettato": "invitation pas encore acceptée",
+ "Nessuna persona.": "Aucune personne.",
+ "scheda cliente": "fiche client",
+ "Questa redazione non ha un cliente: collegane uno esistente o compila i dati qui sotto per crearlo.": "Cette rédaction n'a pas de client : liez-en un existant ou remplissez les données ci-dessous pour le créer.",
+ "Cliente esistente": "Client existant",
+ "Collega": "Lier",
+ "Crea il cliente e collegalo": "Créer le client et le lier",
+ "Redazioni senza cliente": "Rédactions sans client",
+ "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Ouvrez-la et, dans \"Personnes et client\", liez un client existant ou créez-en un.",
+ "cliente sconosciuto": "client inconnu",
+ "Cliente collegato.": "Client lié.",
+ "Cliente scollegato.": "Client délié."
 }

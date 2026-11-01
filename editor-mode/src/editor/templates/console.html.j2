@@ -172,6 +172,40 @@
         </div>
       </details>
       {% endif %}
+      {% if single_room %}{% set c = room_customer or {} %}
+      <details class="act" data-tone="teal" id="{{ here }}--customer" {% if notice_at == here ~ '--customer' %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">☺</span>{{ _('Persone e cliente') }}<span class="sub">{% if room_customer %}{{ room_customer.name }}{% else %}{{ _('nessun cliente collegato') }}{% endif %}</span></summary>
+        {% if notice and notice_at == here ~ '--customer' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+        <h3 style="margin-top: 8px;">{{ _('Persone') }}</h3>
+        {% for x in people %}
+        <div class="list-row"><span>{{ x.email }}{% if x.name %} · {{ x.name }}{% endif %}</span><span>{{ {'owner': _('Direttore'), 'editor': _('Redattore'), 'viewer': _('Lettura')}.get(x.role, x.role) }}{% if not x.active %} · {{ _('invito non ancora accettato') }}{% endif %}</span></div>
+        {% else %}<p class="hint">{{ _('Nessuna persona.') }}</p>{% endfor %}
+        <h3 style="margin-top: 14px;">{{ _('Cliente') }}</h3>
+        {% if room_customer %}<p>{{ room_customer.name }} · {{ room_customer.email }}{% if room_customer.vat_number %} · {{ _('P.IVA') }} {{ room_customer.vat_number }}{% endif %} · <a href="/admin/customers#c-{{ room_customer.id }}">{{ _('scheda cliente') }}</a></p>{% else %}<p class="hint">{{ _('Questa redazione non ha un cliente: collegane uno esistente o compila i dati qui sotto per crearlo.') }}</p>{% endif %}
+        {% if customers %}
+        <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}/customer/link" class="form-grid" style="margin-top: 8px;">
+          <label class="field">{{ _('Cliente esistente') }}<select name="customer_id"><option value="">{{ _('nessuno') }}</option>{% for cu in customers %}<option value="{{ cu.id }}" {% if room_customer and room_customer.id == cu.id %}selected{% endif %}>{{ cu.name }} · {{ cu.email }}</option>{% endfor %}</select></label>
+          <div><button class="btn" type="submit">{{ _('Collega') }}</button></div>
+        </form>
+        {% endif %}
+        <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}/customer" class="form-grid billing" style="margin-top: 12px;">
+          <label class="field">{{ _('Tipo') }}<select name="kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if c.kind == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
+          <label class="field" style="grid-column: span 2;">{{ _('Ragione sociale o nome') }}<input name="name" value="{{ c.name or '' }}" required maxlength="200"></label>
+          <label class="field">{{ _('Partita IVA') }}<input name="vat_number" value="{{ c.vat_number or '' }}" maxlength="40"></label>
+          <label class="field">{{ _('Codice fiscale') }}<input name="tax_code" value="{{ c.tax_code or '' }}" maxlength="40"></label>
+          <label class="field">{{ _('Codice destinatario SDI') }}<input name="sdi_code" value="{{ c.sdi_code or '' }}" maxlength="7"></label>
+          <label class="field">{{ _('Email per le fatture') }}<input name="email" type="email" value="{{ c.email or ((people|selectattr('role', 'equalto', 'owner')|map(attribute='email')|first) or '') }}" required></label>
+          <label class="field">{{ _('Telefono') }}<input name="phone" value="{{ c.phone or '' }}" maxlength="40"></label>
+          <label class="field">{{ _('PEC') }}<input name="pec" type="email" value="{{ c.pec or '' }}"></label>
+          <label class="field" style="grid-column: span 2;">{{ _('Indirizzo') }}<input name="address" value="{{ c.address or '' }}" maxlength="200"></label>
+          <label class="field">{{ _('CAP') }}<input name="postal_code" value="{{ c.postal_code or '' }}" maxlength="20"></label>
+          <label class="field">{{ _('Città') }}<input name="city" value="{{ c.city or '' }}" maxlength="100"></label>
+          <label class="field">{{ _('Provincia') }}<input name="province" value="{{ c.province or '' }}" maxlength="10"></label>
+          <label class="field">{{ _('Paese') }}<input name="country" value="{{ c.country or 'IT' }}" maxlength="2"></label>
+          <div class="wide"><button class="btn" type="submit">{{ _('Salva i dati') if room_customer else _('Crea il cliente e collegalo') }}</button></div>
+        </form>
+      </details>
+      {% endif %}
       {% set cr = credits.get(r.tenant_id) %}
       <details class="act" id="{{ here }}--credits" {% if notice_at == here ~ '--credits' %}open{% endif %}>
         <summary><span class="ico" aria-hidden="true">◎</span>{{ _('Crediti') }}<span class="sub">{% if cr and cr.enabled %}{{ _('{left} di {month} del mese', left=cr.month_left, month=cr.month) }} · {{ _('{n} extra', n=cr.extra) }}{% else %}{{ _('crediti non attivi') }}{% endif %}</span></summary>
@@ -286,6 +320,14 @@
     </div>
     {% else %}
     <p class="empty">{{ _('Nessun cliente: arrivano dal sito con <code>POST /api/operator/signup</code>, o dai rivenditori.') }}</p>
+    {% endif %}
+    {% set orphans = rooms|selectattr('customer_id', 'none')|list %}
+    {% if orphans %}
+    <div class="pad">
+      <h3>{{ _('Redazioni senza cliente') }}</h3>
+      <p class="hint">{{ _('Aprila e, in "Persone e cliente", collega un cliente esistente o creane uno.') }}</p>
+      {% for o in orphans %}<div class="list-row"><a href="/admin/newsrooms/{{ o.tenant_id }}#r-{{ o.tenant_id }}--customer">{{ o.name }}</a><span class="num">{{ o.tenant_id }}</span></div>{% endfor %}
+    </div>
     {% endif %}
     <div class="pad" id="prove-negate">
       <h3>{{ _('Seconde prove negate') }}</h3>
