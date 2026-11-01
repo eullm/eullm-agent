@@ -228,6 +228,8 @@ def test_a_new_newsroom_opens_on_its_new_customer_or_takes_an_existing_one(db, a
     c.post(f"/admin/newsrooms/{tid}/customer", data={"kind": "person", "name": "Capo", "email": "capo@example.com",
                                                     "tax_code": "VRDMRA80A01H501U"})
     cid = billing.customer_of(admin, tid)["id"]
+    if db.sqlite:  # one newsroom per local installation: the second one is a server matter
+        return
     r = c.post("/admin/newsrooms", data={"name": unique("Seconda"), "owner_email": "capo@example.com",
                                          "customer": str(cid)})
     second = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
