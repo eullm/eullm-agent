@@ -1789,5 +1789,20 @@
  "rimborsato": "refunded",
  "annullato": "cancelled",
  "non riuscito": "failed",
- "scaduto": "expired"
+ "scaduto": "expired",
+ "Persone e cliente": "People and customer",
+ "nessun cliente collegato": "no customer linked",
+ "Persone": "People",
+ "invito non ancora accettato": "invitation not accepted yet",
+ "Nessuna persona.": "No people.",
+ "scheda cliente": "customer card",
+ "Questa redazione non ha un cliente: collegane uno esistente o compila i dati qui sotto per crearlo.": "This newsroom has no customer: link an existing one or fill in the details below to create it.",
+ "Cliente esistente": "Existing customer",
+ "Collega": "Link",
+ "Crea il cliente e collegalo": "Create the customer and link it",
+ "Redazioni senza cliente": "Newsrooms without a customer",
+ "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Open it and, in \"People and customer\", link an existing customer or create one.",
+ "cliente sconosciuto": "unknown customer",
+ "Cliente collegato.": "Customer linked.",
+ "Cliente scollegato.": "Customer unlinked."
 }
