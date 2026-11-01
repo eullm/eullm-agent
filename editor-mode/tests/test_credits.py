@@ -214,3 +214,21 @@ def test_the_console_ties_an_old_newsroom_to_a_customer(db, admin, tenant):
     assert billing.customer_of(admin, tenant) is None
     c.post(f"/admin/newsrooms/{tenant}/customer/link", data={"customer_id": str(cust["id"])})
     assert billing.customer_of(admin, tenant)["id"] == cust["id"]
+
+
+def test_a_new_newsroom_opens_on_its_new_customer_or_takes_an_existing_one(db, admin):
+    c, _ = client(db)
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(admin, op, "Operatore", "password lunga", operator=True)
+    c.post("/login", data={"email": op, "password": "password lunga"})
+    assert 'option value="new" selected' in c.get("/admin/new").text
+    r = c.post("/admin/newsrooms", data={"name": unique("Nuova"), "owner_email": f"{unique('d')}@example.com"})
+    assert r.status_code == 200 and "Crea il cliente e collegalo" in r.text and "--customer\" open" in r.text
+    tid = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
+    c.post(f"/admin/newsrooms/{tid}/customer", data={"kind": "person", "name": "Capo", "email": "capo@example.com",
+                                                    "tax_code": "VRDMRA80A01H501U"})
+    cid = billing.customer_of(admin, tid)["id"]
+    r = c.post("/admin/newsrooms", data={"name": unique("Seconda"), "owner_email": "capo@example.com",
+                                         "customer": str(cid)})
+    second = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
+    assert billing.customer_of(admin, second)["id"] == cid and "--customer\" open" not in r.text

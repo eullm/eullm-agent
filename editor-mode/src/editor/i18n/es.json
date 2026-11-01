@@ -1804,5 +1804,8 @@
  "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Ábrela y, en \"Personas y cliente\", vincula un cliente existente o crea uno.",
  "cliente sconosciuto": "cliente desconocido",
  "Cliente collegato.": "Cliente vinculado.",
- "Cliente scollegato.": "Cliente desvinculado."
+ "Cliente scollegato.": "Cliente desvinculado.",
+ "Nuovo cliente": "Nuevo cliente",
+ "Cliente non collegato: {error}.": "Cliente no vinculado: {error}.",
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Con \"Nuevo cliente\", tras crearla se abre la ficha de la redacción con los datos del cliente por rellenar."
 }

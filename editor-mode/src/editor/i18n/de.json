@@ -1804,5 +1804,8 @@
  "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Öffnen Sie sie und verknüpfen Sie unter \"Personen und Kunde\" einen vorhandenen Kunden oder legen Sie einen an.",
  "cliente sconosciuto": "unbekannter Kunde",
  "Cliente collegato.": "Kunde verknüpft.",
- "Cliente scollegato.": "Kundenverknüpfung aufgehoben."
+ "Cliente scollegato.": "Kundenverknüpfung aufgehoben.",
+ "Nuovo cliente": "Neuer Kunde",
+ "Cliente non collegato: {error}.": "Kunde nicht verknüpft: {error}.",
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Mit \"Neuer Kunde\" öffnet sich nach dem Anlegen die Karte der Redaktion mit den Kundendaten zum Ausfüllen."
 }

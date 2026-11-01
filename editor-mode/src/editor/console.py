@@ -465,7 +465,7 @@ def register(app, ctx) -> None:
     def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(...), plan: str = Form(""),
                   max_sites: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
-                  credits_month: str = Form(""), s=Depends(need_console)):
+                  credits_month: str = Form(""), customer: str = Form("new"), s=Depends(need_console)):
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
                       "max_items_per_day": _num(max_items_per_day),
@@ -485,7 +485,14 @@ def register(app, ctx) -> None:
             new["link"] = send(request, res["invite"], "invite", res["owner_email"], name.strip(), s.email)
         else:
             new["note"] = t("{email} ha già un account: la trova fra le sue redazioni.", email=res["owner_email"])
-        return page(request, s, new=new)
+        tid = res["tenant_id"]
+        if customer.strip().isdigit():
+            try:
+                billing.link_customer(admin, tid, int(customer))
+            except (billing.BillingError, LookupError) as e:
+                new["warning"] = t("Cliente non collegato: {error}.", error=e)
+        # The newsroom's card next, with its customer to create (a new one) or linked.
+        return page(request, s, view="redazione", room=tid, new=new, open_customer=not customer.strip().isdigit())
 
     @app.post("/admin/newsrooms/{tenant_id}")
     def ui_update(tenant_id: str, name: str = Form(""), plan: str = Form(""), max_sites: str = Form(""),

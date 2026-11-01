@@ -1804,5 +1804,8 @@
  "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Ouvrez-la et, dans \"Personnes et client\", liez un client existant ou créez-en un.",
  "cliente sconosciuto": "client inconnu",
  "Cliente collegato.": "Client lié.",
- "Cliente scollegato.": "Client délié."
+ "Cliente scollegato.": "Client délié.",
+ "Nuovo cliente": "Nouveau client",
+ "Cliente non collegato: {error}.": "Client non lié : {error}.",
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Avec \"Nouveau client\", après la création la fiche de la rédaction s'ouvre avec les données du client à remplir."
 }

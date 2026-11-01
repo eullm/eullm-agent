@@ -173,7 +173,7 @@
       </details>
       {% endif %}
       {% if single_room %}{% set c = room_customer or {} %}
-      <details class="act" data-tone="teal" id="{{ here }}--customer" {% if notice_at == here ~ '--customer' %}open{% endif %}>
+      <details class="act" data-tone="teal" id="{{ here }}--customer" {% if notice_at == here ~ '--customer' or open_customer %}open{% endif %}>
         <summary><span class="ico" aria-hidden="true">☺</span>{{ _('Persone e cliente') }}<span class="sub">{% if room_customer %}{{ room_customer.name }}{% else %}{{ _('nessun cliente collegato') }}{% endif %}</span></summary>
         {% if notice and notice_at == here ~ '--customer' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
         <h3 style="margin-top: 8px;">{{ _('Persone') }}</h3>
@@ -262,10 +262,11 @@
   {% if view == 'nuova' %}
   <section class="card pad" id="nuova" aria-labelledby="h-create">
     <h2 id="h-create" class="sr-only">{{ _('Nuova redazione') }}</h2>
-    <p class="hint">{{ _('Il direttore riceve un invito per scegliere la sua password (o se ha già un account la trova fra le sue redazioni).') }}</p>
+    <p class="hint">{{ _('Il direttore riceve un invito per scegliere la sua password (o se ha già un account la trova fra le sue redazioni).') }} {{ _('Con "Nuovo cliente" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.') }}</p>
     <form method="post" action="/admin/newsrooms" class="form-grid">
       <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('Redazione i3k') }}"></label>
       <label class="field">{{ _('Email del direttore') }}<input name="owner_email" type="email" required></label>
+      <label class="field">{{ _('Cliente') }}<select name="customer"><option value="new" selected>{{ _('Nuovo cliente') }}</option>{% for cu in customers %}<option value="{{ cu.id }}">{{ cu.name }} · {{ cu.email }}</option>{% endfor %}</select></label>
       <label class="field">{{ _('Piano') }}<input name="plan" maxlength="60" placeholder="standard"></label>
       <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
       <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
