@@ -462,7 +462,7 @@ def register(app, ctx) -> None:
                     "aggiornamenti")
 
     @app.post("/admin/newsrooms", response_class=HTMLResponse)
-    def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(...), plan: str = Form(""),
+    def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(""), plan: str = Form(""),
                   max_sites: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
                   credits_month: str = Form(""), customer: str = Form("new"), s=Depends(need_console)):
@@ -474,6 +474,12 @@ def register(app, ctx) -> None:
                       "credits_month": _num(credits_month)}
         except ValueError:
             return page(request, s, 400, view="nuova", error=t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
+        if not owner_email.strip() and customer.strip().isdigit():
+            # An existing customer: the director is the customer, unless said otherwise.
+            owner_email = (billing.customer(admin, int(customer)) or {}).get("email") or ""
+        if not owner_email.strip():
+            return page(request, s, 400, view="nuova",
+                        error=t("Scrivi l'email del direttore, oppure scegli un cliente che ne ha una."))
         spec = {"name": name, "owner_email": owner_email, "limits": limits} | ({"plan": plan.strip()[:60]} if plan.strip() else {})
         try:
             res = newsrooms.create(admin, spec, s.email, ctx.core)

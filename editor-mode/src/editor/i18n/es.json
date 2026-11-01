@@ -1807,5 +1807,7 @@
  "Cliente scollegato.": "Cliente desvinculado.",
  "Nuovo cliente": "Nuevo cliente",
  "Cliente non collegato: {error}.": "Cliente no vinculado: {error}.",
- "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Con \"Nuevo cliente\", tras crearla se abre la ficha de la redacción con los datos del cliente por rellenar."
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Con \"Nuevo cliente\", tras crearla se abre la ficha de la redacción con los datos del cliente por rellenar.",
+ "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Escribe el email del director o elige un cliente que tenga uno.",
+ "vuota: l'email del cliente scelto": "vacío: el email del cliente elegido"
 }
