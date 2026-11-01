@@ -143,9 +143,9 @@
           {% for p in pays %}
             <tr>
               <td>{{ (p.paid_at or p.created_at).strftime('%d/%m/%Y %H:%M') if (p.paid_at or p.created_at) else '' }}</td>
-              <td>{{ {'first': _('primo pagamento'), 'recurring': _('rinnovo'), 'manual': _('bonifico'), 'refund': _('rimborso')}.get(p.kind, p.kind) }}</td>
+              <td>{{ {'first': _('primo pagamento'), 'recurring': _('rinnovo'), 'manual': _('bonifico'), 'refund': _('rimborso'), 'credits': _('crediti')}.get(p.kind, p.kind) }}</td>
               <td class="num">{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</td>
-              <td>{{ p.status }}</td>
+              <td>{{ {'paid': _('pagato'), 'open': _('in attesa'), 'queued': _('in coda'), 'pending': _('in corso'), 'processing': _('in corso'), 'refunded': _('rimborsato'), 'canceled': _('annullato'), 'failed': _('non riuscito'), 'expired': _('scaduto')}.get(p.status, p.status) }}</td>
               <td><code>{{ p.provider_payment_id or '' }}</code></td>
             </tr>
             {% if p.refundable_cents and online %}

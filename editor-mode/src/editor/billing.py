@@ -963,6 +963,39 @@ def refund(admin, gateway, payment_row_id: int, amount_cents: int | None, by: st
             "tenant_id": row.tenant_id, "payment_id": row.provider_payment_id}
 
 
+REFUND_OPEN = ("queued", "pending", "processing")
+
+
+def sync_refunds(admin, gateway, tenant_id: str | None = None) -> int:
+    """Read again from the gateway the refunds not finished yet: one
+    cancelled in Mollie's dashboard (for example for lack of funds) shows
+    as cancelled here too. Returns how many changed."""
+    if gateway is None or not hasattr(gateway, "refund_status"):
+        return 0
+    p = m.payments
+    q = select(p.c.id, p.c.provider_payment_id, p.c.note, p.c.status).where(
+        p.c.kind == "refund", p.c.provider == gateway.name, p.c.status.in_(REFUND_OPEN))
+    if tenant_id is not None:
+        q = q.where(p.c.tenant_id == tenant_id)
+    with accounts._read(admin) as conn:
+        rows = conn.execute(q).all()
+    changed = 0
+    for r in rows:
+        of = re.search(r"tr_\w+", r.note or "")
+        if not of or not r.provider_payment_id:
+            continue
+        try:
+            status = gateway.refund_status(of.group(0), r.provider_payment_id)
+        except Exception:
+            log.exception("refund %s not read from the gateway", r.provider_payment_id)
+            continue
+        if status and status != r.status:
+            with admin.engine.begin() as conn:
+                conn.execute(update(p).where(p.c.id == r.id).values(status=status))
+            changed += 1
+    return changed
+
+
 def payment_by_provider_id(admin, payment_id: str) -> dict | None:
     with accounts._read(admin) as conn:
         row = conn.execute(select(m.payments).where(m.payments.c.provider_payment_id == payment_id)).first()

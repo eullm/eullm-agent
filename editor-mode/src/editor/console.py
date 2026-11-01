@@ -12,6 +12,7 @@ Two ways in, both checked here:
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from importlib import metadata
 from zoneinfo import ZoneInfo
@@ -25,6 +26,8 @@ from . import accounts, billing, commerce, credits, installs, newsrooms, repo, t
 from . import models as m
 from .auth import ROLES
 from .i18n import t
+
+log = logging.getLogger(__name__)
 
 COOKIE = "editor_token"
 INSTALLED = metadata.version("eullm-editor-mode")
@@ -263,6 +266,11 @@ def register(app, ctx) -> None:
         notice = request.cookies.get(NOTICE_COOKIE)
         notice_at = request.cookies.get(NOTICE_AT_COOKIE) if notice else None
         from urllib.parse import unquote
+        if room:  # a refund cancelled in Mollie's dashboard shows as cancelled here
+            try:
+                billing.sync_refunds(admin, ctx.gateway, room)
+            except Exception:
+                log.exception("refunds of %s not synced", room)
         resp = pages.TemplateResponse(request, "console.html.j2", {
             "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),

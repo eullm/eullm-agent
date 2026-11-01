@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.1
+
+### Fixed
+
+- A refund cancelled in Mollie's dashboard (for example when the balance
+  has no funds) showed in the console as if it had left. Refunds not
+  finished yet are read again from Mollie when a newsroom's card opens and
+  every hour by the worker: queued, in progress, refunded or cancelled, in
+  the newsroom's language. Credit payments are named in the list.
+
 ## 0.28.0
 
 ### Added
