@@ -1782,5 +1782,12 @@
  "Crediti insufficienti: ne servono \\1 e ne restano \\2. Puoi aggiungerne in Il mio piano.": "Crédits insuffisants : il en faut \\1 et il en reste \\2. Vous pouvez en ajouter dans Mon offre.",
  "Articoli del piano finiti per questo mese (\\1 di \\2).": "Les articles de l'offre sont épuisés pour ce mois (\\1 sur \\2).",
  "La prova è finita: solo proposte finché non scegli un piano.": "L'essai est terminé : seulement des propositions jusqu'à ce que vous choisissiez une offre.",
- "Crediti insufficienti: una nuova copertina costa {n} crediti e ne restano {left}. Puoi aggiungerne in Il mio piano.": "Crédits insuffisants : une nouvelle couverture coûte {n} crédits et il en reste {left}. Vous pouvez en ajouter dans Mon offre."
+ "Crediti insufficienti: una nuova copertina costa {n} crediti e ne restano {left}. Puoi aggiungerne in Il mio piano.": "Crédits insuffisants : une nouvelle couverture coûte {n} crédits et il en reste {left}. Vous pouvez en ajouter dans Mon offre.",
+ "crediti": "crédits",
+ "pagato": "payé",
+ "in attesa": "en attente",
+ "rimborsato": "remboursé",
+ "annullato": "annulé",
+ "non riuscito": "échoué",
+ "scaduto": "expiré"
 }

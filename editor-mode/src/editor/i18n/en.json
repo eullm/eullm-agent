@@ -1782,5 +1782,12 @@
  "Crediti insufficienti: ne servono \\1 e ne restano \\2. Puoi aggiungerne in Il mio piano.": "Not enough credits: \\1 needed and \\2 left. You can add more in My plan.",
  "Articoli del piano finiti per questo mese (\\1 di \\2).": "The plan's articles are used up for this month (\\1 of \\2).",
  "La prova è finita: solo proposte finché non scegli un piano.": "The trial is over: proposals only until you choose a plan.",
- "Crediti insufficienti: una nuova copertina costa {n} crediti e ne restano {left}. Puoi aggiungerne in Il mio piano.": "Not enough credits: a new cover costs {n} credits and {left} are left. You can add more in My plan."
+ "Crediti insufficienti: una nuova copertina costa {n} crediti e ne restano {left}. Puoi aggiungerne in Il mio piano.": "Not enough credits: a new cover costs {n} credits and {left} are left. You can add more in My plan.",
+ "crediti": "credits",
+ "pagato": "paid",
+ "in attesa": "waiting",
+ "rimborsato": "refunded",
+ "annullato": "cancelled",
+ "non riuscito": "failed",
+ "scaduto": "expired"
 }

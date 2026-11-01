@@ -667,3 +667,8 @@ def test_the_console_refunds_an_online_payment(db, admin):
     # The renewals are already stopped: the plan can then be changed without a second cancel at Mollie.
     assert "Abbonamento di" in c.post(f"/admin/subscriptions/{tid}", data={"plan": "trial"}).text
     assert billing.subscription(admin, tid)["plan_code"] == "trial"
+    # A refund cancelled in Mollie's dashboard (no funds) shows as cancelled.
+    fake.refund_status = lambda payment_id, refund_id: "canceled" if refund_id.endswith("1") else "queued"
+    page = c.get(f"/admin/newsrooms/{tid}").text
+    assert "annullato" in page and "in coda" in page
+

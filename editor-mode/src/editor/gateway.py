@@ -97,6 +97,12 @@ class Mollie:
             raise GatewayError("Mollie 404: payment not found")
         return r["id"], r.get("status", "queued")
 
+    def refund_status(self, payment_id: str, refund_id: str) -> str | None:
+        """The refund's status now (queued, pending, processing, refunded,
+        failed, canceled), None when Mollie does not know it."""
+        r = self._call("GET", f"/payments/{payment_id}/refunds/{refund_id}")
+        return None if r is None else r.get("status")
+
     def create_subscription(self, customer_id: str, amount_cents: int, currency: str, interval: str, start: date,
                             description: str, webhook_url: str, mandate_id: str | None, metadata: dict) -> str:
         body = {"amount": _amount(amount_cents, currency), "interval": "12 months" if interval == "year" else "1 month",
