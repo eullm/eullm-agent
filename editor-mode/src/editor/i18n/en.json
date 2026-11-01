@@ -1804,5 +1804,8 @@
  "Aprila e, in \"Persone e cliente\", collega un cliente esistente o creane uno.": "Open it and, in \"People and customer\", link an existing customer or create one.",
  "cliente sconosciuto": "unknown customer",
  "Cliente collegato.": "Customer linked.",
- "Cliente scollegato.": "Customer unlinked."
+ "Cliente scollegato.": "Customer unlinked.",
+ "Nuovo cliente": "New customer",
+ "Cliente non collegato: {error}.": "Customer not linked: {error}.",
+ "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "With \"New customer\", after creating it the newsroom's card opens with the customer's details to fill in."
 }

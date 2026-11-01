@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.28.3
+
+### Added
+
+- Nuova redazione in the console asks for its customer: "Nuovo cliente"
+  (chosen by default) opens the new newsroom's card with the customer's
+  details to fill in; an existing customer is linked at once.
+
 ## 0.28.2
 
 ### Added
