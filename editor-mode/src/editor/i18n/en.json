@@ -1828,5 +1828,8 @@
  "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.": "no suitable proposal this hour: it needs opportunity at least {o} and news from at least {f} different sources. It tries again at the next round.",
  "La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.": "The automatic newsroom picks among these proposals by itself: you can still accept one yourself.",
  "la sceglie la redazione automatica": "picked by the automatic newsroom",
- "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "The automatic newsroom is on: it picks the proposals, writes and publishes by itself every hour. Your yes is not needed; the status is in Site and profile › Automatic newsroom."
+ "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "The automatic newsroom is on: it picks the proposals, writes and publishes by itself every hour. Your yes is not needed; the status is in Site and profile › Automatic newsroom.",
+ "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "The destination \\1 takes articles in \\2, this one is in \\3: choose the destination of its language.",
+ "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub cannot find the repository \\1 with this token: in the token choose «Only select repositories» with \\1 and give Contents read and write.",
+ "Richiesta non inviata: {e}": "Request not sent: {e}"
 }

@@ -1828,5 +1828,8 @@
  "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.": "kein passender Vorschlag in dieser Stunde: nötig sind Relevanz mindestens {o} und Nachrichten aus mindestens {f} verschiedenen Quellen. Neuer Versuch beim nächsten Durchlauf.",
  "La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.": "Die automatische Redaktion wählt selbst aus diesen Vorschlägen: Sie können trotzdem selbst einen annehmen.",
  "la sceglie la redazione automatica": "wählt die automatische Redaktion",
- "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "Die automatische Redaktion ist an: Sie wählt die Vorschläge, schreibt und veröffentlicht jede Stunde selbst. Ihr Ja ist nicht nötig; den Stand sehen Sie unter Website und Profil › Automatische Redaktion."
+ "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "Die automatische Redaktion ist an: Sie wählt die Vorschläge, schreibt und veröffentlicht jede Stunde selbst. Ihr Ja ist nicht nötig; den Stand sehen Sie unter Website und Profil › Automatische Redaktion.",
+ "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "Das Ziel \\1 nimmt Artikel in \\2 an, dieser ist in \\3: Wählen Sie das Ziel seiner Sprache.",
+ "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub findet das Repository \\1 mit diesem Token nicht: Wählen Sie im Token «Only select repositories» mit \\1 und geben Sie Contents Lesen und Schreiben.",
+ "Richiesta non inviata: {e}": "Anfrage nicht gesendet: {e}"
 }

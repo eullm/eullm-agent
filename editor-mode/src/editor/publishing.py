@@ -274,6 +274,13 @@ def search_fields(s, d) -> dict:
     }
 
 
+def fits_language(target, language: str | None) -> bool:
+    """A destination set for one language takes only articles in it; one
+    set for none takes any."""
+    want = ((target.config or {}).get("language") or "").strip()[:2].lower()
+    return not want or want == (language or "")[:2].lower()
+
+
 def request(db, tenant_id: str, draft_id: int, target_id: int, mode: str, by: str) -> int:
     with db.tenant(tenant_id) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
@@ -286,6 +293,9 @@ def request(db, tenant_id: str, draft_id: int, target_id: int, mode: str, by: st
             raise PublishError("the trial is over: choose a plan to publish")
         if t.site_id != d.site_id or not t.enabled:
             raise PublishError("target not available for this site")
+        if not fits_language(t, d.language):
+            raise PublishError(f"the destination {t.name} takes articles in {t.config.get('language')}, "
+                               f"this one is in {d.language}")
         body = d.body_md
         settings = (s.execute(select(m.editorial_profiles.c.body).where(
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()

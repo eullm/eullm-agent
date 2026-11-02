@@ -1828,5 +1828,8 @@
  "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.": "aucune proposition adaptée cette heure-ci : il faut une opportunité d'au moins {o} et des nouvelles d'au moins {f} sources différentes. Nouvel essai au prochain passage.",
  "La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.": "La rédaction automatique choisit elle-même parmi ces propositions : vous pouvez quand même en accepter une.",
  "la sceglie la redazione automatica": "choisie par la rédaction automatique",
- "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "La rédaction automatique est active : elle choisit les propositions, écrit et publie elle-même toutes les heures. Votre accord n'est pas nécessaire ; l'état est dans Site et profil › Rédaction automatique."
+ "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "La rédaction automatique est active : elle choisit les propositions, écrit et publie elle-même toutes les heures. Votre accord n'est pas nécessaire ; l'état est dans Site et profil › Rédaction automatique.",
+ "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "La destination \\1 reçoit des articles en \\2, celui-ci est en \\3 : choisissez la destination de sa langue.",
+ "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub ne trouve pas le dépôt \\1 avec ce jeton : dans le jeton choisissez «Only select repositories» avec \\1 et donnez Contents en lecture et écriture.",
+ "Richiesta non inviata: {e}": "Demande non envoyée : {e}"
 }

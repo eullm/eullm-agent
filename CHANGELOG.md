@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.8
+
+### Fixed
+
+- A destination set for one language takes only articles in that
+  language: the draft page lists only the destinations of the draft's
+  language, and a request towards another one is refused, so an Italian
+  article can no longer go to the English site.
+- Publication errors in plain words: a GitHub token that cannot see the
+  repository says what to set in the token.
+
 ## 0.28.7
 
 ### Changed
