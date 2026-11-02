@@ -1842,5 +1842,7 @@
  "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Traduction écartée : «{title}». L'original reste publié.",
  "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Écarté par la rédaction automatique : «{title}». Il n'a pas été publié et aucune couverture n'a été nécessaire.",
  "Il modello più forte riscrive l'articolo per correggere: {why}": "Le modèle le plus fort réécrit l'article pour corriger : {why}",
- "Correzione degli articoli scartati (modello più forte)": "Correction des articles écartés (modèle le plus fort)"
+ "Correzione degli articoli scartati (modello più forte)": "Correction des articles écartés (modèle le plus fort)",
+ "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "arrêtée pour aujourd'hui : {t} articles essayés, {k} gardés, les autres n'ont pas passé les contrôles. Elle reprend demain.",
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Articles publiés. Les articles écartés sont remplacés, jusqu'au double de tentatives par jour."
 }

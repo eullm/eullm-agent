@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 import pytest
 import respx
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text
+from sqlalchemy import func, insert, select, text, update
 
 from editor import auth, autopilot as ap, drafts, models as m, proposals as props, publishing as pub, repo
 from editor import opportunity as opp, profile as prof, translate as tr
@@ -71,6 +71,26 @@ def test_each_hour_takes_its_share_of_the_day(db, tenant):
     assert all(r.status == "rejected" for r in left if "starlink" in r.title.lower())
     # The day's one article is taken: nothing more until tomorrow.
     assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"done": 1}
+    # Written and discarded, it does not count: the day still wants one, and
+    # after two tries the newsroom stops, so the cost stays known.
+    with db.tenant(tenant) as s:
+        s.execute(update(m.proposals).where(m.proposals.c.id == queued[0]).values(status="drafted"))
+        for v in (1, 2):  # written again once: still one article tried
+            s.execute(insert(m.drafts).values(tenant_id=tenant, proposal_id=queued[0], site_id=site_id, version=v,
+                                              title="x", body_md="x", status="rejected", decided_by=ap.AUTO,
+                                              generated_by="model"))
+        since = datetime(2026, 10, 27, 23, tzinfo=UTC)
+        assert ap.made_since(s, site_id, since) == (0, 1)
+        first = s.execute(select(m.proposals).where(m.proposals.c.id == queued[0])).one()
+        s.execute(insert(m.proposals).values(tenant_id=tenant, site_id=site_id, topic_id=first.topic_id,
+                                             profile_id=first.profile_id, opportunity=50, title="y",
+                                             generated_by="model", status="drafted", decided_by=ap.AUTO, created_at=now))
+        other = s.execute(select(func.max(m.proposals.c.id))).scalar()
+        s.execute(insert(m.drafts).values(tenant_id=tenant, proposal_id=other, site_id=site_id, version=1,
+                                          title="y", body_md="y", status="rejected", decided_by=ap.AUTO,
+                                          generated_by="model"))
+        assert ap.made_since(s, site_id, since) == (0, 2)
+    assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"tried": 2, "kept": 0}
     settings(db, tenant, site_id, hours=[3, 4])
     assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"waiting": "hours"}
     settings(db, tenant, site_id, enabled=False)
@@ -115,6 +135,7 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
     with respx.mock() as router:
         router.post(CORE).mock(return_value=chat(json.dumps(ENGLISH)))
         tid = tr.translate(db, tenant, did, "en", core())
+    assert ap.owns(db, tenant, tid) and not ap.owns(db, tenant, did)  # asked by hand, it still goes out by itself
     out = ap.finish_translation(db, tenant, tid, sent.append)
     with db.tenant(tenant) as s:
         p = s.execute(select(m.publications).where(m.publications.c.id == sent[-1])).one()

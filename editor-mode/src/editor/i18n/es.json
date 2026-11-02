@@ -1842,5 +1842,7 @@
  "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Traducción descartada: «{title}». El original sigue publicado.",
  "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Descartado por la redacción automática: «{title}». No se publicó y no hizo falta portada.",
  "Il modello più forte riscrive l'articolo per correggere: {why}": "El modelo más potente reescribe el artículo para corregir: {why}",
- "Correzione degli articoli scartati (modello più forte)": "Corrección de artículos descartados (modelo más potente)"
+ "Correzione degli articoli scartati (modello più forte)": "Corrección de artículos descartados (modelo más potente)",
+ "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "parada por hoy: ya probó {t} artículos y conservó {k}, los demás no pasaron los controles. Vuelve mañana.",
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Artículos publicados. Los descartados se sustituyen, hasta el doble de intentos al día."
 }

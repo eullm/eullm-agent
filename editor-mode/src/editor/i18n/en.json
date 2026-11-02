@@ -1842,5 +1842,7 @@
  "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Translation discarded: «{title}». The original stays published.",
  "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Discarded by the automatic newsroom: «{title}». It was not published and no cover was needed.",
  "Il modello più forte riscrive l'articolo per correggere: {why}": "The stronger model writes the article again to fix: {why}",
- "Correzione degli articoli scartati (modello più forte)": "Fixing discarded articles (stronger model)"
+ "Correzione degli articoli scartati (modello più forte)": "Fixing discarded articles (stronger model)",
+ "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "stopped for today: it already tried {t} articles and kept {k}, the others failed the checks. It starts again tomorrow.",
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Published articles. Discarded ones are replaced, up to twice as many tries a day."
 }

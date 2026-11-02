@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.10
+
+### Changed
+
+- The automatic newsroom's articles a day are articles kept: one it
+  discards is replaced by another. It tries at most twice the articles of
+  the day, so the cost stays known; past that it stops until the next day
+  and says so on the site page ("Ultimo giro").
+- A translation asked by hand of an article the automatic newsroom
+  published is approved and published by itself, like the original.
+
 ## 0.28.9
 
 ### Changed

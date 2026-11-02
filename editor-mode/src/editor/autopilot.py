@@ -20,7 +20,7 @@ from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, case, func, select, update
 
 from . import drafts, models as m, proposals, publishing, quotas, translate as tr, usage
 from .core_client import CoreClient, CoreError
@@ -162,16 +162,27 @@ def hours_left(cfg: dict, local: datetime) -> int:
     return max(1, n)
 
 
-def made_since(s, site_id: int, since: datetime) -> int:
-    """Articles the automatic newsroom took on since the given time: those
-    written, and those accepted and still being written."""
+def made_since(s, site_id: int, since: datetime) -> tuple[int, int]:
+    """Articles of the automatic newsroom since the given time, as (kept,
+    tried): kept are those not discarded (published, on their way or held
+    for a person), tried every article it took on, discarded ones included.
+    An article written again counts once; those accepted and still being
+    written count in both."""
     pr, dr = m.proposals.c, m.drafts.c
-    written = s.execute(select(func.count()).select_from(m.drafts.join(m.proposals, pr.id == dr.proposal_id)).where(
-        pr.site_id == site_id, pr.decided_by == AUTO, dr.translation_of.is_(None), dr.created_at >= since)).scalar()
+    mine = (select(dr.proposal_id, func.max(case((dr.status != "rejected", 1), else_=0)).label("kept"))
+            .join(m.proposals, pr.id == dr.proposal_id)
+            .where(pr.site_id == site_id, pr.decided_by == AUTO, dr.translation_of.is_(None), dr.created_at >= since)
+            .group_by(dr.proposal_id).subquery())
+    tried, kept = s.execute(select(func.count(), func.coalesce(func.sum(mine.c.kept), 0)).select_from(mine)).one()
     writing = s.execute(select(func.count()).select_from(m.proposals).where(
         pr.site_id == site_id, pr.decided_by == AUTO, pr.status == "accepted",
-        pr.created_at >= since - timedelta(days=1))).scalar()
-    return (written or 0) + (writing or 0)
+        pr.created_at >= since - timedelta(days=1))).scalar() or 0
+    return int(kept) + writing, int(tried) + writing
+
+
+# How many articles a day the newsroom may try, for each one it should keep:
+# discarded articles are replaced, within this limit, so the cost stays known.
+TRIES_PER_ARTICLE = 2
 
 
 def source_count(s, proposal_id: int) -> int:
@@ -220,9 +231,12 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         return {"waiting": "hours"}
     since = datetime.combine(local.date(), time(), local.tzinfo).astimezone(UTC)
     with db.tenant(tenant_id) as s:
-        left = cfg["per_day"] - made_since(s, site_id, since)
-        if left <= 0:
+        kept, tried = made_since(s, site_id, since)
+        if kept >= cfg["per_day"]:
             return {"done": cfg["per_day"]}
+        if tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
+            return {"tried": tried, "kept": kept}
+        left = min(cfg["per_day"] - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
         # Spread over the hours left, so the day does not go in the first hour.
         want = math.ceil(left / hours_left(cfg, local))
         picked = choose(s, site_id, cfg, now, want)
@@ -397,6 +411,20 @@ def _stop(db, tenant_id: str, d, why: list[str], out: dict, discard: bool) -> di
         return {**out, "held": why}
     drafts.decide(db, tenant_id, d.id, False, AUTO)
     return {**out, "discarded": why}
+
+
+def owns(db, tenant_id: str, draft_id: int) -> bool:
+    """Whether a translation belongs to the automatic newsroom: its original
+    was approved by it and the newsroom is still on. A translation asked by
+    hand of such an article then goes out by itself too, like the original."""
+    with db.tenant(tenant_id) as s:
+        d = s.execute(select(m.drafts.c.translation_of, m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).first()
+        if d is None or d.translation_of is None:
+            return False
+        by = s.execute(select(m.drafts.c.decided_by).where(m.drafts.c.id == d.translation_of)).scalar()
+        body = s.execute(select(m.editorial_profiles.c.body).where(
+            m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
+    return by == AUTO and settings_of(body)["enabled"]
 
 
 def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
