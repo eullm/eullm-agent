@@ -46,6 +46,7 @@
   <a href="/drafts" {% if active == 'drafts' %}class="on" aria-current="page"{% endif %}>{{ _('Bozze') }}</a>
   <a href="/publications" {% if active == 'publications' %}class="on" aria-current="page"{% endif %}>{{ _('Pubblicazioni') }}</a>
   <span class="grow"></span>
+  <div class="nav-foot">
   <a href="/plan" class="plan-link{% if active == 'plan' %} on{% endif %}" {% if active == 'plan' %}aria-current="page"{% endif %}><span>{{ _('Il mio piano') }}</span>{% if plan_state %}<small>{{ plan_state.plan_name }} · {{ (_('{n} giorno rimasto', n=plan_state.days_left) if plan_state.days_left == 1 else _('{n} giorni rimasti', n=plan_state.days_left)) if plan_state.status == 'trialing' else plan_state.label|lower }}</small>{% elif plan_name %}<small>{{ plan_name }}</small>{% endif %}</a>
   <a href="/guide" {% if active == 'guide' %}class="on" aria-current="page"{% endif %}>{{ _('Guida') }}</a>
   <a href="/settings" {% if active == 'settings' %}class="on" aria-current="page"{% endif %}>{{ _('Impostazioni') }}</a>
@@ -58,6 +59,7 @@
     </div>
   </div>
   <small class="hint" style="font-size: 11px; padding: 0 10px; overflow-wrap: anywhere;">{% if version %}Redazia {{ version }}{% endif %}</small>
+  </div>
 </div>
 </nav>
 <main class="main">
