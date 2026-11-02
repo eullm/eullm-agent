@@ -106,6 +106,10 @@ def done(path: str, notice: str | None = None) -> RedirectResponse:
     return resp
 
 
+# Fewer articles read than this and the profile is a guess: the start page asks for the context first.
+THIN_POSTS = 5
+
+
 PROBLEMS = [
     (r"no RSS or Atom feed found", N_("Il sito non ha un feed RSS o Atom: gli articoli sono stati trovati da sitemap e pagine.")),
     (r"no usable sitemap", N_("Nessuna sitemap utilizzabile: gli articoli sono stati trovati seguendo i link.")),
@@ -765,7 +769,7 @@ def register(app, ctx) -> None:
              "busy": "analysis" in working and not sites,
              "wait": t("Scansione del sito in corso: legge fino a 25 articoli, di solito pochi minuti."),
              "todo": t("Scrivi il dominio qui sotto: la redazione legge il sito e ne ricava temi, pubblico e tono.")},
-            {"title": t("Approva il profilo"), "past": t("Profilo approvato"), "done": bool(lines.get(sid) if sid else lines), "href": "/site", "busy": "analysis" in working,
+            {"title": t("Approva il profilo"), "past": t("Profilo approvato"), "done": bool(lines.get(sid) if sid else lines), "href": "/site", "busy": bool({"analysis", "brief"} & working),
              "wait": t("Analisi in corso: il profilo da approvare arriva appena finisce."),
              "todo": t("Controlla temi e articoli d'esempio, togli i temi che non vuoi e approva.")},
             {"title": t("Attiva le fonti"), "past": t("Fonti attivate"), "done": count(m.sources, m.sources.c.status == "active", of_site) > 0, "href": "/sources",
@@ -818,6 +822,14 @@ def register(app, ctx) -> None:
                             "audience": (b.get("audience") or {}).get("value") if isinstance(b.get("audience"), dict) else b.get("audience"),
                             "subtopics": [x.get("name") for x in b.get("subtopics", [])][:10],
                             "gaps": b.get("gaps", [])[:4]}
+                        # Too little to read (a new site): the profile is a guess from the home page and
+                        # its sections, so the context comes first and approval second.
+                        read = (b.get("analysis") or {}).get("posts_read") or 0
+                        by_brief = (b.get("sector") or {}).get("by") == "brief" if isinstance(b.get("sector"), dict) else False
+                        if read < THIN_POSTS and not by_brief:
+                            cfg = autopilot.settings_of(b)
+                            data["thin"] = {"read": read, "brief": cfg["brief"], "sections": cfg["sections"],
+                                            "language": (getattr(site, "language", None) or "it")[:2]}
                 elif key == "sources":
                     src = m.sources.c
                     data["candidates"] = s.execute(
@@ -919,7 +931,7 @@ def register(app, ctx) -> None:
             if url not in seen:
                 seen.add(url)
                 ev.append({"url": url, "label": label})
-        return render(request, "site.html.j2", c, s, "site", status_code=status_code, _sites=(sites, site),
+        return render(request, "site.html.j2", c, s, "site", status_code=status_code, thin_posts=THIN_POSTS, _sites=(sites, site),
                       profiles=profiles, approved=approved, draft=draft, shown=shown, analysis=analysis,
                       rows=rows, evidence=ev, editing=editing, error=error,
                       numbers=site_numbers(s, site) if site else None,
@@ -983,6 +995,32 @@ def register(app, ctx) -> None:
         ctx.run_analysis(c.tenant_id, domain)
         return done(safe_path(back, "/site"),
                     t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività.", domain=domain))
+
+    @app.post("/ui/sites/{site_id}/brief")
+    def ui_brief(site_id: int, brief: str = Form(""), sections: str = Form(""), language: str = Form("it"),
+                 back: str = Form("/site"), c: auth.Caller = Depends(ctx.need("owner"))):
+        """The profile from the owner's words, for a site with too little to
+        read: the other settings of the automatic newsroom stay as they are."""
+        to = safe_path(back, "/site")
+        if not brief.strip():
+            return done(to, t("Scrivi prima il contesto: il profilo si ricava da lì."))
+        p = m.editorial_profiles.c
+        with db.tenant(c.tenant_id) as s:
+            if s.execute(select(m.sites.c.id).where(m.sites.c.id == site_id)).scalar() is None:
+                raise HTTPException(404, "site not found")
+            body = s.execute(select(p.body).where(p.site_id == site_id, p.status.in_(("draft", "approved")))
+                             .order_by(p.version.desc()).limit(1)).scalar()
+            values = autopilot.settings_of(body) | {"brief": brief.strip()}
+            if sections.strip():
+                values["sections"] = [y.strip() for y in re.split(r"[\n,;]", sections) if y.strip()]
+            try:
+                values = autopilot.check_settings(values)
+            except ValueError as e:
+                return done(to, t("Impostazioni non salvate: {e}.", e=e))
+            autopilot.save(s, site_id, values)
+        queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
+                      {"site_id": site_id, "language": language if language in autopilot.LANGS else "it", "auto": values})
+        return done(to, t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui."))
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
     def ui_approve(site_id: int, version: int, back: str = Form("/site"), c: auth.Caller = Depends(ctx.need("owner"))):

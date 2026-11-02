@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.5
+
+### Changed
+
+- A site with too few articles to read (fewer than 5, as a new site) gets
+  "Profilo da completare" in Primi passi and Sito e profilo instead of
+  "Approva il profilo": the profile read from the home page and the
+  sections is a guess, so the page asks for the context in a few lines
+  and writes the profile from it ("Crea il profilo dal contesto"), then
+  it is approved as usual. The other automatic newsroom settings stay.
+
 ## 0.28.4
 
 ### Changed

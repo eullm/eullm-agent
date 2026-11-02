@@ -1809,5 +1809,11 @@
  "Cliente non collegato: {error}.": "Customer not linked: {error}.",
  "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "With \"New customer\", after creating it the newsroom's card opens with the customer's details to fill in.",
  "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Write the director's email, or choose a customer who has one.",
- "vuota: l'email del cliente scelto": "empty: the chosen customer's email"
+ "vuota: l'email del cliente scelto": "empty: the chosen customer's email",
+ "Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.": "The site still has few articles to read: this profile comes from the home page and the sections, and is not enough for tailored proposals and articles. Write the context in &quot;Automatic newsroom&quot; below and press &quot;Create the profile from the brief&quot;.",
+ "Sul sito ho letto solo {n} articoli": "I read only {n} articles on the site",
+ "Sul sito non ho trovato articoli da leggere": "I found no articles to read on the site",
+ ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": ": the profile above comes from the home page and the sections, and is not enough for tailored proposals and articles.",
+ "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Describe the site in a few lines: what it is about, for whom, with what goal. The newsroom writes the profile from it, then you approve it.",
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "The model writes the profile from the context: follow it in the Activity box, then approve it here."
 }

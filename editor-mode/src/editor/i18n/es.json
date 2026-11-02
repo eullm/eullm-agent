@@ -1809,5 +1809,11 @@
  "Cliente non collegato: {error}.": "Cliente no vinculado: {error}.",
  "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Con \"Nuevo cliente\", tras crearla se abre la ficha de la redacción con los datos del cliente por rellenar.",
  "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Escribe el email del director o elige un cliente que tenga uno.",
- "vuota: l'email del cliente scelto": "vacío: el email del cliente elegido"
+ "vuota: l'email del cliente scelto": "vacío: el email del cliente elegido",
+ "Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.": "El sitio aún tiene pocos artículos que leer: este perfil sale de la portada y las secciones y no basta para propuestas y artículos a medida. Escribe el contexto en &quot;Redacción automática&quot; aquí abajo y pulsa &quot;Crear el perfil desde el contexto&quot;.",
+ "Sul sito ho letto solo {n} articoli": "En el sitio solo he leído {n} artículos",
+ "Sul sito non ho trovato articoli da leggere": "En el sitio no he encontrado artículos que leer",
+ ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": ": el perfil de arriba sale de la portada y las secciones y no basta para propuestas y artículos a medida.",
+ "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Describe el sitio en pocas líneas: de qué trata, para quién, con qué objetivo. La redacción escribe el perfil a partir de ahí y luego lo apruebas.",
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "El modelo escribe el perfil desde el contexto: síguelo en el recuadro Actividad y luego apruébalo aquí."
 }

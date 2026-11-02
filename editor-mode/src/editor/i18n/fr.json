@@ -1809,5 +1809,11 @@
  "Cliente non collegato: {error}.": "Client non lié : {error}.",
  "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Avec \"Nouveau client\", après la création la fiche de la rédaction s'ouvre avec les données du client à remplir.",
  "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Saisissez l'e-mail du directeur, ou choisissez un client qui en a un.",
- "vuota: l'email del cliente scelto": "vide : l'e-mail du client choisi"
+ "vuota: l'email del cliente scelto": "vide : l'e-mail du client choisi",
+ "Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.": "Le site a encore peu d'articles à lire : ce profil vient de la page d'accueil et des rubriques, et ne suffit pas pour des propositions et des articles sur mesure. Écrivez le contexte dans &quot;Rédaction automatique&quot; ci-dessous et cliquez sur &quot;Créer le profil à partir du contexte&quot;.",
+ "Sul sito ho letto solo {n} articoli": "Je n'ai lu que {n} articles sur le site",
+ "Sul sito non ho trovato articoli da leggere": "Je n'ai trouvé aucun article à lire sur le site",
+ ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": " : le profil ci-dessus vient de la page d'accueil et des rubriques, et ne suffit pas pour des propositions et des articles sur mesure.",
+ "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Décrivez le site en quelques lignes : de quoi il parle, pour qui, avec quel objectif. La rédaction en tire le profil, puis vous l'approuvez.",
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "Le modèle écrit le profil à partir du contexte : suivez-le dans l'encadré Activité, puis approuvez-le ici."
 }
