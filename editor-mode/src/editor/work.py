@@ -82,24 +82,28 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
 
     def auto(tenant: str, subject: str, args: dict) -> dict:
         """One article of the automatic newsroom, from the accepted proposal
-        to the publication: draft, cover, editor-in-chief, then the site."""
+        to the publication: draft, checks and editor-in-chief (written again
+        or discarded when it fails), then the cover and the site."""
         need(core, "model (Core)")
         # The automatic newsroom stays within the plan's articles: credits
         # are spent only on what a person asks for.
-        if http_factory is None:
-            did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=False)
-        else:
+        def write(purpose="draft", notes=None):
+            if http_factory is None:
+                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=False,
+                                          purpose=purpose, notes=notes)
             with http_factory() as client:
-                did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=False)
-        if imager is not None:
-            step(N_("Immagine di copertina"))
-            try:
+                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=False,
+                                          purpose=purpose, notes=notes)
+
+        def cover(did):  # drawn only for an article that passed every check
+            if imager is not None:
                 images.make(db, tenant, did, imager, core_for(tenant))
-            except Exception as e:  # an article without a cover still goes out
-                log.warning("cover for draft %s failed: %s", did, e)
+
+        did = write()
         return autopilot.finish(db, tenant, did, core_for(tenant), publish_job(tenant, args["site_id"]),
-                                lambda language: enqueue(db, tenant, "translate", f"draft {did} {language}", {
-                                    "draft_id": did, "language": language, "site_id": args["site_id"], "auto": True}))
+                                lambda language, final: enqueue(db, tenant, "translate", f"draft {final} {language}", {
+                                    "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
+                                rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover)
 
     def publish_job(tenant: str, site_id):
         return lambda pub_id: enqueue(db, tenant, "publish", f"publication {pub_id}",

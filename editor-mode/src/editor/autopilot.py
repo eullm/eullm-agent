@@ -33,7 +33,12 @@ AUTO = "redazione automatica"  # who decides, on proposals, drafts and publicati
 LANGS = ("it", "en", "de", "fr", "es")
 
 DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "avoid": [], "per_day": 6,
-            "min_opportunity": 40.0, "min_sources": 2, "hours": [7, 23], "target_id": None, "credit": True}
+            "min_opportunity": 40.0, "min_sources": 2, "hours": [7, 23], "target_id": None, "credit": True,
+            "on_problem": "fix"}
+# "fix": an article with problems is written again once, by the stronger model when the console sets one,
+# and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
+ON_PROBLEM = ("fix", "hold")
+FIX_ROUNDS = 1
 
 # What the AI editor-in-chief never lets through, whatever the directives say.
 RULES = [
@@ -89,6 +94,7 @@ class _Auto(BaseModel):
     hours: list[int] = Field(DEFAULTS["hours"], min_length=2, max_length=2)
     target_id: int | None = None
     credit: bool = True
+    on_problem: str = Field("fix", pattern="^(fix|hold)$")
 
 
 def check_settings(values: dict) -> dict:
@@ -306,10 +312,17 @@ def _send(db, tenant_id: str, d, cfg: dict, main: bool, publish) -> dict:
     return {"approved": True, "target": target.name, "publication_id": pub_id}
 
 
-def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, translate=lambda language: None) -> dict:
-    """After the draft: the guardrails, the editor-in-chief, the label, the
-    approval and the publication. `publish(pub_id)` queues the sending,
-    `translate(language)` a translation into each of the site's languages."""
+def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, translate=lambda language, draft_id: None,
+           rewrite=None, cover=None, rounds: int = 0) -> dict:
+    """After the draft: the guardrails, the editor-in-chief, the cover, the
+    label, the approval and the publication. `publish(pub_id)` queues the
+    sending, `translate(language, draft_id)` a translation into each of the site's
+    languages, `rewrite(draft_id, notes)` writes the article again with the
+    stronger model and returns the new draft, `cover(draft_id)` draws it.
+
+    With on_problem "fix" nothing waits for a person: what can be fixed is
+    written again once, what cannot is discarded. The cover is drawn only
+    for an article that passed everything, so a bad day costs no images."""
     with db.tenant(tenant_id) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
         body = s.execute(select(m.editorial_profiles.c.body).where(
@@ -320,41 +333,70 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             .join(m.source_items, m.source_items.c.id == m.draft_claim_sources.c.item_id))
             .where(m.draft_claims.c.draft_id == draft_id)).scalar() or 0
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id}
-    held = []
     if not cfg["enabled"]:
-        held.append("the automatic newsroom was stopped")
-    if d.status == "needs_review":
-        held.append("some sentences failed the source checks")
-    if cited < cfg["min_sources"]:
-        held.append(f"{cited} sources cited, {cfg['min_sources']} needed")
+        return _stop(db, tenant_id, d, ["the automatic newsroom was stopped"], out, discard=False)
     word = avoided(f"{d.title}\n{d.body_md}", cfg["avoid"])
-    if word:
-        held.append(f"topic to avoid: {word}")
-    if not held:
+    if word:  # nothing to fix: the subject itself is out
+        return _stop(db, tenant_id, d, [f"topic to avoid: {word}"], out, discard=cfg["on_problem"] == "fix")
+    fixable = []
+    if d.status == "needs_review":
+        fixable.append("some sentences failed the source checks: " + "; ".join(
+            f"sentence {f.get('claim')}: {', '.join(f.get('problems') or [])}" for f in (d.flags or []))[:1500])
+    if cited < cfg["min_sources"]:
+        fixable.append(f"{cited} different sources cited, at least {cfg['min_sources']} needed")
+    if not fixable:
         step(N_("Il caporedattore AI rilegge l'articolo"))
         try:
             verdict = editor_check(db, tenant_id, d, body, core)
         except CoreError as e:
-            held.append(f"the editor-in-chief did not answer: {e}")
-        else:
-            held += verdict["problems"] if not verdict["publish"] else []
-            section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
-            if section:  # the site files the article under it
-                with db.tenant(tenant_id) as s:
-                    s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
-                        seo={**(d.seo or {}), "section": section}))
-    if held:
-        with db.tenant(tenant_id) as s:
-            proposals.record_feedback(s, tenant_id, "draft", draft_id, "down", AUTO, "; ".join(held)[:1000], d.site_id)
-        return {**out, "held": held}
+            return _stop(db, tenant_id, d, [f"the editor-in-chief did not answer: {e}"], out, discard=False)
+        if not verdict["publish"]:
+            fixable += verdict["problems"]
+        section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
+        if section:  # the site files the article under it
+            with db.tenant(tenant_id) as s:
+                s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
+                    seo={**(d.seo or {}), "section": section}))
+    if fixable:
+        if cfg["on_problem"] != "fix":
+            return _stop(db, tenant_id, d, fixable, out, discard=False)
+        if rewrite is None or rounds >= FIX_ROUNDS:
+            return _stop(db, tenant_id, d, fixable, out, discard=True)
+        step(N_("Il modello più forte riscrive l'articolo per correggere: {why}"), why="; ".join(fixable)[:300])
+        _stop(db, tenant_id, d, fixable, out, discard=True)
+        try:
+            again = rewrite(draft_id, "; ".join(fixable)[:3000])
+        except (CoreError, ValueError, quotas.QuotaExceeded) as e:
+            return {**out, "discarded": fixable + [f"not written again: {e}"]}
+        res = finish(db, tenant_id, again, core, publish, translate, rewrite, cover, rounds + 1)
+        return {**res, "rewritten_from": draft_id}
+    if cover is not None:
+        step(N_("Immagine di copertina"))
+        try:
+            cover(draft_id)
+        except Exception as e:  # an article without a cover still goes out
+            log.warning("cover for draft %s failed: %s", draft_id, e)
+    with db.tenant(tenant_id) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
     res = {**out, **_send(db, tenant_id, d, cfg, True, publish)}
     with db.tenant(tenant_id) as s:
         langs = tr.missing(s, draft_id)
     for language in langs:
-        translate(language)
+        translate(language, draft_id)
     if langs:
         res["translations"] = langs
     return res
+
+
+def _stop(db, tenant_id: str, d, why: list[str], out: dict, discard: bool) -> dict:
+    """An article that does not go out: discarded, or held for a person."""
+    note = "; ".join(why)[:1000]
+    with db.tenant(tenant_id) as s:
+        proposals.record_feedback(s, tenant_id, "draft", d.id, "down", AUTO, note, d.site_id)
+    if not discard:
+        return {**out, "held": why}
+    drafts.decide(db, tenant_id, d.id, False, AUTO)
+    return {**out, "discarded": why}
 
 
 def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
@@ -366,15 +408,11 @@ def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
     cfg = settings_of(body)
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id, "language": d.language}
-    held = []
     if not cfg["enabled"]:
-        held.append("the automatic newsroom was stopped")
-    if d.status == "needs_review":
-        held.append("some sentences failed the source checks")
-    if held:
-        with db.tenant(tenant_id) as s:
-            proposals.record_feedback(s, tenant_id, "draft", draft_id, "down", AUTO, "; ".join(held), d.site_id)
-        return {**out, "held": held}
+        return _stop(db, tenant_id, d, ["the automatic newsroom was stopped"], out, discard=False)
+    if d.status == "needs_review":  # the original stays published; this language is skipped
+        return _stop(db, tenant_id, d, ["some sentences failed the source checks"], out,
+                     discard=cfg["on_problem"] == "fix")
     return {**out, **_send(db, tenant_id, d, cfg, False, publish)}
 
 
@@ -390,10 +428,13 @@ def today(s, site_id: int, since: datetime) -> dict:
         f.target == "draft", f.given_by == AUTO, f.target_id.in_([r.id for r in rows] or [0]))).all())
     pubs = dict(s.execute(select(m.publications.c.draft_id, m.publications.c.status).where(
         m.publications.c.draft_id.in_([r.id for r in rows] or [0]))).all())
-    items = [{"id": r.id, "title": r.title, "status": r.status, "held": notes.get(r.id),
+    items = [{"id": r.id, "title": r.title, "status": r.status,
+              "held": notes.get(r.id) if r.status != "rejected" else None,
+              "discarded": notes.get(r.id) or "" if r.status == "rejected" else None,
               "publication": pubs.get(r.id)} for r in rows]
     return {"items": items, "published": sum(1 for x in items if x["publication"] == "published"),
-            "held": sum(1 for x in items if x["held"])}
+            "held": sum(1 for x in items if x["held"]),
+            "discarded": sum(1 for x in items if x["discarded"] is not None)}
 
 
 BRIEF_SYSTEM = (

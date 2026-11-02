@@ -364,3 +364,16 @@ def test_sitegit_formats():
     assert sg.guess_url(fmt, "content/posts", "s.it", ["- [A](https://s.it/articoli/aaaa/)"]) == "https://s.it/posts/{slug}"
     fmt.samples[0].slug = "aaaa"
     assert sg.guess_url(fmt, "content/posts", "s.it", ["- [A](https://s.it/articoli/aaaa/)"]) == "https://s.it/articoli/{slug}/"
+
+
+def test_an_article_goes_only_to_the_destinations_of_its_language(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    en = pub.add_target(db, tenant, site_id, "webhook", "Sito EN", {"url": "https://en.example/hook", "language": "en"}, None)
+    it = pub.add_target(db, tenant, site_id, "webhook", "Sito IT", {"url": "https://it.example/hook", "language": "it"}, None)
+    with pytest.raises(pub.PublishError, match="takes articles in en"):
+        pub.request(db, tenant, did, en, "publish", "francesco")
+    assert pub.request(db, tenant, did, it, "publish", "francesco")
+    from test_ui import logged_in
+    page = logged_in(db, tenant, "owner").get(f"/drafts/{did}").text
+    assert "Sito IT" in page and f'<option value="{en}">' not in page

@@ -118,10 +118,17 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         return [text], f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Leggi la bozza")
     if kind == "auto":
         link = f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts"
+        if r.get("discarded"):
+            return [t("Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita "
+                      "nessuna copertina.", title=r.get("title", "")),
+                    t("Motivi: {why}", why="; ".join(humanize(x) for x in r["discarded"]))], link, t("Leggi la bozza")
         if r.get("held"):
             return [t("Fermato dal caporedattore AI: «{title}». Resta una bozza da rileggere.", title=r.get("title", "")),
                     t("Motivi: {why}", why="; ".join(humanize(x) for x in r["held"]))], link, t("Leggi la bozza")
-        out = [t("«{title}» approvato dal caporedattore AI e inviato a {target}.", title=r.get("title", ""),
+        out = []
+        if r.get("rewritten_from"):
+            out.append(t("La prima versione non passava: riscritto dal modello più forte."))
+        out += [t("«{title}» approvato dal caporedattore AI e inviato a {target}.", title=r.get("title", ""),
                  target=r["target"]) if r.get("target")
                else t("«{title}» approvato dal caporedattore AI: nessuna destinazione per pubblicarlo, è nel feed e "
                       "nel pacchetto.", title=r.get("title", ""))]
@@ -132,6 +139,10 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
     if kind == "brief":
         return [t("Profilo scritto dal contesto (versione {version}): controllalo e approvalo.", version=r.get("version"))], \
             _site_link(site_id, "/site#h-profile"), t("Vedi il profilo")
+    if kind == "translate" and r.get("discarded"):
+        return [t("Traduzione scartata: «{title}». L'originale resta pubblicato.", title=r.get("title", "")),
+                t("Motivi: {why}", why="; ".join(humanize(x) for x in r["discarded"]))], \
+            f"/drafts/{r['draft_id']}", t("Leggi la traduzione")
     if kind == "translate" and r.get("held"):
         return [t("Traduzione fermata: «{title}».", title=r.get("title", "")),
                 t("Motivi: {why}", why="; ".join(humanize(x) for x in r["held"]))], \

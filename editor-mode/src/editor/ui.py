@@ -135,6 +135,10 @@ PROBLEMS = [
     (r"model analysis failed \((.*)\): .*", N_(r"Il modello non ha completato l'analisi (\1): settore, pubblico e stile restano da determinare.")),
     (r"model analysis not run.*", N_("Analisi del modello non eseguita: settore, pubblico e stile restano da determinare.")),
     (r"not enough material.*", N_("Materiale insufficiente: settore, pubblico e stile restano da determinare.")),
+    (r"the destination (.+) takes articles in (\w+), this one is in (\w+)",
+     N_(r"La destinazione \1 riceve articoli in \2, questo è in \3: scegli la destinazione della sua lingua.")),
+    (r"repository (\S+) not found, or the token cannot see it",
+     N_(r"GitHub non trova il repository \1 con questo token: nel token scegli «Only select repositories» con \1 e dai Contents in lettura e scrittura.")),
     (r"nothing new for more than (\d+) days", N_(r"Nessuna notizia nuova da più di \1 giorni: ritorna in valutazione tra due settimane.")),
     (r"(\d+) failed fetches in a row", N_(r"\1 letture fallite di fila: la riprovo da sola ogni giorno.")),
     (r"off topic \(relevance ([\d.]+) on the last (\d+) items\)",
@@ -152,7 +156,7 @@ PROBLEMS = [
 
 def problem(text) -> str:
     """The crawler's and profile's notes, in the dashboard's language."""
-    text = str(text)
+    text = re.sub(r"^(?:\w+Error: )+", "", str(text).strip())
     for pattern, it in PROBLEMS:
         if re.fullmatch(pattern, text, flags=re.S):
             return re.sub(pattern, t(it), text, flags=re.S)
@@ -1079,13 +1083,15 @@ def register(app, ctx) -> None:
                 avoid: str = Form(""), per_day: int = Form(6), min_opportunity: float = Form(40),
                 min_sources: int = Form(2), start: int = Form(7), end: int = Form(23), target_id: str = Form(""),
                 enabled: str = Form(""), credit: str = Form(""), language: str = Form("it"),
+                on_problem: str = Form("fix"),
                 action: str = Form("save"), c: auth.Caller = Depends(ctx.need("owner"))):
         def lines(x: str) -> list[str]:
             return [y.strip() for y in re.split(r"[\n,;]", x) if y.strip()]
         values = {"enabled": bool(enabled), "brief": brief.strip(), "sections": lines(sections),
                   "directives": directives.strip(), "avoid": lines(avoid), "per_day": per_day,
                   "min_opportunity": min_opportunity, "min_sources": min_sources, "hours": [start, end],
-                  "target_id": int(target_id) if target_id.isdigit() else None, "credit": bool(credit)}
+                  "target_id": int(target_id) if target_id.isdigit() else None, "credit": bool(credit),
+                  "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix"}
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1471,8 +1477,9 @@ def register(app, ctx) -> None:
             flags = d.flags or []
             problems = " ".join(p for f in flags for p in f.get("problems", []))
             checks = [{"label": t(label), "ok": key not in problems} for key, label in CHECKS]
-            targets = s.execute(select(m.publish_targets).where(m.publish_targets.c.site_id == d.site_id,
-                                                                m.publish_targets.c.enabled.is_not(False))).all()
+            targets = [x for x in s.execute(select(m.publish_targets).where(
+                m.publish_targets.c.site_id == d.site_id, m.publish_targets.c.enabled.is_not(False))).all()
+                if publishing.fits_language(x, d.language)]  # Italian text never goes to the English site
             pubs = s.execute(select(m.publications.c.status, m.publications.c.mode, m.publications.c.external_url,
                                     m.publish_targets.c.name)
                              .join(m.publish_targets, m.publish_targets.c.id == m.publications.c.target_id)
@@ -1642,7 +1649,7 @@ def register(app, ctx) -> None:
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
-            return done(f"/drafts/{draft_id}", t("Richiesta non inviata: {e}.", e=e))
+            return done(f"/drafts/{draft_id}", t("Richiesta non inviata: {e}", e=problem(e)))
         except IntegrityError:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta."))
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
