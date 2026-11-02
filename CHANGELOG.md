@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.28.12
+
+### Added
+
+- Sources added by hand, in Fonti: the addresses of sites or feeds, up to
+  20 at a time. The agent finds and reads each feed; those a person chose
+  enter active, within the plan's limit, even outside the profile's topics.
+- The automatic newsroom looks for sources by itself once a day and takes
+  on the candidates, within the plan: nobody has to pick them.
+- Source suggestions for sites on world news include the main outlets of
+  other countries (United States, United Kingdom, Germany, France, China,
+  Japan, India), up to 25 domains.
+- The news base read by every newsroom grows from 46 to 64 feeds, with the
+  United States, China, Japan, India, Singapore and Australia, plus the
+  Frankfurter Allgemeine and Le Figaro.
+
 ## 0.28.11
 
 ### Changed

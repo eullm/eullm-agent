@@ -281,8 +281,18 @@ class Runner:
 
         p = m.editorial_profiles.c
         with self.db.tenant(tenant) as s:
-            sites = [r.site_id for r in s.execute(select(p.site_id, p.body).where(p.status == "approved")).all()
-                     if autopilot.settings_of(r.body)["enabled"]]
+            rows = [r for r in s.execute(select(p.site_id, p.body).where(p.status == "approved")).all()
+                    if autopilot.settings_of(r.body)["enabled"]]
+        sites = [r.site_id for r in rows]
+        for r in rows:
+            # Once a day it looks for new sources and takes them on itself.
+            if autopilot.sources_due((r.body.get("settings") or {}).get("auto_sources_at"), now):
+                from .profile import _set_settings
+
+                with self.db.tenant(tenant) as s:
+                    _set_settings(s, r.site_id, auto_sources_at=now.astimezone(UTC).isoformat())
+                    domain = s.execute(select(m.sites.c.domain).where(m.sites.c.id == r.site_id)).scalar()
+                enqueue(self.db, tenant, "discovery", domain or f"site {r.site_id}", {"site_id": r.site_id})
         for site_id in sites:
             def go(site_id=site_id):
                 res = autopilot.run(self.db, tenant, site_id, self.core_for(tenant), now, tz,

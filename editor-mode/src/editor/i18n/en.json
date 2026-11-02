@@ -1845,5 +1845,10 @@
  "Correzione degli articoli scartati (modello più forte)": "Fixing discarded articles (stronger model)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "stopped for today: it already tried {t} articles and kept {k}, the others failed the checks. It starts again tomorrow.",
  "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Published articles. Discarded ones are replaced, up to twice as many tries a day.",
- "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "stopped, the plan's articles of the month are used up: it starts again next month, or ask for more articles."
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "stopped, the plan's articles of the month are used up: it starts again next month, or ask for more articles.",
+ "Aggiungi fonti a mano": "Add sources by hand",
+ "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Addresses of sites or feeds, one per line (up to 20)",
+ "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "For each site the agent looks for its feed and reads it. The ones you choose enter active, within the plan's limit.",
+ "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "Reading the sources has started: follow it in the Activity box. Those with a feed enter active.",
+ "Scrivi almeno un indirizzo.": "Write at least one address."
 }
