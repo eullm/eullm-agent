@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.7
+
+### Changed
+
+- With the automatic newsroom on, the pages stop asking for decisions it
+  takes by itself: the site's numbers say "Proposte in coda" picked by the
+  automatic newsroom, Desk marks its proposals, Primi passi waits on it
+  instead of "Tocca a te", and "Proposte al giorno" says it is the morning
+  number for deciding by hand, apart from the articles a day.
+- Redazione automatica shows its last round: not done yet, outside hours,
+  stopped by the plan, the day's articles done, proposals picked, or no
+  proposal good enough and why (minimum opportunity and sources).
+
 ## 0.28.6
 
 ### Changed

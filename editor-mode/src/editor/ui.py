@@ -110,6 +110,18 @@ def done(path: str, notice: str | None = None) -> RedirectResponse:
 THIN_POSTS = 5
 
 
+def auto_last(settings: dict) -> dict | None:
+    """The automatic newsroom's last hour, with its time as a datetime."""
+    last = dict(settings.get("auto_last") or {})
+    if not last:
+        return None
+    try:
+        last["at"] = datetime.fromisoformat(last["at"])
+    except (KeyError, TypeError, ValueError):
+        last["at"] = None
+    return last
+
+
 PROBLEMS = [
     (r"no RSS or Atom feed found", N_("Il sito non ha un feed RSS o Atom: gli articoli sono stati trovati da sitemap e pagine.")),
     (r"no usable sitemap", N_("Nessuna sitemap utilizzabile: gli articoli sono stati trovati seguendo i link.")),
@@ -675,6 +687,10 @@ def register(app, ctx) -> None:
                         m.sources.c.site_id == sid, m.sources.c.status == "active")).scalar() or 0,
                     "today": s.execute(select(func.count()).select_from(m.source_items).where(
                         repo.followed_by(sid), m.source_items.c.fetched_at >= start_of_day(s))).scalar() or 0}
+            # Sites whose automatic newsroom picks the proposals by itself.
+            auto_sites = {r.site_id for r in s.execute(select(m.editorial_profiles.c.site_id, m.editorial_profiles.c.body)
+                                                       .where(m.editorial_profiles.c.status == "approved")).all()
+                          if autopilot.settings_of(r.body)["enabled"]}
             # A source the maintenance suspended is news, not a decision.
             decisions = len(profile_drafts) + proposed_total + len(pending_pubs)
             desk = desk_rows(s, [one] if one else sites, lines, pending)
@@ -698,7 +714,7 @@ def register(app, ctx) -> None:
                           news_day=news_day, latest=latest,
                           activity=act.recent(s, zone(s), problem, full=True, site=sid),
                           profile_drafts=profile_drafts, lines=lines, site_lines=site_lines,
-                          proposed=proposed, explained=explained, pending_pubs=pending_pubs,
+                          proposed=proposed, explained=explained, pending_pubs=pending_pubs, auto_sites=auto_sites,
                           stopped=stopped, drafts_ready=sum(draft_counts.values()),
                           needs_review=draft_counts.get("needs_review", 0), new_today=new_today,
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,
@@ -790,6 +806,16 @@ def register(app, ctx) -> None:
             {"title": t("Collega il sito per pubblicare"), "past": t("Sito collegato"), "done": count(m.publish_targets, of(m.publish_targets.c.site_id)) > 0, "href": "/publications",
              "busy": False, "wait": "", "todo": t("Aggiungi WordPress, GitHub, un webhook o un canale Telegram: nulla esce senza il tuo sì.")},
         ]
+        if sid is not None:
+            body = s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == sid, m.editorial_profiles.c.status == "approved")).scalar()
+            if autopilot.settings_of(body)["enabled"]:
+                # The automatic newsroom chooses and writes: nothing to decide by hand.
+                for x in steps[4:6]:
+                    x["busy"], x["wait"] = True, t("La redazione automatica è accesa: sceglie le proposte, scrive e "
+                                                  "pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in "
+                                                  "Sito e profilo › Redazione automatica.")
+                    x["href"] = "/site#h-auto"
         if all(x["done"] for x in steps):
             return None
         current = next(i for i, x in enumerate(steps) if not x["done"])
@@ -884,6 +910,7 @@ def register(app, ctx) -> None:
                 m.editorial_profiles.c.site_id == site.id, m.editorial_profiles.c.status == "draft")
                 .order_by(m.editorial_profiles.c.version.desc()).limit(1)).scalar()),
             "auto_today": autopilot.today(s, site.id, start_of_day(s)),
+            "auto_last": auto_last((body or {}).get("settings") or {}),
             "auto_allowed": quotas.autopilot_allowed(s),
             "auto_targets": s.execute(select(pt.id, pt.name, pt.kind).where(
                 pt.site_id == site.id, pt.enabled.is_not(False)).order_by(pt.id)).all(),

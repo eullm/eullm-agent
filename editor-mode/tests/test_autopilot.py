@@ -175,6 +175,14 @@ def test_the_switch_on_the_site_page(db, tenant):
     with db.tenant(tenant) as s:
         cfg = ap.settings_of(prof_body(s, site_id))
     assert cfg["enabled"] and cfg["avoid"] == ["calcio", "politica"] and cfg["sections"] == ["Fibra", "Satellite"]
+    page = c.get("/site").text
+    assert "Ultimo giro" in page and "non ancora fatto" in page and "Proposte in coda" in page
+    ap.remember(db, tenant, site_id, {"waiting": "hours"}, datetime(2026, 11, 2, 4, tzinfo=UTC))
+    ap.remember(db, tenant, site_id, {"accepted": [], "wanted": 1}, datetime(2026, 11, 2, 9, tzinfo=UTC))
+    page = c.get("/site").text
+    assert "nessuna proposta adatta" in page and "almeno 40" in page
+    with db.tenant(tenant) as s:  # saving the settings keeps the last round
+        assert ap.save(s, site_id, {**cfg, "per_day": 5}) and prof_body(s, site_id)["settings"]["auto_last"]["wanted"] == 1
     assert "Redazione automatica fermata" in c.post(f"/ui/sites/{site_id}/auto/stop").text
     with db.tenant(tenant) as s:
         assert not ap.settings_of(prof_body(s, site_id))["enabled"]

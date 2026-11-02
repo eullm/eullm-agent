@@ -59,9 +59,9 @@
     <span class="note">{{ _('{n} in 7 giorni', n=n.news_week) }}</span>
   </a>
   <a class="card kpi" href="/trends#h-plan">
-    <span class="label">{{ _('Proposte da decidere') }}</span>
+    <span class="label">{{ _('Proposte in coda') if n.auto.enabled else _('Proposte da decidere') }}</span>
     <span class="value">{{ n.proposals.get('proposed', 0) }}</span>
-    <span class="note">{{ _('{t} oggi · {a} accettate · {r} scartate', t=n.proposals_today, a=n.proposals.get('accepted', 0) + n.proposals.get('drafted', 0), r=n.proposals.get('rejected', 0)) }}</span>
+    <span class="note">{% if n.auto.enabled %}{{ _('le sceglie la redazione automatica') }} · {% endif %}{{ _('{t} oggi · {a} accettate · {r} scartate', t=n.proposals_today, a=n.proposals.get('accepted', 0) + n.proposals.get('drafted', 0), r=n.proposals.get('rejected', 0)) }}</span>
   </a>
   <a class="card kpi" href="/drafts">
     <span class="label">{{ _('Bozze da rileggere') }}</span>
@@ -89,7 +89,7 @@
   <span class="hint">{{ _('Proposte al giorno per questo sito') }}</span>
   <input name="n" type="number" min="0" max="50" value="{{ n.per_day }}" style="width: 5em;">
   <button class="btn" type="submit">{{ _('Salva') }}</button>
-  <span class="hint">{{ _('Una proposta costa una chiamata al modello; si scrive solo ciò che accetti.') }}</span>
+  <span class="hint">{% if n.auto.enabled %}{{ _('Sono le proposte del mattino per chi decide a mano. Con la redazione automatica accesa ne prepara da sola quante servono per i suoi {n} articoli al giorno.', n=n.auto.per_day) }}{% else %}{{ _('Una proposta costa una chiamata al modello; si scrive solo ciò che accetti.') }}{% endif %}</span>
 </form>
 <form class="row" method="post" action="/ui/sites/{{ site.id }}/cover" style="align-items: center; gap: 8px; margin-top: 6px;">
   <span class="hint">{{ _('Copertine') }}</span>
@@ -124,6 +124,16 @@
     {% else %}<span class="chip">{{ _('Spenta') }}</span>{% endif %}
   </div>
   <p class="lead">{{ _("Il sito scrive e pubblica da solo: ogni ora sceglie le notizie migliori che rispettano le tue regole, scrive l'articolo con le fonti, fa la copertina, lo fa rileggere a un caporedattore AI e lo pubblica. Ogni articolo dice che è scritto dall'intelligenza artificiale senza revisione umana, come chiede l'AI Act.") }}</p>
+  {% set last = numbers.auto_last %}
+  {% if a.enabled %}
+  <p class="hint" id="auto-last"><strong>{{ _('Ultimo giro') }}</strong>{% if last %} {{ when(last.at, 'time') }}{% endif %}:
+  {% if not last %}{{ _('non ancora fatto: parte al prossimo giro orario.') }}
+  {% elif last.waiting == 'plan' %}{{ _('fermo, il piano della redazione non comprende la redazione automatica.') }}
+  {% elif last.waiting == 'hours' %}{{ _('fuori orario, riparte alle {h}.', h=a.hours[0]) }}
+  {% elif last.done %}{{ _('fatti gli articoli di oggi ({n}).', n=last.done) }}
+  {% elif last.accepted %}{{ _('ha scelto {n} proposte, le scrive e le pubblica.', n=last.accepted|length) }}
+  {% else %}{{ _('nessuna proposta adatta in quest\'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.', o=a.min_opportunity|int, f=a.min_sources) }}{% endif %}</p>
+  {% endif %}
   {% if day['items'] %}
   <p class="hint">{{ _('Oggi: {p} pubblicati, {h} fermati dal caporedattore AI.', p=day.published, h=day.held) }}</p>
   <ul class="plain">{% for x in day['items'][:10] %}<li><a href="/drafts/{{ x.id }}">{{ x.title }}</a> · {% if x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}</li>{% endfor %}</ul>

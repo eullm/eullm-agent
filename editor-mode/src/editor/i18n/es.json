@@ -1815,5 +1815,18 @@
  "Sul sito non ho trovato articoli da leggere": "En el sitio no he encontrado artículos que leer",
  ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": ": el perfil de arriba sale de la portada y las secciones y no basta para propuestas y artículos a medida.",
  "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Describe el sitio en pocas líneas: de qué trata, para quién, con qué objetivo. La redacción escribe el perfil a partir de ahí y luego lo apruebas.",
- "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "El modelo escribe el perfil desde el contexto: síguelo en el recuadro Actividad y luego apruébalo aquí."
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "El modelo escribe el perfil desde el contexto: síguelo en el recuadro Actividad y luego apruébalo aquí.",
+ "Proposte in coda": "Propuestas en cola",
+ "le sceglie la redazione automatica": "las elige la redacción automática",
+ "Sono le proposte del mattino per chi decide a mano. Con la redazione automatica accesa ne prepara da sola quante servono per i suoi {n} articoli al giorno.": "Son las propuestas de la mañana para decidir a mano. Con la redacción automática activa, prepara por sí sola las que necesita para sus {n} artículos al día.",
+ "Ultimo giro": "Última ronda",
+ "non ancora fatto: parte al prossimo giro orario.": "aún no hecha: empieza en la próxima ronda horaria.",
+ "fermo, il piano della redazione non comprende la redazione automatica.": "parada, el plan de la redacción no incluye la redacción automática.",
+ "fuori orario, riparte alle {h}.": "fuera de horario, vuelve a empezar a las {h}.",
+ "fatti gli articoli di oggi ({n}).": "hechos los artículos de hoy ({n}).",
+ "ha scelto {n} proposte, le scrive e le pubblica.": "ha elegido {n} propuestas, las escribe y las publica.",
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.": "ninguna propuesta adecuada en esta hora: hace falta una oportunidad de al menos {o} y noticias de al menos {f} fuentes distintas. Lo intenta de nuevo en la próxima ronda.",
+ "La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.": "La redacción automática elige sola entre estas propuestas: aun así puedes aceptar una tú.",
+ "la sceglie la redazione automatica": "la elige la redacción automática",
+ "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "La redacción automática está activa: elige las propuestas, escribe y publica sola cada hora. No hace falta tu sí; el estado está en Sitio y perfil › Redacción automática."
 }

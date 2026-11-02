@@ -1815,5 +1815,18 @@
  "Sul sito non ho trovato articoli da leggere": "I found no articles to read on the site",
  ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": ": the profile above comes from the home page and the sections, and is not enough for tailored proposals and articles.",
  "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Describe the site in a few lines: what it is about, for whom, with what goal. The newsroom writes the profile from it, then you approve it.",
- "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "The model writes the profile from the context: follow it in the Activity box, then approve it here."
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "The model writes the profile from the context: follow it in the Activity box, then approve it here.",
+ "Proposte in coda": "Proposals in queue",
+ "le sceglie la redazione automatica": "picked by the automatic newsroom",
+ "Sono le proposte del mattino per chi decide a mano. Con la redazione automatica accesa ne prepara da sola quante servono per i suoi {n} articoli al giorno.": "These are the morning proposals for deciding by hand. With the automatic newsroom on, it prepares as many as it needs for its {n} articles a day.",
+ "Ultimo giro": "Last round",
+ "non ancora fatto: parte al prossimo giro orario.": "not done yet: it starts at the next hourly round.",
+ "fermo, il piano della redazione non comprende la redazione automatica.": "stopped, the newsroom's plan does not include the automatic newsroom.",
+ "fuori orario, riparte alle {h}.": "outside hours, it starts again at {h}.",
+ "fatti gli articoli di oggi ({n}).": "today's articles are done ({n}).",
+ "ha scelto {n} proposte, le scrive e le pubblica.": "it picked {n} proposals, it writes and publishes them.",
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.": "no suitable proposal this hour: it needs opportunity at least {o} and news from at least {f} different sources. It tries again at the next round.",
+ "La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.": "The automatic newsroom picks among these proposals by itself: you can still accept one yourself.",
+ "la sceglie la redazione automatica": "picked by the automatic newsroom",
+ "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "The automatic newsroom is on: it picks the proposals, writes and publishes by itself every hour. Your yes is not needed; the status is in Site and profile › Automatic newsroom."
 }
