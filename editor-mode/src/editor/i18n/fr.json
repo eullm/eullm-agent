@@ -1844,5 +1844,6 @@
  "Il modello più forte riscrive l'articolo per correggere: {why}": "Le modèle le plus fort réécrit l'article pour corriger : {why}",
  "Correzione degli articoli scartati (modello più forte)": "Correction des articles écartés (modèle le plus fort)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "arrêtée pour aujourd'hui : {t} articles essayés, {k} gardés, les autres n'ont pas passé les contrôles. Elle reprend demain.",
- "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Articles publiés. Les articles écartés sont remplacés, jusqu'au double de tentatives par jour."
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Articles publiés. Les articles écartés sont remplacés, jusqu'au double de tentatives par jour.",
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "arrêtée, les articles du mois prévus par l'offre sont épuisés : elle reprend le mois prochain, ou demandez plus d'articles."
 }

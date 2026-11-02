@@ -16,6 +16,7 @@ from editor import opportunity as opp, profile as prof, translate as tr
 from editor.api import create_app
 from editor.core_client import CoreClient
 
+from conftest import set_plan
 from test_drafts import accepted_proposal, chat
 from test_proposals import setup_site
 from test_publishing import public_resolver
@@ -91,6 +92,10 @@ def test_each_hour_takes_its_share_of_the_day(db, tenant):
                                           generated_by="model"))
         assert ap.made_since(s, site_id, since) == (0, 2)
     assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"tried": 2, "kept": 0}
+    # The plan's articles of the month are over: it waits, it never pays with credits.
+    set_plan(db, tenant, max_drafts_month=0)
+    assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"waiting": "month"}
+    set_plan(db, tenant, max_drafts_month=None)
     settings(db, tenant, site_id, hours=[3, 4])
     assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {"waiting": "hours"}
     settings(db, tenant, site_id, enabled=False)

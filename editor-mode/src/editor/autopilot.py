@@ -221,11 +221,16 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         body = s.execute(select(m.editorial_profiles.c.body).where(
             m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
         allowed = quotas.autopilot_allowed(s)
+        month_left = quotas.remaining(s, "drafts")
     cfg = settings_of(body)
     if body is None or not cfg["enabled"]:
         return {}
     if not allowed:
         return {"waiting": "plan"}
+    # The plan's articles of the month, set by the console: the automatic
+    # newsroom never pays with credits, so it waits for the next month.
+    if month_left is not None and month_left <= 0:
+        return {"waiting": "month"}
     local = now.astimezone(ZoneInfo(tz))
     if not in_hours(cfg, local):
         return {"waiting": "hours"}
@@ -239,6 +244,8 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         left = min(cfg["per_day"] - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
         # Spread over the hours left, so the day does not go in the first hour.
         want = math.ceil(left / hours_left(cfg, local))
+        if month_left is not None:
+            want = min(want, int(month_left))
         picked = choose(s, site_id, cfg, now, want)
         planned_today = proposals.made_today(s, site_id, since)
     if len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
