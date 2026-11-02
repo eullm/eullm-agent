@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
 from . import credits, quotas, repo, seo, usage
+from .text import humanize
 from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
 from .i18n import N_
@@ -134,7 +135,7 @@ def parse_article(value, allowed: set[int]) -> Article:
     for sec in sections:
         if not isinstance(sec, dict) or not isinstance(sec.get("claims"), list):
             raise ValueError("each section needs a claims list")
-        heading = sec.get("heading") if isinstance(sec.get("heading"), str) else None
+        heading = humanize(sec["heading"]) if isinstance(sec.get("heading"), str) else None
         for c in sec["claims"]:
             if not isinstance(c, dict) or not isinstance(c.get("text"), str) or not c["text"].strip():
                 raise ValueError("each claim needs a text")
@@ -147,7 +148,7 @@ def parse_article(value, allowed: set[int]) -> Article:
             unknown = [i for i in ids if i not in allowed]
             if unknown:
                 raise ValueError(f"claim cites ids not in the list: {unknown}")
-            claims.append(Claim(c["text"].strip(), list(dict.fromkeys(ids)), heading))
+            claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), heading))
     if len(claims) < 3:
         raise ValueError("an article needs at least 3 claims")
     # Questions readers ask, each answered with sourced claims like the rest.
@@ -155,7 +156,7 @@ def parse_article(value, allowed: set[int]) -> Article:
     for q in value.get("faq") or []:
         if not isinstance(q, dict) or not isinstance(q.get("question"), str) or not q["question"].strip():
             continue
-        question = " ".join(q["question"].split())[:200]
+        question = humanize(" ".join(q["question"].split()))[:200]
         answer = [c for c in q.get("claims") or [] if isinstance(c, dict) and isinstance(c.get("text"), str)
                   and c["text"].strip()]
         if not answer:
@@ -167,10 +168,10 @@ def parse_article(value, allowed: set[int]) -> Article:
                 raise ValueError("sources must be item ids") from None
             if not ids or any(i not in allowed for i in ids):
                 raise ValueError(f"FAQ answer without valid sources: {c['text'][:80]!r}")
-            claims.append(Claim(c["text"].strip(), list(dict.fromkeys(ids)), question))
+            claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), question))
         faq.append(question)
     seo = value.get("seo") if isinstance(value.get("seo"), dict) else {}
-    return Article(title.strip(), str(value.get("subtitle") or "").strip()[:300], claims, faq, seo)
+    return Article(humanize(title.strip()), humanize(str(value.get("subtitle") or "").strip())[:300], claims, faq, seo)
 
 
 READ_MORE = {"it": "Leggi anche", "de": "Weiterlesen", "fr": "À lire aussi", "es": "Lee también"}
@@ -249,7 +250,9 @@ SYSTEM = (
     "never pad with vague sentences. Write like a journalist of the site, not like an assistant: vary the length "
     "of sentences, prefer concrete nouns and verbs to adjectives, no stock openings or closings (\"in today's "
     "world\", \"it is worth noting\", \"in conclusion\", \"game changer\", their equivalents in any language), no "
-    "em dashes, no triplets of adjectives, no rhetorical questions in the text, no summary of what was just said. "
+    "no em dashes, en dashes or double hyphens as pauses, no ellipses, no triplets of adjectives, no rhetorical "
+    "questions in the text, no summary of what was just said, no colon-split titles: it must read as written by a "
+    "person. "
     "Write it so search engines and AI answer engines pick it up: the first section has no heading and answers "
     "the reader's main question in two or three sentences; the other headings are the questions people search "
     "for, in plain words; then two to four frequently asked questions, each answered with sourced claims like "

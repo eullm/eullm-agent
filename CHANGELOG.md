@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.9
+
+### Changed
+
+- Articles read as written by a person: dashes used as pauses (em dash,
+  en dash, double hyphen) and ellipses are taken out of every sentence,
+  title, heading and question, in drafts and translations; the writing
+  prompt forbids them too.
+- A site with a destination set for another language publishes in it: the
+  automatic newsroom translates every article into the languages of the
+  site's destinations as well as those chosen, within the plan.
+
 ## 0.28.8
 
 ### Changed

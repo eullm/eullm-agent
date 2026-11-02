@@ -158,3 +158,11 @@ def test_related_items_give_the_article_context(db, tenant):
         found = related_items(s, [ids["https://news.example/1"]])
     assert ids["https://rete.example/2"] in found
     assert ids["https://news.example/5"] not in found  # the pizza recipe has nothing to do with it
+
+
+def test_machine_marks_are_taken_out_of_the_text():
+    from editor.text import humanize
+    assert humanize("Il titolo — dice tutto") == "Il titolo, dice tutto"
+    assert humanize("Dal 2020–2024 i dati -- e non solo... crescono…") == "Dal 2020-2024 i dati, e non solo, crescono."
+    assert humanize("Un modello open-source, ben fatto") == "Un modello open-source, ben fatto"
+    assert humanize("Fine — .") == "Fine."
