@@ -1809,5 +1809,11 @@
  "Cliente non collegato: {error}.": "Kunde nicht verknüpft: {error}.",
  "Con \"Nuovo cliente\" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.": "Mit \"Neuer Kunde\" öffnet sich nach dem Anlegen die Karte der Redaktion mit den Kundendaten zum Ausfüllen.",
  "Scrivi l'email del direttore, oppure scegli un cliente che ne ha una.": "Geben Sie die E-Mail des Chefredakteurs ein oder wählen Sie einen Kunden, der eine hat.",
- "vuota: l'email del cliente scelto": "leer: E-Mail des gewählten Kunden"
+ "vuota: l'email del cliente scelto": "leer: E-Mail des gewählten Kunden",
+ "Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.": "Die Website hat noch wenige Artikel zum Lesen: Dieses Profil stammt aus der Startseite und den Rubriken und reicht nicht für passgenaue Vorschläge und Artikel. Schreiben Sie den Kontext unten in &quot;Automatische Redaktion&quot; und klicken Sie auf &quot;Profil aus dem Kontext erstellen&quot;.",
+ "Sul sito ho letto solo {n} articoli": "Auf der Website habe ich nur {n} Artikel gelesen",
+ "Sul sito non ho trovato articoli da leggere": "Auf der Website habe ich keine Artikel zum Lesen gefunden",
+ ": il profilo qui sopra è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura.": ": Das Profil oben stammt aus der Startseite und den Rubriken und reicht nicht für passgenaue Vorschläge und Artikel.",
+ "Descrivi il sito in poche righe: di cosa parla, per chi, con quale obiettivo. La redazione scrive il profilo da qui e poi lo approvi.": "Beschreiben Sie die Website in wenigen Zeilen: worum es geht, für wen, mit welchem Ziel. Die Redaktion schreibt daraus das Profil, dann genehmigen Sie es.",
+ "Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui.": "Das Modell schreibt das Profil aus dem Kontext: Sie verfolgen es im Feld Aktivität und genehmigen es dann hier."
 }

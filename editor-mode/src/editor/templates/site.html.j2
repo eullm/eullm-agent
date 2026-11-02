@@ -171,6 +171,7 @@
 </section>
 {% elif shown %}
 {% set incomplete = not (shown.body.get('sector') or {}).get('value') %}
+{% set thin = (shown.body.get('analysis') or {}).get('posts_read', 99) < thin_posts and (shown.body.get('sector') or {}).get('by') != 'brief' %}
 <section class="card {% if draft %}drift{% endif %}" aria-labelledby="h-profile">
   <div class="card-head">
     <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -189,7 +190,9 @@
     <div class="row">
       {% if approved %}<form class="inline" method="post" action="/ui/sites/{{ site.id }}/discard/{{ draft.version }}"><button class="btn" type="submit">{{ _('Mantieni la v{version}', version=approved.version) }}</button></form>{% endif %}
       <a class="btn" href="/site?edit=1">{{ _('Modifica') }}</a>
-      {% if incomplete %}
+      {% if thin %}
+      <a class="btn pri" href="#h-auto">{{ _('Crea il profilo dal contesto') }}</a>
+      {% elif incomplete %}
       <form class="inline" method="post" action="/ui/sites/{{ site.id }}/review"><button class="btn pri" type="submit">{{ _('Rianalizza') }}</button></form>
       <form class="inline" method="post" action="/ui/sites/{{ site.id }}/approve/{{ draft.version }}"><button class="btn" type="submit">{{ _('Approva comunque') }}</button></form>
       {% else %}
@@ -235,7 +238,9 @@
     {% set nm = b.get('name') or site.domain %}
     <p class="lead" style="margin: 0;">{% if langs|length > 1 %}{{ _('{name} pubblica in {languages}', name=nm, languages=langs.keys()|join(' ' ~ _('e') ~ ' ')) }}{% elif b.get('language') %}{{ _('{name} pubblica in {languages}', name=nm, languages=b.get('language')) }}{% else %}{{ _('{name} pubblica', name=nm) }}{% endif %}{% if an.get('posts_per_week') %}{{ _(', circa {n} articoli a settimana', n=an.get('posts_per_week')|num) }}{% endif %}{% if sty.get('typical_words') %} {{ _('di circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{% if subs %}{{ _(', soprattutto su {topics}', topics=subs|map(attribute='name')|join(', ')) }}{% endif %}.{% if b.get('site_keywords') %} {{ _('Si presenta con le parole chiave {keywords}.', keywords=b.get('site_keywords')|join(', ')) }}{% endif %}</p>
     {% endif %}
-    {% if incomplete %}
+    {% if thin %}
+    <p style="margin: 0;"><span class="chip amber">{{ _('Profilo da completare') }}</span> {{ _('Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.') }}</p>
+    {% elif incomplete %}
     <p class="error" style="margin: 0;">{{ _("Questa descrizione è parziale: il modello non ha completato l'analisi, quindi settore, pubblico e stile mancano (il motivo è in &quot;Non determinato&quot;). Riprovo da solo entro un'ora; puoi anche rianalizzare subito, oppure completarli tu con &quot;Modifica&quot; prima di approvare.") }}</p>
     {% endif %}
     <p class="hint" style="margin: 0;">{{ _("Approvare vuol dire: &quot;questa è la mia linea&quot;. Da qui l'agente:") }}</p>
