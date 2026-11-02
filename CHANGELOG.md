@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.28.11
+
+### Changed
+
+- The automatic newsroom stays within the plan's articles of the month set
+  in the console: it never takes on more than are left and, when they are
+  used up, it waits for the next month and says so on the site page.
+
 ## 0.28.10
 
 ### Changed

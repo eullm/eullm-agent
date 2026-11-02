@@ -1844,5 +1844,6 @@
  "Il modello più forte riscrive l'articolo per correggere: {why}": "Das stärkere Modell schreibt den Artikel neu, um zu korrigieren: {why}",
  "Correzione degli articoli scartati (modello più forte)": "Korrektur verworfener Artikel (stärkeres Modell)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "für heute angehalten: {t} Artikel versucht, {k} behalten, die anderen haben die Prüfungen nicht bestanden. Morgen geht es weiter.",
- "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Veröffentlichte Artikel. Verworfene werden ersetzt, bis zu doppelt so viele Versuche pro Tag."
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Veröffentlichte Artikel. Verworfene werden ersetzt, bis zu doppelt so viele Versuche pro Tag.",
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "angehalten, die Artikel des Monats im Tarif sind aufgebraucht: es geht nächsten Monat weiter, oder fordern Sie mehr Artikel an."
 }

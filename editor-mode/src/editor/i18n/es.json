@@ -1844,5 +1844,6 @@
  "Il modello più forte riscrive l'articolo per correggere: {why}": "El modelo más potente reescribe el artículo para corregir: {why}",
  "Correzione degli articoli scartati (modello più forte)": "Corrección de artículos descartados (modelo más potente)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "parada por hoy: ya probó {t} artículos y conservó {k}, los demás no pasaron los controles. Vuelve mañana.",
- "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Artículos publicados. Los descartados se sustituyen, hasta el doble de intentos al día."
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Artículos publicados. Los descartados se sustituyen, hasta el doble de intentos al día.",
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "parada, se acabaron los artículos del mes del plan: vuelve el mes que viene, o pide más artículos."
 }

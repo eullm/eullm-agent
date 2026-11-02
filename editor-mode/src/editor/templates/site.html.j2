@@ -129,6 +129,7 @@
   <p class="hint" id="auto-last"><strong>{{ _('Ultimo giro') }}</strong>{% if last %} {{ when(last.at, 'time') }}{% endif %}:
   {% if not last %}{{ _('non ancora fatto: parte al prossimo giro orario.') }}
   {% elif last.waiting == 'plan' %}{{ _('fermo, il piano della redazione non comprende la redazione automatica.') }}
+  {% elif last.waiting == 'month' %}{{ _('fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.') }}
   {% elif last.waiting == 'hours' %}{{ _('fuori orario, riparte alle {h}.', h=a.hours[0]) }}
   {% elif last.done %}{{ _('fatti gli articoli di oggi ({n}).', n=last.done) }}
   {% elif last.tried %}{{ _('fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.', t=last.tried, k=last.kept) }}
