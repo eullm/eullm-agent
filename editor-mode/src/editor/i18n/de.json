@@ -1842,5 +1842,7 @@
  "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Übersetzung verworfen: «{title}». Das Original bleibt veröffentlicht.",
  "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Von der automatischen Redaktion verworfen: «{title}». Nicht veröffentlicht, kein Titelbild nötig.",
  "Il modello più forte riscrive l'articolo per correggere: {why}": "Das stärkere Modell schreibt den Artikel neu, um zu korrigieren: {why}",
- "Correzione degli articoli scartati (modello più forte)": "Korrektur verworfener Artikel (stärkeres Modell)"
+ "Correzione degli articoli scartati (modello più forte)": "Korrektur verworfener Artikel (stärkeres Modell)",
+ "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "für heute angehalten: {t} Artikel versucht, {k} behalten, die anderen haben die Prüfungen nicht bestanden. Morgen geht es weiter.",
+ "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Veröffentlichte Artikel. Verworfene werden ersetzt, bis zu doppelt so viele Versuche pro Tag."
 }

@@ -131,7 +131,7 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
     def translation(tenant: str, subject: str, args: dict) -> dict:
         did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"),
                            pay=not args.get("auto"))
-        if args.get("auto"):
+        if args.get("auto") or autopilot.owns(db, tenant, did):
             return autopilot.finish_translation(db, tenant, did, publish_job(tenant, args.get("site_id")))
         with db.tenant(tenant) as s:
             d = s.execute(select(m.drafts.c.title, m.drafts.c.status, m.drafts.c.site_id, m.drafts.c.language)
