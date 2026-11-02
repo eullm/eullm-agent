@@ -135,8 +135,8 @@
   {% else %}{{ _('nessuna proposta adatta in quest\'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.', o=a.min_opportunity|int, f=a.min_sources) }}{% endif %}</p>
   {% endif %}
   {% if day['items'] %}
-  <p class="hint">{{ _('Oggi: {p} pubblicati, {h} fermati dal caporedattore AI.', p=day.published, h=day.held) }}</p>
-  <ul class="plain">{% for x in day['items'][:10] %}<li><a href="/drafts/{{ x.id }}">{{ x.title }}</a> · {% if x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}</li>{% endfor %}</ul>
+  <p class="hint">{{ _('Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.', p=day.published, d=day.discarded, h=day.held) }}</p>
+  <ul class="plain">{% for x in day['items'][:10] %}<li><a href="/drafts/{{ x.id }}">{{ x.title }}</a> · {% if x.discarded is not none %}<span class="chip" title="{{ x.discarded }}">{{ _('scartato') }}</span>{% elif x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}</li>{% endfor %}</ul>
   {% endif %}
   <form method="post" action="/ui/sites/{{ site.id }}/auto" style="display: flex; flex-direction: column; gap: 12px;">
     <label class="field">{{ _('Contesto: di cosa parla il sito, per chi, con quale obiettivo') }}<textarea name="brief" rows="4" maxlength="4000" placeholder="{{ _('Es.: notizie dal mondo per lettori italiani curiosi; obiettivo: più lettori possibili, titoli che invogliano senza ingannare.') }}">{{ a.brief }}</textarea></label>
@@ -152,6 +152,11 @@
       <label class="field">{{ _('Destinazione') }}<select name="target_id"><option value="">{{ _('La prima adatta') }}</option>{% for x in numbers.auto_targets %}<option value="{{ x.id }}" {% if a.target_id == x.id %}selected{% endif %}>{{ x.name }} ({{ x.kind }})</option>{% endfor %}</select></label>
       <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (site.language or 'it')[:2] == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
     </div>
+    <label class="field">{{ _('Se un articolo non passa i controlli o il caporedattore AI') }}<select name="on_problem">
+      <option value="fix" {% if a.on_problem != 'hold' %}selected{% endif %}>{{ _('Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico') }}</option>
+      <option value="hold" {% if a.on_problem == 'hold' %}selected{% endif %}>{{ _('Lo ferma e aspetta me') }}</option>
+    </select></label>
+    <p class="hint">{{ _('La copertina si disegna solo per gli articoli che passano tutto: uno scartato non costa immagini. Il modello più forte si sceglie in console › Consumi › Modello per passo, alla voce «Correzione degli articoli scartati»; senza, riscrive il modello normale.') }}</p>
     <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="credit" value="1" {% if a.credit %}checked{% endif %}> {{ _('Sotto ogni articolo il link a Redazia') }}</label>
     <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="enabled" value="1" {% if a.enabled %}checked{% endif %}> {{ _('Accendi la redazione automatica') }}</label>
     {% if not numbers.auto_allowed %}<p class="hint">{{ _('Il tuo piano non comprende la redazione automatica: le regole restano salvate e partono quando passi a un piano che la comprende.') }} <a href="/plan">{{ _('Vedi i piani') }}</a></p>{% endif %}

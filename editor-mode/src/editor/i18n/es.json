@@ -1831,5 +1831,16 @@
  "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "La redacción automática está activa: elige las propuestas, escribe y publica sola cada hora. No hace falta tu sí; el estado está en Sitio y perfil › Redacción automática.",
  "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "El destino \\1 recibe artículos en \\2, este está en \\3: elige el destino de su idioma.",
  "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub no encuentra el repositorio \\1 con este token: en el token elige «Only select repositories» con \\1 y da Contents en lectura y escritura.",
- "Richiesta non inviata: {e}": "Solicitud no enviada: {e}"
+ "Richiesta non inviata: {e}": "Solicitud no enviada: {e}",
+ "Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.": "Hoy: {p} publicados, {d} descartados, {h} detenidos para ti.",
+ "scartato": "descartado",
+ "Se un articolo non passa i controlli o il caporedattore AI": "Si un artículo no pasa los controles o el redactor jefe IA",
+ "Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico": "Lo reescribe una vez con el modelo más potente y luego lo descarta: todo automático",
+ "Lo ferma e aspetta me": "Lo detiene y me espera",
+ "La copertina si disegna solo per gli articoli che passano tutto: uno scartato non costa immagini. Il modello più forte si sceglie in console › Consumi › Modello per passo, alla voce «Correzione degli articoli scartati»; senza, riscrive il modello normale.": "La portada solo se dibuja para los artículos que lo pasan todo: uno descartado no cuesta imágenes. El modelo más potente se elige en la consola › Consumos › Modelo por paso, en «Corrección de artículos descartados»; sin él, reescribe el modelo normal.",
+ "La prima versione non passava: riscritto dal modello più forte.": "La primera versión no pasaba: reescrita por el modelo más potente.",
+ "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Traducción descartada: «{title}». El original sigue publicado.",
+ "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Descartado por la redacción automática: «{title}». No se publicó y no hizo falta portada.",
+ "Il modello più forte riscrive l'articolo per correggere: {why}": "El modelo más potente reescribe el artículo para corregir: {why}",
+ "Correzione degli articoli scartati (modello più forte)": "Corrección de artículos descartados (modelo más potente)"
 }

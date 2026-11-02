@@ -2,6 +2,22 @@
 
 ## 0.28.8
 
+### Changed
+
+- The automatic newsroom never stops to wait for a person (new setting
+  "Se un articolo non passa", default "fix"): an article that fails the
+  source checks, cites too few sources or is refused by the AI
+  editor-in-chief is written again once, with the reasons, by the model of
+  the new step "Correzione degli articoli scartati" (the stronger model
+  chosen in the console, else the default); if it still does not pass it
+  is discarded. An article on a topic to avoid is discarded at once. A
+  translation that fails is discarded, the original stays published. The
+  old behaviour stays available as "Lo ferma e aspetta me".
+- The cover is drawn only after an article passed every check and the
+  editor-in-chief: a discarded article costs no image.
+- Activity and Redazione automatica say what was discarded and why, and
+  when an article was written again.
+
 ### Fixed
 
 - A destination set for one language takes only articles in that

@@ -1831,5 +1831,16 @@
  "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "La rédaction automatique est active : elle choisit les propositions, écrit et publie elle-même toutes les heures. Votre accord n'est pas nécessaire ; l'état est dans Site et profil › Rédaction automatique.",
  "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "La destination \\1 reçoit des articles en \\2, celui-ci est en \\3 : choisissez la destination de sa langue.",
  "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub ne trouve pas le dépôt \\1 avec ce jeton : dans le jeton choisissez «Only select repositories» avec \\1 et donnez Contents en lecture et écriture.",
- "Richiesta non inviata: {e}": "Demande non envoyée : {e}"
+ "Richiesta non inviata: {e}": "Demande non envoyée : {e}",
+ "Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.": "Aujourd'hui : {p} publiés, {d} écartés, {h} retenus pour vous.",
+ "scartato": "écarté",
+ "Se un articolo non passa i controlli o il caporedattore AI": "Si un article ne passe pas les contrôles ou le rédacteur en chef IA",
+ "Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico": "Elle le réécrit une fois avec le modèle le plus fort, puis l'écarte : tout automatique",
+ "Lo ferma e aspetta me": "Elle le retient et m'attend",
+ "La copertina si disegna solo per gli articoli che passano tutto: uno scartato non costa immagini. Il modello più forte si sceglie in console › Consumi › Modello per passo, alla voce «Correzione degli articoli scartati»; senza, riscrive il modello normale.": "L'image de couverture n'est dessinée que pour les articles qui passent tout : un article écarté ne coûte aucune image. Le modèle le plus fort se choisit dans la console › Consommation › Modèle par étape, à la ligne «Correction des articles écartés» ; sans lui, le modèle normal réécrit.",
+ "La prima versione non passava: riscritto dal modello più forte.": "La première version ne passait pas : réécrite par le modèle le plus fort.",
+ "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Traduction écartée : «{title}». L'original reste publié.",
+ "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Écarté par la rédaction automatique : «{title}». Il n'a pas été publié et aucune couverture n'a été nécessaire.",
+ "Il modello più forte riscrive l'articolo per correggere: {why}": "Le modèle le plus fort réécrit l'article pour corriger : {why}",
+ "Correzione degli articoli scartati (modello più forte)": "Correction des articles écartés (modèle le plus fort)"
 }

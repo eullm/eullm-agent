@@ -394,7 +394,7 @@ def expand(db, tenant_id: str, prop, core: CoreClient, messages: list, last, art
 
 
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
-                pay: bool = True) -> int:
+                pay: bool = True, purpose: str = "draft", notes: str | None = None) -> int:
     """Write and store a draft for an accepted proposal; returns its id.
     Past the plan's articles of the month it is paid with credits, unless
     `pay` is False (the automatic newsroom stays within the plan)."""
@@ -420,14 +420,17 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         sources = _sources(s, ids)
 
     allowed = set(sources)
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": _prompt(profile, prop, sources, set(cited), posts)}]
+    prompt = _prompt(profile, prop, sources, set(cited), posts)
+    if notes:  # a version written again: what was wrong with the last one
+        prompt += f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}"
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
     article, calls = None, []
     from .core_client import extract_json
 
     for attempt in range(3):
         step(N_("Il modello scrive la bozza") if attempt == 0
              else N_("Il modello corregge la bozza: frasi senza fonte o numeri che le fonti non riportano"))
-        with usage.tagged(db, tenant_id, "draft", site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
+        with usage.tagged(db, tenant_id, purpose, site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
             res = core.chat(messages)
         calls.append(res)
         try:

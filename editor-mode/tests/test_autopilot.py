@@ -102,7 +102,7 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
     sent, translations = [], []
     with respx.mock() as router:
         check = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True, "problems": [], "section": "rete"})))
-        out = ap.finish(db, tenant, did, core(), sent.append, translations.append)
+        out = ap.finish(db, tenant, did, core(), sent.append, lambda language, d: translations.append(language))
         assert "editor-in-chief" in json.loads(check.calls[0].request.content)["messages"][0]["content"]
     assert out["target"] == "sito" and translations == ["en"] and sent == [out["publication_id"]]
     with db.tenant(tenant) as s:
@@ -121,7 +121,8 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
     assert out["target"] == "site en" and p.target_id == english and "without human review" in p.payload["markdown"]
     assert p.payload["section"] == "Rete"  # the translation is in its original's section
 
-    # The next one breaks a rule: it stays a draft, with the reason.
+    # The next one breaks a rule: set to wait for a person, it stays a draft, with the reason.
+    settings(db, tenant, site_id, min_sources=1, sections=["Rete", "Mondo"], on_problem="hold")
     did2, _, _ = _written(db, tenant, prop)
     with respx.mock() as router:
         router.post(CORE).mock(return_value=chat(json.dumps(
@@ -134,12 +135,46 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
         day = ap.today(s, site_id, datetime(2000, 1, 1, tzinfo=UTC))
     assert day["held"] == 1 and len(sent) == 2
     # Too few sources: stopped before asking the model.
-    settings(db, tenant, site_id, min_sources=3)
+    settings(db, tenant, site_id, min_sources=3, on_problem="hold")
     did3, _, _ = _written(db, tenant, prop)
     with respx.mock(assert_all_called=False) as router:
         llm = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True})))
         out = ap.finish(db, tenant, did3, core(), sent.append)
-    assert not llm.calls and "1 sources cited, 3 needed" in out["held"]
+    assert not llm.calls and "1 different sources cited, at least 3 needed" in out["held"]
+
+
+def test_the_automatic_newsroom_fixes_or_discards_and_draws_only_what_passes(db, tenant, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    did, site_id, prop = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=1)  # on_problem "fix" by default
+    pub.add_target(db, tenant, site_id, "webhook", "sito", {"url": "https://hooks.example/it"}, None)
+    sent, covers, notes = [], [], []
+    ready = [_written(db, tenant, prop)[0], _written(db, tenant, prop)[0]]  # the versions written again
+
+    def rewrite(old, why):
+        notes.append(why)
+        return ready.pop(0)
+
+    refuse = chat(json.dumps({"publish": False, "problems": ["the title promises what the article does not say"]}))
+    ok = chat(json.dumps({"publish": True, "problems": []}))
+    # Refused, written again by the stronger model, then let through: one cover, for the new one.
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=[refuse, ok])
+        out = ap.finish(db, tenant, did, core(), sent.append, rewrite=rewrite, cover=covers.append)
+    new = out["draft_id"]
+    assert out["rewritten_from"] == did and new != did and covers == [new] and len(sent) == 1
+    assert "title promises" in notes[0]
+    with db.tenant(tenant) as s:
+        status = dict(s.execute(select(m.drafts.c.id, m.drafts.c.status).where(m.drafts.c.id.in_([did, new]))).all())
+    assert status == {did: "rejected", new: "approved"}
+    # Refused twice: discarded, no cover, nothing published, nobody asked.
+    did2, _, _ = _written(db, tenant, prop)
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=[refuse, refuse])
+        out = ap.finish(db, tenant, did2, core(), sent.append, rewrite=rewrite, cover=covers.append)
+    assert out["discarded"] and covers == [new] and len(sent) == 1
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.drafts.c.status).where(m.drafts.c.id == out["draft_id"])).scalar() == "rejected"
 
 
 def test_a_new_site_gets_its_profile_from_the_brief(db, tenant):

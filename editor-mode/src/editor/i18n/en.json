@@ -1831,5 +1831,16 @@
  "La redazione automatica è accesa: sceglie le proposte, scrive e pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in Sito e profilo › Redazione automatica.": "The automatic newsroom is on: it picks the proposals, writes and publishes by itself every hour. Your yes is not needed; the status is in Site and profile › Automatic newsroom.",
  "La destinazione \\1 riceve articoli in \\2, questo è in \\3: scegli la destinazione della sua lingua.": "The destination \\1 takes articles in \\2, this one is in \\3: choose the destination of its language.",
  "GitHub non trova il repository \\1 con questo token: nel token scegli «Only select repositories» con \\1 e dai Contents in lettura e scrittura.": "GitHub cannot find the repository \\1 with this token: in the token choose «Only select repositories» with \\1 and give Contents read and write.",
- "Richiesta non inviata: {e}": "Request not sent: {e}"
+ "Richiesta non inviata: {e}": "Request not sent: {e}",
+ "Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.": "Today: {p} published, {d} discarded, {h} held for you.",
+ "scartato": "discarded",
+ "Se un articolo non passa i controlli o il caporedattore AI": "If an article fails the checks or the AI editor-in-chief",
+ "Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico": "It writes it again once with the stronger model, then discards it: fully automatic",
+ "Lo ferma e aspetta me": "It holds it and waits for me",
+ "La copertina si disegna solo per gli articoli che passano tutto: uno scartato non costa immagini. Il modello più forte si sceglie in console › Consumi › Modello per passo, alla voce «Correzione degli articoli scartati»; senza, riscrive il modello normale.": "The cover is drawn only for articles that pass everything: a discarded one costs no images. The stronger model is chosen in the console › Usage › Model per step, under «Fixing discarded articles»; without it, the normal model writes again.",
+ "La prima versione non passava: riscritto dal modello più forte.": "The first version did not pass: written again by the stronger model.",
+ "Traduzione scartata: «{title}». L'originale resta pubblicato.": "Translation discarded: «{title}». The original stays published.",
+ "Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita nessuna copertina.": "Discarded by the automatic newsroom: «{title}». It was not published and no cover was needed.",
+ "Il modello più forte riscrive l'articolo per correggere: {why}": "The stronger model writes the article again to fix: {why}",
+ "Correzione degli articoli scartati (modello più forte)": "Fixing discarded articles (stronger model)"
 }
