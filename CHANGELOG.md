@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.28.6
+
+### Changed
+
+- The side menu stays in view while a long page scrolls, in the newsroom
+  and in the console: Il mio piano, Guida, Impostazioni, the person, Esci
+  and the version are always at the bottom of the screen; on a short
+  screen the upper part of the menu scrolls on its own.
+
 ## 0.28.5
 
 ### Changed
