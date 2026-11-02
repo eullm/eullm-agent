@@ -230,7 +230,18 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         if proposals.decide(db, tenant_id, r.id, True, AUTO, "automatic newsroom"):
             enqueue(r.id)
             accepted.append(r.id)
-    return {"accepted": accepted}
+    return {"accepted": accepted, "wanted": want}
+
+
+def remember(db, tenant_id: str, site_id: int, result: dict, now: datetime) -> None:
+    """The last hour of the automatic newsroom, for the site page: what it
+    did or what it waits for."""
+    from .profile import _set_settings
+
+    if not result:
+        return
+    with db.tenant(tenant_id) as s:
+        _set_settings(s, site_id, auto_last={**result, "at": now.astimezone(UTC).isoformat()})
 
 
 def add_label(body_md: str, language: str | None, credit: bool = True) -> str:
