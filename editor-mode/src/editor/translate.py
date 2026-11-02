@@ -49,8 +49,19 @@ def main_language(s, site_id: int) -> str | None:
 
 
 def site_languages(s, site_id: int) -> list[str]:
-    """The languages the site's articles are translated into."""
-    return list(s.execute(select(m.sites.c.languages).where(m.sites.c.id == site_id)).scalar() or [])
+    """The languages the site's articles are translated into: those chosen,
+    and those of the site's destinations set for another language (a site
+    with an English destination publishes in English), within the plan."""
+    chosen = list(s.execute(select(m.sites.c.languages).where(m.sites.c.id == site_id)).scalar() or [])
+    own = main_language(s, site_id)
+    for cfg in s.execute(select(m.publish_targets.c.config).where(
+            m.publish_targets.c.site_id == site_id, m.publish_targets.c.enabled.is_not(False))).scalars():
+        lang = ((cfg or {}).get("language") or "").strip().lower()[:2]
+        if lang in LANGUAGES and lang != own and lang not in chosen:
+            limit = allowed(s)
+            if limit is None or len(chosen) + 1 < limit:
+                chosen.append(lang)
+    return chosen
 
 
 def allowed(s) -> int | None:
@@ -126,11 +137,13 @@ def _parse(value, n_headings: int, n_sentences: int) -> dict:
         raise ValueError(f"expected {n_headings} headings, got {len(heads) if isinstance(heads, list) else 0}")
     if not isinstance(sents, list) or len(sents) != n_sentences:
         raise ValueError(f"expected {n_sentences} sentences, got {len(sents) if isinstance(sents, list) else 0}")
-    texts = [" ".join(str(x or "").split()) for x in sents]
+    from .text import humanize
+
+    texts = [humanize(" ".join(str(x or "").split())) for x in sents]
     if not all(texts):
         raise ValueError("a sentence is empty")
-    return {"title": title, "subtitle": " ".join(str(value.get("subtitle") or "").split())[:300],
-            "headings": [" ".join(str(x or "").split()) or None for x in heads], "sentences": texts,
+    return {"title": humanize(title), "subtitle": humanize(" ".join(str(value.get("subtitle") or "").split()))[:300],
+            "headings": [humanize(" ".join(str(x or "").split())) or None for x in heads], "sentences": texts,
             "seo": value.get("seo") if isinstance(value.get("seo"), dict) else {},
             "image_alt": " ".join(str(value.get("image_alt") or "").split())[:300]}
 

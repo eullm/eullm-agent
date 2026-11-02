@@ -374,6 +374,9 @@ def test_an_article_goes_only_to_the_destinations_of_its_language(db, tenant, mo
     with pytest.raises(pub.PublishError, match="takes articles in en"):
         pub.request(db, tenant, did, en, "publish", "francesco")
     assert pub.request(db, tenant, did, it, "publish", "francesco")
+    from editor import translate as tr
+    with db.tenant(tenant) as s:  # an English destination: the site publishes in English too
+        assert tr.site_languages(s, site_id) == ["en"] and tr.missing(s, did) == ["en"]
     from test_ui import logged_in
     page = logged_in(db, tenant, "owner").get(f"/drafts/{did}").text
     assert "Sito IT" in page and f'<option value="{en}">' not in page

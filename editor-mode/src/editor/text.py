@@ -54,3 +54,21 @@ def top_terms(texts: list[str], n: int = 12) -> list[str]:
     for t in texts:
         counts.update(dict.fromkeys(tokens(t), 1))
     return [t for t, _ in counts.most_common(n)]
+
+
+def humanize(text: str) -> str:
+    """Take out the marks that give away a machine-written text: dashes used
+    as pauses (em dash, en dash, double hyphen) become commas, ellipses a
+    full stop, typographic oddities plain characters. Ranges between numbers
+    (2020–2024) and hyphenated words stay."""
+    if not text:
+        return text
+    t = re.sub(r"(\d)\s*[–—]\s*(\d)", r"\1-\2", text)
+    t = re.sub(r"\s*(?:—|–|--)\s*", ", ", t)
+    t = re.sub(r"\s*(?:…|\.{3,})(?=\s+[a-zà-ÿ])", ",", t)  # a pause inside the sentence
+    t = re.sub(r"\s*(?:…|\.{3,})", ".", t)
+    t = re.sub(r",\s*([,.;:!?])", r"\1", t)
+    t = re.sub(r"^\s*,\s*", "", t)
+    t = re.sub(r"\.\.+", ".", t)
+    return " ".join(t.split())
+
