@@ -138,6 +138,34 @@ def test_discovery_and_maintenance(db, tenant):
         status, reason = s.execute(text("SELECT status, status_reason FROM editor.sources WHERE id = :i"), {"i": sid}).one()
     assert (status, reason) == ("active", "re-evaluated")
 
+    # Added by hand: a feed's address or a site's; chosen by a person, it
+    # enters active even off the profile's topics. A site without a feed is not added.
+    with respx.mock(assert_all_called=False) as router:
+        router.get(url__regex=r"https://[^/]+/robots.txt").mock(return_value=httpx.Response(404))
+        router.get("https://cucina.example/rss.xml").mock(return_value=httpx.Response(200, text=feed(
+            [f"Ricette della settimana {i}" for i in range(10)])))
+        router.get(url__regex=r"https://nofeed\.example/.*").mock(return_value=httpx.Response(404))
+        with httpx.Client() as c:
+            rep = src.discover(db, tenant, site["site_id"], c, None,
+                               urls=["https://cucina.example/rss.xml", "nofeed.example"], by="francesco")
+    assert rep.failed == 1 and rep.active == 1
+    with db.tenant(tenant) as s:
+        r = s.execute(select(m.sources.c.status, m.sources.c.origin, m.sources.c.evidence)
+                      .where(m.sources.c.url == "https://cucina.example/rss.xml", repo.own())).one()
+    assert r.status == "active" and r.origin == "manual" and r.evidence["added_by"] == "francesco"
+
+    # With the automatic newsroom on, nobody picks among the candidates: it takes them on itself.
+    with db.tenant(tenant) as s:
+        hn = s.execute(select(m.sources.c.id).where(m.sources.c.kind == "hackernews", repo.own())).scalars().first()
+        s.execute(update(m.sources).where(m.sources.c.id == hn).values(status="candidate"))
+        prof._set_settings(s, site["site_id"], auto={"enabled": True})
+    with respx.mock(assert_all_called=False) as router:
+        router.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+        with httpx.Client() as c:
+            src.discover(db, tenant, site["site_id"], c, None)
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.sources.c.status).where(m.sources.c.id == hn)).scalar() == "active"
+
     # A source a person suspended stays suspended.
     with db.tenant(tenant) as s:
         fid = s.execute(text("SELECT id FROM editor.sources WHERE archive_id = :i"), {"i": sid}).scalar()

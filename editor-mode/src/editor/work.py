@@ -63,7 +63,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
 
     def discovery(tenant: str, subject: str, args: dict) -> dict:
         with need(http_factory, "web access")() as client:
-            rep = sources.discover(db, tenant, args["site_id"], client, core_for(tenant))
+            rep = sources.discover(db, tenant, args["site_id"], client, core_for(tenant),
+                                   urls=args.get("urls"), by=args.get("by") or "")
         return {"site_id": args["site_id"], **found(rep)}
 
     def draft(tenant: str, subject: str, args: dict) -> dict:

@@ -293,3 +293,10 @@ def test_a_site_with_discreet_sources_publishes_them_in_one_line(db, tenant, mon
     assert "Fonti negli articoli salvate" in c.post(f"/ui/sites/{site_id}/sources-style", data={"style": "notes"}).text
     with db.tenant(tenant) as s:
         assert prof_body(s, site_id)["settings"]["sources_style"] == "notes"
+
+
+def test_the_automatic_newsroom_looks_for_sources_once_a_day():
+    now = datetime(2026, 11, 2, 20, tzinfo=UTC)
+    assert ap.sources_due(None, now) and ap.sources_due("not a date", now)
+    assert not ap.sources_due(datetime(2026, 11, 2, 7, tzinfo=UTC).isoformat(), now)
+    assert ap.sources_due(datetime(2026, 11, 1, 19, tzinfo=UTC).isoformat(), now)

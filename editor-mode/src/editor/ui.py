@@ -1307,6 +1307,17 @@ def register(app, ctx) -> None:
         return done(safe_path(back, "/sources?status=candidate"),
                     t("Ricerca delle fonti partita: la segui nel riquadro Attività. Le trovate entrano come candidate."))
 
+    @app.post("/ui/sites/{site_id}/sources/add")
+    def ui_source_add(site_id: int, urls: str = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            if s.execute(select(m.sites.c.id).where(m.sites.c.id == site_id)).scalar() is None:
+                raise HTTPException(404, "site not found")
+        wanted = [x for x in re.split(r"[\s,]+", urls) if x][:20]
+        if not wanted:
+            return done("/sources", t("Scrivi almeno un indirizzo."))
+        ctx.run_discovery(c.tenant_id, site_id, wanted, c.name)
+        return done("/sources?status=active", t("Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive."))
+
     # --- Trend e piano --------------------------------------------------------------
 
     @app.get("/trends", response_class=HTMLResponse)

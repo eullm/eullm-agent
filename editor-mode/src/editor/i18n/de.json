@@ -1845,5 +1845,10 @@
  "Correzione degli articoli scartati (modello più forte)": "Korrektur verworfener Artikel (stärkeres Modell)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "für heute angehalten: {t} Artikel versucht, {k} behalten, die anderen haben die Prüfungen nicht bestanden. Morgen geht es weiter.",
  "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Veröffentlichte Artikel. Verworfene werden ersetzt, bis zu doppelt so viele Versuche pro Tag.",
- "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "angehalten, die Artikel des Monats im Tarif sind aufgebraucht: es geht nächsten Monat weiter, oder fordern Sie mehr Artikel an."
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "angehalten, die Artikel des Monats im Tarif sind aufgebraucht: es geht nächsten Monat weiter, oder fordern Sie mehr Artikel an.",
+ "Aggiungi fonti a mano": "Quellen von Hand hinzufügen",
+ "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Adressen von Websites oder Feeds, eine pro Zeile (bis zu 20)",
+ "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "Für jede Website sucht der Agent den Feed und liest ihn. Die von Ihnen gewählten werden aktiv, im Rahmen des Tariflimits.",
+ "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "Das Lesen der Quellen hat begonnen: Sie verfolgen es im Feld Aktivität. Quellen mit Feed werden aktiv.",
+ "Scrivi almeno un indirizzo.": "Geben Sie mindestens eine Adresse ein."
 }

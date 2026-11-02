@@ -1845,5 +1845,10 @@
  "Correzione degli articoli scartati (modello più forte)": "Correction des articles écartés (modèle le plus fort)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "arrêtée pour aujourd'hui : {t} articles essayés, {k} gardés, les autres n'ont pas passé les contrôles. Elle reprend demain.",
  "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Articles publiés. Les articles écartés sont remplacés, jusqu'au double de tentatives par jour.",
- "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "arrêtée, les articles du mois prévus par l'offre sont épuisés : elle reprend le mois prochain, ou demandez plus d'articles."
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "arrêtée, les articles du mois prévus par l'offre sont épuisés : elle reprend le mois prochain, ou demandez plus d'articles.",
+ "Aggiungi fonti a mano": "Ajouter des sources à la main",
+ "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Adresses des sites ou des flux, une par ligne (jusqu'à 20)",
+ "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "Pour chaque site, l'agent cherche le flux et le lit. Celles que vous choisissez entrent actives, dans la limite de l'offre.",
+ "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "La lecture des sources a démarré : suivez-la dans l'encadré Activité. Celles qui ont un flux entrent actives.",
+ "Scrivi almeno un indirizzo.": "Écrivez au moins une adresse."
 }

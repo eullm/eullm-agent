@@ -187,10 +187,11 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
             repo.add_site(s, tenant, domain)
         queue.enqueue(db, tenant, "analysis", domain)
 
-    def run_discovery(tenant: str, site_id: int):
+    def run_discovery(tenant: str, site_id: int, urls: list[str] | None = None, by: str = ""):
         with db.tenant(tenant) as s:  # named by its domain on the pages that list the work
             domain = s.execute(select(m.sites.c.domain).where(m.sites.c.id == site_id)).scalar()
-        queue.enqueue(db, tenant, "discovery", domain or f"site {site_id}", {"site_id": site_id})
+        args = {"site_id": site_id} | ({"urls": urls, "by": by} if urls is not None else {})
+        queue.enqueue(db, tenant, "discovery", domain or f"site {site_id}", args)
 
     def run_draft(tenant: str, proposal_id: int):
         queue.enqueue(db, tenant, "draft", f"proposal {proposal_id}", {"proposal_id": proposal_id})

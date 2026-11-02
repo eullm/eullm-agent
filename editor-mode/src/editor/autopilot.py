@@ -260,6 +260,16 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
     return {"accepted": accepted, "wanted": want}
 
 
+def sources_due(last: str | None, now: datetime) -> bool:
+    """Whether the automatic newsroom looks for new sources: once a day."""
+    if not last:
+        return True
+    try:
+        return now - datetime.fromisoformat(last) >= timedelta(hours=24)
+    except ValueError:
+        return True
+
+
 def remember(db, tenant_id: str, site_id: int, result: dict, now: datetime) -> None:
     """The last hour of the automatic newsroom, for the site page: what it
     did or what it waits for."""

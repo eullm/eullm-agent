@@ -1845,5 +1845,10 @@
  "Correzione degli articoli scartati (modello più forte)": "Corrección de artículos descartados (modelo más potente)",
  "fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.": "parada por hoy: ya probó {t} artículos y conservó {k}, los demás no pasaron los controles. Vuelve mañana.",
  "Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.": "Artículos publicados. Los descartados se sustituyen, hasta el doble de intentos al día.",
- "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "parada, se acabaron los artículos del mes del plan: vuelve el mes que viene, o pide más artículos."
+ "fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.": "parada, se acabaron los artículos del mes del plan: vuelve el mes que viene, o pide más artículos.",
+ "Aggiungi fonti a mano": "Añadir fuentes a mano",
+ "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Direcciones de sitios o feeds, una por línea (hasta 20)",
+ "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "Para cada sitio el agente busca el feed y lo lee. Las que eliges entran activas, dentro del límite del plan.",
+ "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "La lectura de las fuentes ha empezado: síguela en el recuadro Actividad. Las que tienen feed entran activas.",
+ "Scrivi almeno un indirizzo.": "Escribe al menos una dirección."
 }

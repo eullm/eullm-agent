@@ -15,6 +15,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 
 import feedparser
 import httpx
@@ -147,7 +148,7 @@ def rate(
 
 
 class Discoverer:
-    def __init__(self, client: httpx.Client, max_domains: int = 20):
+    def __init__(self, client: httpx.Client, max_domains: int = 25):
         self.client = client
         self.max_domains = max_domains
         self._robots = RobotsCache(client)
@@ -190,6 +191,30 @@ class Discoverer:
             if found:
                 out.append(Candidate("rss", found[1], found[0], origin="site_outbound",
                                      evidence={"cited_by_site": count, "domain": domain}))
+        return out
+
+    def from_urls(self, urls: list[str], by: str) -> list[Candidate]:
+        """Sources a person added by hand: a feed's address, or a site's,
+        whose feed is looked for."""
+        out = []
+        for raw in urls[: self.max_domains]:
+            url = raw.strip()
+            if not url:
+                continue
+            if "://" not in url:
+                url = "https://" + url
+            domain = (urlparse(url).hostname or "").removeprefix("www.")
+            if "." not in domain:
+                continue
+            r = self._get(url, "application/rss+xml, application/atom+xml, application/xml, text/html")
+            if r is not None and feedparser.parse(r.content).entries:
+                feed = feedparser.parse(r.content).feed
+                found = (url, (feed.get("title") or domain)[:80])
+            else:
+                found = self.find_feed(domain)
+            if found:
+                out.append(Candidate("rss", found[1], found[0], origin="manual",
+                                     evidence={"added_by": by, "domain": domain, "verified": "feed read"}))
         return out
 
     def from_suggestions(self, domains: list[str], own_domain: str) -> list[Candidate]:
@@ -287,8 +312,10 @@ def api_candidates(body: dict) -> list[Candidate]:
 SUGGEST_SYSTEM = (
     "You help an editor find sources. Given the editorial profile of a site, reply with JSON only: "
     '{"search_terms": ["<up to 6 short English search queries for the site\'s main subtopics>"], '
-    '"domains": ["<up to 15 domains of established publications, institutions or projects that regularly '
-    'publish on these subtopics, including publications in the site\'s languages>"]}. Domains are checked by '
+    '"domains": ["<up to 25 domains of established publications, institutions or projects that regularly '
+    'publish on these subtopics, including publications in the site\'s languages>"]}. When the site covers world news or many subjects, '
+    'include the main outlets of other countries too (United States, United Kingdom, Germany, France, China, '
+    'Japan, India and others), in English or in their own language. Domains are checked by '
     'reading their feeds; do not include the site itself.'
 )
 
@@ -298,7 +325,7 @@ def _validate_suggestions(v) -> dict:
         raise ValueError("expected an object")
     terms = [t.strip() for t in v.get("search_terms", []) if isinstance(t, str) and 2 <= len(t.strip()) <= 60]
     domains = [d.strip() for d in v.get("domains", []) if isinstance(d, str) and "." in d and len(d) <= 100]
-    return {"search_terms": terms[:6], "domains": domains[:15]}
+    return {"search_terms": terms[:6], "domains": domains[:25]}
 
 
 # --- registry ------------------------------------------------------------------
@@ -328,7 +355,11 @@ class DiscoveryReport:
     notes: list[str] = field(default_factory=list)
 
 
-def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreClient | None = None) -> DiscoveryReport:
+def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreClient | None = None,
+             urls: list[str] | None = None, by: str = "") -> DiscoveryReport:
+    """Find sources for a site and judge each on what it publishes. With
+    `urls`, only those, added by hand: a person chose them, so they enter
+    active (within the plan) whatever their score, unless unreadable."""
     report = DiscoveryReport()
     with db.tenant(tenant_id) as s:
         prof = _profile_for(s, site_id)
@@ -337,6 +368,9 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
             return report
         body = dict(prof.body)
         domain = body.get("domain", "")
+        # With the automatic newsroom on nobody picks among the candidates:
+        # the newsroom takes them on itself, within the plan.
+        auto = ((body.get("settings") or {}).get("auto") or {}).get("enabled") is True
         snap = s.execute(
             select(m.site_analyses.c.snapshot).where(m.site_analyses.c.site_id == site_id)
             .order_by(m.site_analyses.c.id.desc()).limit(1)
@@ -346,7 +380,7 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
             select(m.sources.c.kind, m.sources.c.url, m.sources.c.config).where(m.sources.c.site_id == site_id))}
 
     suggestions = {"search_terms": [], "domains": []}
-    if core is not None and body.get("subtopics"):
+    if core is not None and body.get("subtopics") and urls is None:
         step(N_("Il modello suggerisce dove cercare le fonti per {domain}"), domain=domain)
         try:
             prompt = "Profile:\n" + "\n".join(
@@ -361,9 +395,13 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
     body["search_terms"] = suggestions["search_terms"]
 
     finder = Discoverer(client)
-    candidates = finder.from_outbound(snap.get("outbound_domains", {}), domain)
-    candidates += api_candidates(body)
-    candidates += finder.from_suggestions(suggestions["domains"], domain)
+    if urls is not None:
+        candidates = finder.from_urls(urls, by)
+        report.failed += len([u for u in urls if u.strip()]) - len(candidates)
+    else:
+        candidates = finder.from_outbound(snap.get("outbound_domains", {}), domain)
+        candidates += api_candidates(body)
+        candidates += finder.from_suggestions(suggestions["domains"], domain)
     keywords = profile_keywords(body)
     seen = set()
     total = len({(c.kind, c.url, str(c.config)) for c in candidates} - existing)
@@ -385,6 +423,10 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
         # What it was judged on, shown next to the source.
         ev["examples"] = [{"title": i.title[:200], "url": i.url} for i in result.items[:3] if i.title]
         known += [minhash(f"{i.title} {i.summary}") for i in result.items[:20]]
+        if cand.origin == "manual" and result.items:
+            ev["status"], ev["chosen_by_hand"] = "active", True
+        elif auto and ev["status"] == "candidate":
+            ev["status"], ev["chosen_by"] = "active", "automatic newsroom"
         with db.tenant(tenant_id) as s:
             if ev["status"] == "active" and quotas.remaining(s, "sources") == 0:
                 ev["status"], ev["held_by_quota"] = "candidate", True
@@ -395,6 +437,16 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
                                      site_id=site_id, status=ev["status"], origin=cand.origin, evidence=cand.evidence)
             s.execute(update(m.sources).where(m.sources.c.id == sid).values(
                 evaluation=ev, score=ev["score"], evaluated_at=datetime.now(UTC)))
+    if auto and urls is None:
+        with db.tenant(tenant_id) as s:
+            waiting = s.execute(select(m.sources.c.id).where(
+                m.sources.c.site_id == site_id, m.sources.c.status == "candidate", repo.own())
+                .order_by(m.sources.c.score.desc().nulls_last())).scalars().all()
+            for sid in waiting:
+                if quotas.remaining(s, "sources") == 0:
+                    break
+                repo.set_source_status(s, sid, "active", "taken on by the automatic newsroom")
+                report.active += 1
     return report
 
 
