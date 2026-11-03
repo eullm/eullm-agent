@@ -176,15 +176,19 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
 
     # Background work is queued, never run in this process: the worker runs
     # it (work.py), and a restart of the dashboard loses nothing.
-    def run_analysis(tenant: str, domain: str):
-        """Raises quotas.QuotaExceeded when the plan has no room for a new site,
+    def register_site(tenant: str, domain: str) -> int:
+        """The site, in the newsroom from now on, before anything is read from it.
+        Raises quotas.QuotaExceeded when the plan has no room for a new site,
         trials.TrialUsed for a site that had its free trial in another newsroom."""
         with db.tenant(tenant) as s:
             known = s.execute(select(m.sites.c.id).where(m.sites.c.domain == domain)).scalar() is not None
         if not known and admin is not None:
             trials.check_domain(admin, tenant, domain)
         with db.tenant(tenant) as s:
-            repo.add_site(s, tenant, domain)
+            return repo.add_site(s, tenant, domain)
+
+    def run_analysis(tenant: str, domain: str):
+        register_site(tenant, domain)
         queue.enqueue(db, tenant, "analysis", domain)
 
     def run_discovery(tenant: str, site_id: int, urls: list[str] | None = None, by: str = ""):
@@ -567,7 +571,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
 
     ui.register(app, SimpleNamespace(db=db, admin=admin, pages=pages, need=need, core=core, mail=mail,
                                      public_url=public_url,
-                                     run_analysis=run_analysis, run_discovery=run_discovery, run_draft=run_draft,
+                                     add_site=register_site, run_analysis=run_analysis, run_discovery=run_discovery, run_draft=run_draft,
                                      run_proposals=run_proposals, run_titles=run_titles, run_collect=run_collect,
                                      run_publication=run_publication, run_translation=run_translation,
                                      run_translations=run_translations, run_image=run_image, imager=imager,

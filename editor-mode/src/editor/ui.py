@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import opportunity as oppo, queue
+from . import connect, opportunity as oppo, queue
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
@@ -789,11 +789,16 @@ def register(app, ctx) -> None:
         if working is None:
             working = set(s.execute(select(m.jobs.c.kind).where(m.jobs.c.status.in_(("queued", "running")))).scalars())
         of = (lambda col: col == sid) if sid is not None else (lambda col: True)
+        has_target = count(m.publish_targets, of(m.publish_targets.c.site_id)) > 0
+        has_profile = count(m.editorial_profiles, of(m.editorial_profiles.c.site_id)) > 0
         steps = [
             {"title": t("Aggiungi il sito"), "past": t("Sito aggiunto"), "done": bool(sites), "href": None,
              "busy": "analysis" in working and not sites,
              "wait": t("Scansione del sito in corso: legge fino a 25 articoli, di solito pochi minuti."),
              "todo": t("Scrivi il dominio qui sotto: la redazione legge il sito e ne ricava temi, pubblico e tono.")},
+            {"title": t("Collega il sito"), "past": t("Sito collegato"), "href": "/connect", "busy": False, "wait": "",
+             "done": has_target, "later": has_profile or "analysis" in working,
+             "todo": t("Dimmi con cosa è fatto (WordPress, GitHub, altro): provo il collegamento, leggo le categorie e poi analizzo il sito.")},
             {"title": t("Approva il profilo"), "past": t("Profilo approvato"), "done": bool(lines.get(sid) if sid else lines), "href": "/site", "busy": bool({"analysis", "brief"} & working),
              "wait": t("Analisi in corso: il profilo da approvare arriva appena finisce."),
              "todo": t("Controlla temi e articoli d'esempio, togli i temi che non vuoi e approva.")},
@@ -812,22 +817,23 @@ def register(app, ctx) -> None:
             {"title": t("Rileggi la prima bozza"), "past": t("Prima bozza approvata"), "done": count(m.drafts, of(m.drafts.c.site_id), m.drafts.c.status == "approved") > 0,
              "href": "/drafts", "busy": "draft" in working, "wait": t("La bozza è in scrittura."),
              "todo": t("Quando accetti una proposta la bozza si scrive da sola: rileggila, guarda fonti e controlli automatici e approvala.")},
-            {"title": t("Collega il sito per pubblicare"), "past": t("Sito collegato"), "done": count(m.publish_targets, of(m.publish_targets.c.site_id)) > 0, "href": "/publications",
-             "busy": False, "wait": "", "todo": t("Aggiungi WordPress, GitHub, un webhook o un canale Telegram: nulla esce senza il tuo sì.")},
         ]
         if sid is not None:
             body = s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == sid, m.editorial_profiles.c.status == "approved")).scalar()
             if autopilot.settings_of(body)["enabled"]:
                 # The automatic newsroom chooses and writes: nothing to decide by hand.
-                for x in steps[4:6]:
+                for x in steps[5:7]:
                     x["busy"], x["wait"] = True, t("La redazione automatica è accesa: sceglie le proposte, scrive e "
                                                   "pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in "
                                                   "Sito e profilo › Redazione automatica.")
                     x["href"] = "/site#h-auto"
         if all(x["done"] for x in steps):
             return None
-        current = next(i for i, x in enumerate(steps) if not x["done"])
+        # A site read without a destination can wait for it: the next step is the one in view
+        # until nothing else is left, then the connection is.
+        pending = [i for i, x in enumerate(steps) if not x["done"]]
+        current = next((i for i in pending if not steps[i].get("later")), pending[0])
         for i, x in enumerate(steps):
             x["current"] = i == current
         return steps
@@ -844,7 +850,7 @@ def register(app, ctx) -> None:
             current = next((i for i, x in enumerate(steps) if x["current"]), None) if steps else None
             data = {}
             if steps:
-                data["key"] = key = ["site", "profile", "sources", "news", "proposal", "draft", "target"][current]
+                data["key"] = key = ["site", "connect", "profile", "sources", "news", "proposal", "draft"][current]
             if site is not None and steps:
                 if key == "profile":
                     draft = s.execute(select(p).where(p.c.site_id == site.id, p.c.status == "draft")
@@ -1010,17 +1016,135 @@ def register(app, ctx) -> None:
         from .api import normalise_domain
         d = normalise_domain(domain)
         try:
-            ctx.run_analysis(c.tenant_id, d)
+            sid = ctx.add_site(c.tenant_id, d)
         except trials.TrialUsed:
             return done("/settings#h-sites", t("{domain} ha già avuto la prova gratuita in un'altra redazione: per lavorarci scegli un piano in Abbonamento.", domain=d))
         except quotas.QuotaExceeded:
             return done("/settings#h-sites", t("Il piano non ha posto per un altro sito: scegline uno più grande in Abbonamento."))
-        with db.tenant(c.tenant_id) as s:
-            sid = s.execute(select(m.sites.c.id).where(m.sites.c.domain == d)).scalar()
-        resp = done(safe_path(back, "/"), t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività.", domain=d))
-        if sid is not None:
-            choose_site(resp, sid)
+        # The site is in; what it is made with comes before the analysis, so the first reading
+        # already knows its categories and the way articles will get there.
+        resp = done("/connect", t("{domain} aggiunto: dimmi con cosa è fatto e lo collego, poi lo analizzo.", domain=d))
+        choose_site(resp, sid)
         return resp
+
+    # --- Collega il sito ------------------------------------------------------------
+
+    def connect_message(e: connect.ConnectError) -> str:
+        i = e.info
+        return {
+            "address": t("L'indirizzo non è valido: scrivilo per esteso, per esempio https://esempio.it."),
+            "https": t("Serve un indirizzo https: WordPress accetta le password applicative solo su una connessione sicura."),
+            "private": t("Questo indirizzo non è raggiungibile da internet: scrivi quello pubblico del sito."),
+            "timeout": t("Il sito non ha risposto in tempo: riprova tra poco."),
+            "unreachable": t("Non riesco a raggiungere il sito: controlla l'indirizzo e che sia online."),
+            "redirect": t("Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser)."),
+            "credentials_missing": t("Mancano le credenziali: compila tutti i campi."),
+            "not_wordpress": t("A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.", status=i.get("status", "")),
+            "auth": t("WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata."),
+            "rest": t("WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.", status=i.get("status", "")),
+            "role": t("Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.", roles=", ".join(i.get("roles") or []) or "?"),
+            "repo_name": t("Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub."),
+            "token_bad": t("GitHub ha rifiutato il token: è sbagliato, scaduto o revocato. Creane uno nuovo seguendo i passi qui sopra."),
+            "token_forbidden": t("GitHub non lascia usare questo token su {repo}: controlla i permessi e che il repository sia tra quelli scelti.", repo=i.get("repo", "")),
+            "repo_missing": t("Non trovo {repo}: il nome è sbagliato, oppure il token non è stato abilitato su questo repository.", repo=i.get("repo", "")),
+            "no_write": t("Il token vede {repo} ma non può scriverci: nei permessi serve Contents in lettura e scrittura.", repo=i.get("repo", "")),
+            "branch_missing": t("Il ramo {branch} non esiste in questo repository.", branch=i.get("branch", "")),
+            "github": t("GitHub ha risposto con un errore: {detail}", detail=i.get("detail", "")),
+        }.get(e.code, t("Collegamento non riuscito ({code}).", code=e.code))
+
+    def connect_page(request, c, s, sites, site, *, kind="", host="", form=None, error=None, result=None, status=200):
+        return render(request, "connect.html.j2", c, s, "start", status_code=status, _sites=(sites, site),
+                      kind=kind, host=host, form=form or {}, error=error, result=result,
+                      has_profile=bool(s.execute(select(m.editorial_profiles.c.id).where(
+                          m.editorial_profiles.c.site_id == site.id).limit(1)).first()),
+                      linked=s.execute(select(m.publish_targets.c.id, m.publish_targets.c.name, m.publish_targets.c.kind)
+                                       .where(m.publish_targets.c.site_id == site.id)).all())
+
+    @app.get("/connect", response_class=HTMLResponse)
+    def connect_view(request: Request, kind: str = "", host: str = "", c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            sites, site = current_site(s, request)
+            if site is None:
+                return RedirectResponse("/start", status_code=303)
+            return connect_page(request, c, s, sites, site, kind=kind if kind in ("wordpress", "github", "webhook") else "",
+                                host=host if host in connect.HOSTS else "")
+
+    def start_analysis_once(tenant_id: str, site_id: int, domain: str) -> bool:
+        """The first reading of the site, unless it has had one: connecting again changes nothing there."""
+        with db.tenant(tenant_id) as s:
+            if s.execute(select(m.editorial_profiles.c.id).where(m.editorial_profiles.c.site_id == site_id).limit(1)).first():
+                return False
+        ctx.run_analysis(tenant_id, domain)
+        return True
+
+    @app.post("/ui/connect/{site_id}/later")
+    def ui_connect_later(site_id: int, c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            domain = s.execute(select(m.sites.c.domain).where(m.sites.c.id == site_id)).scalar()
+        if domain is None:
+            raise HTTPException(404, "site not found")
+        start_analysis_once(c.tenant_id, site_id, domain)
+        return done("/start", t("Analisi di {domain} partita: la segui passo per passo nel riquadro Attività. Il collegamento lo fai quando vuoi, da Primi passi.", domain=domain))
+
+    @app.post("/ui/connect/{site_id}/check")
+    def ui_connect_check(request: Request, site_id: int, kind: str = Form(...), address: str = Form(""),
+                         user: str = Form(""), secret: str = Form(""), host: str = Form(""), branch: str = Form(""),
+                         path: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+        if kind not in ("wordpress", "github", "webhook"):
+            raise HTTPException(400, "unknown kind")
+        host = host if host in connect.HOSTS else ""
+        with db.tenant(c.tenant_id) as s:
+            sites, site = current_site(s, request)
+            row = s.execute(select(m.sites).where(m.sites.c.id == site_id)).first()
+            if row is None:
+                raise HTTPException(404, "site not found")
+            site = row
+        form = {"address": address.strip(), "user": user.strip(), "branch": branch.strip(), "path": path.strip()}
+
+        def again(e: connect.ConnectError | str):
+            with db.tenant(c.tenant_id) as s:
+                return connect_page(request, c, s, sites, site, kind=kind, host=host, form=form,
+                                    error=connect_message(e) if isinstance(e, connect.ConnectError) else e)
+
+        try:
+            if kind == "wordpress":
+                found = connect.wordpress(address or f"https://{site.domain}", user, secret, resolver=connect.resolver)
+                config = {"url": found["base"], "user": found["user"], "categories": found["categories"],
+                          "can_upload": found["can_upload"], "can_publish": found["can_publish"]}
+                connect.save_target(db, c.tenant_id, site_id, "wordpress", found["name"] or site.domain, config,
+                                    secret.strip(), "WP", site.domain)
+            elif kind == "github":
+                found = connect.github(address, secret, branch=branch, path=path, resolver=connect.resolver)
+                chosen = host or found["host"] or "other"
+                config = {"repo": found["repo"], "host": chosen,
+                          # The preview deploy is what tells a bad build before it reaches the site;
+                          # GitHub Pages and unknown hosts have none to wait for.
+                          "verify": chosen in ("vercel", "cloudflare", "netlify")}
+                if branch.strip():
+                    config["branch"] = branch.strip()
+                if found["articles_path"]:
+                    config["path"] = found["articles_path"]
+                connect.save_target(db, c.tenant_id, site_id, "github", found["repo"], config, secret.strip(),
+                                    "GH", site.domain)
+                found["host"] = chosen
+            else:
+                url = address.strip()
+                try:
+                    publishing.add_target(db, c.tenant_id, site_id, "webhook", site.domain, {"url": url},
+                                          connect.secret_name("WEBHOOK", site.domain) if secret.strip() else None)
+                    if secret.strip():
+                        vault.put(db, c.tenant_id, connect.secret_name("WEBHOOK", site.domain), secret.strip())
+                except publishing.PublishError as e:
+                    return again(t("Indirizzo non valido: {e}.", e=e))
+                found = {"url": url}
+        except connect.ConnectError as e:
+            return again(e)
+        except (vault.VaultError, publishing.PublishError) as e:
+            return again(t("Collegamento non salvato: {e}.", e=e))
+        started = start_analysis_once(c.tenant_id, site_id, site.domain)
+        with db.tenant(c.tenant_id) as s:
+            return connect_page(request, c, s, sites, site, kind=kind, host=host,
+                                result={"kind": kind, "found": found, "started": started})
 
     @app.post("/ui/sites/{site_id}/review")
     def ui_review(site_id: int, back: str = "/site", c: auth.Caller = Depends(ctx.need("owner"))):

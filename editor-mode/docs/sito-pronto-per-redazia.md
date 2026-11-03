@@ -14,7 +14,16 @@ Ci sono quattro strade. Scegli la prima che vale per il tuo sito.
 | Un'altra piattaforma con un tuo programmatore | Webhook | Un indirizzo che riceve l'articolo in JSON |
 | Nessuno dei precedenti | Un sito nuovo dal modello Redazia, su `news.tuodominio.it` o sotto `tuodominio.it/news` | Vedi l'ultima sezione |
 
-Le destinazioni si aggiungono in **Pubblicazioni**. Se il sito è in più
+Il modo più semplice è il percorso guidato: aggiungi il dominio e Redazia
+ti chiede con cosa è fatto il sito (**Primi passi › Collega il sito**,
+oppure `/connect`). Ti spiega dove creare la password o il token, **prova
+il collegamento prima di salvare** (accesso, permessi, categorie di
+WordPress, cartella e formato degli articoli su GitHub, servizio che
+pubblica il sito) e solo dopo avvia l'analisi, che parte già dalle
+categorie del sito: diventano le rubriche, e la rubrica di ogni articolo
+è la categoria del post su WordPress.
+
+Le destinazioni si possono anche aggiungere a mano in **Pubblicazioni**. Se il sito è in più
 lingue, aggiungi una destinazione per lingua e indica la lingua: la
 traduzione di un articolo va da sola alla destinazione della sua lingua.
 
@@ -125,7 +134,11 @@ firma prima di pubblicare.
 }
 ```
 
-`mode` è `publish` (pubblica) o `draft` (salva come bozza). Rispondi con
+`mode` è `publish` (pubblica) o `draft` (salva come bozza). Se il direttore
+modifica l'articolo dopo la pubblicazione arriva lo stesso corpo con
+`"event": "update"` (stesso `slug`: va riscritto lo stesso file o articolo);
+se lo ritira arriva `"event": "withdraw"` con `publication_id` e `slug`:
+l'articolo va tolto dal sito. Rispondi con
 un codice 2xx quando l'articolo è salvato; con un errore la pubblicazione
 risulta fallita in Pubblicazioni, con il motivo.
 

@@ -64,7 +64,7 @@ class FakeGitHub:
             if want in files:
                 return httpx.Response(200, json={"type": "file", "path": want,
                                                  "content": base64.b64encode(files[want]).decode()})
-            prefix = want.rstrip("/") + "/"
+            prefix = want.rstrip("/") + "/" if want.strip("/") else ""
             names = {}
             for p in files:
                 if p.startswith(prefix):

@@ -1,0 +1,225 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ _('Collega il sito') }}{% endblock %}
+{% block main %}
+{# From a domain to a site the newsroom can update: what it is made with, the credential tried for real,
+   what was found, and only then the reading of the site. #}
+{% set phase = 4 if result else (3 if kind else 2) %}
+<header class="head">
+  <div>
+    <span class="kicker">{{ site.domain }}</span>
+    <h1>{{ _('Collega il sito') }}</h1>
+  </div>
+  <a class="btn" href="/start">{{ _('Primi passi') }}</a>
+</header>
+
+<p class="phases">
+  <span class="chip {{ 'teal' if phase > 1 else '' }}">1 · {{ _('Il sito') }}</span>
+  <span class="chip {{ 'teal' if phase > 2 else ('amber' if phase == 2 else '') }}">2 · {{ _('Di cosa è fatto') }}</span>
+  <span class="chip {{ 'teal' if phase > 3 else ('amber' if phase == 3 else '') }}">3 · {{ _('Accesso e verifica') }}</span>
+  <span class="chip {{ 'teal' if result else '' }}">4 · {{ _('Analisi e primi articoli') }}</span>
+</p>
+
+{% if error %}
+<section class="card pad" role="alert" style="border-color: var(--red, #b3261e);">
+  <p><span class="chip red">{{ _('Non riuscito') }}</span> {{ error }}</p>
+  <p class="hint">{{ _('Non è stato salvato nulla: correggi e riprova.') }}</p>
+</section>
+{% endif %}
+
+{% if result %}
+{# --- the connection works --- #}
+{% set f = result.found %}
+<section class="card pad">
+  <h2>✓ {{ _('Collegamento verificato') }}</h2>
+  {% if result.kind == 'wordpress' %}
+  <div class="list-row"><span>{{ _('Sito') }}</span><span>{{ f.name or site.domain }} <small class="hint">{{ f.base }}</small></span></div>
+  <div class="list-row"><span>{{ _('Utente') }}</span><span>{{ f.display_name }}</span></div>
+  <div class="list-row"><span>{{ _('Può pubblicare') }}</span><span>{% if f.can_publish %}<span class="chip teal">{{ _('sì') }}</span>{% else %}<span class="chip amber">{{ _('solo bozze') }}</span> <small class="hint">{{ _('con questo ruolo WordPress salva gli articoli come bozza: li pubblichi tu da WordPress.') }}</small>{% endif %}</span></div>
+  <div class="list-row"><span>{{ _('Può caricare la copertina') }}</span><span>{% if f.can_upload %}<span class="chip teal">{{ _('sì') }}</span>{% else %}<span class="chip amber">{{ _('no') }}</span> <small class="hint">{{ _('gli articoli arrivano senza immagine: serve un ruolo che carica file.') }}</small>{% endif %}</span></div>
+  <h3 style="margin-top: 14px;">{{ _('Categorie trovate') }}</h3>
+  {% if f.sections %}
+  <p>{% for c in f.categories %}<span class="chip">{{ c.name }}{% if c.count %} · {{ c.count }}{% endif %}</span> {% endfor %}</p>
+  <p class="hint">{{ _('Sono le rubriche che la redazione riempie: la rubrica di ogni articolo diventa la categoria del post. Le modifichi in Sito e profilo › Redazione automatica.') }}</p>
+  {% else %}
+  <p class="hint">{{ _('Il sito ha solo la categoria predefinita: le rubriche le ricava la redazione dall\'analisi.') }}</p>
+  {% endif %}
+  {% elif result.kind == 'github' %}
+  <div class="list-row"><span>{{ _('Repository') }}</span><span>{{ f.repo }} <small class="hint">{{ _('ramo {branch}', branch=f.branch) }}{% if f.private %} · {{ _('privato') }}{% endif %}</small></span></div>
+  <div class="list-row"><span>{{ _('Costruito con') }}</span><span>{{ f.generator or _('non riconosciuto') }}</span></div>
+  <div class="list-row"><span>{{ _('Lo pubblica') }}</span><span>{{ {'vercel': 'Vercel', 'cloudflare': 'Cloudflare Pages', 'netlify': 'Netlify', 'github_pages': 'GitHub Pages'}.get(f.host, _('un altro servizio')) }}</span></div>
+  <div class="list-row"><span>{{ _('Cartella degli articoli') }}</span><span>{% if f.articles_path %}<code>{{ f.articles_path }}</code> <small class="hint">{{ _('{n} articoli letti per copiarne il formato', n=f.articles_found) }}</small>{% else %}<span class="chip amber">{{ _('non trovata') }}</span> <small class="hint">{{ _('Non vedo ancora articoli: creo la cartella content/blog con il primo. Se i tuoi stanno altrove, indicala in Pubblicazioni › Destinazioni.') }}</small>{% endif %}</span></div>
+  <div class="list-row"><span>{{ _('llms.txt e sitemap') }}</span><span>{{ _('llms.txt') }}: {{ _('sì') if f.has_llms else _('no') }} · {{ _('sitemap') }}: {{ _('sì') if f.has_sitemap else _('no') }}</span></div>
+  {% if f.host in ['vercel', 'cloudflare', 'netlify'] %}
+  <p class="hint">{{ _('Ogni articolo passa da una pull request: Redazia aspetta che l\'anteprima si costruisca senza errori e solo allora la unisce, così un build rotto non tocca il sito.') }}</p>
+  {% else %}
+  <p class="hint">{{ _('Questo servizio non dà un\'anteprima da aspettare: Redazia pubblica direttamente sul ramo del sito.') }}</p>
+  {% endif %}
+  {% else %}
+  <div class="list-row"><span>{{ _('Indirizzo del webhook') }}</span><span>{{ f.url }}</span></div>
+  <p class="hint">{{ _('Non l\'ho chiamato per non creare un articolo finto: al primo articolo approvato il tuo sito riceve l\'evento publication (e update e withdraw se lo modifichi o lo ritiri).') }}</p>
+  {% endif %}
+</section>
+<section class="card pad">
+  <h2>{{ _('E adesso') }}</h2>
+  {% if result.started %}
+  <p>{{ _('L\'analisi di {domain} è partita: la redazione legge il sito, ne ricava settore, pubblico e tono, e tiene conto di quanto ho trovato. La segui passo per passo nel riquadro Attività.', domain=site.domain) }}</p>
+  {% else %}
+  <p>{{ _('{domain} era già stato analizzato: il collegamento è pronto per la prossima pubblicazione.', domain=site.domain) }}</p>
+  {% endif %}
+  <p><a class="btn pri" href="/start">{{ _('Continua con i primi passi') }}</a></p>
+</section>
+
+{% elif not kind %}
+{# --- what is the site made with --- #}
+<p class="lead">{{ _('Per aggiornare {domain} da solo, la redazione deve sapere con cosa è fatto e avere il permesso di scriverci. Scegli, ti guido e provo il collegamento prima di salvare qualsiasi cosa.', domain=site.domain) }}</p>
+{% if linked %}
+<section class="card pad">
+  <p>{{ _('Già collegato:') }} {% for l in linked %}<span class="chip teal">{{ l.name }}</span> {% endfor %}</p>
+</section>
+{% endif %}
+<div class="cols kinds">
+  <a class="card pad kind" href="/connect?kind=wordpress">
+    <h2>WordPress</h2>
+    <p>{{ _('Il sito è fatto con WordPress. Mi servono un utente e una password applicativa: leggo le categorie, pubblico con le API standard, con copertina.') }}</p>
+  </a>
+  <a class="card pad kind" href="/connect?kind=github">
+    <h2>GitHub</h2>
+    <p>{{ _('Il sito è un progetto in un repository GitHub e un servizio lo pubblica a ogni modifica: Vercel, Cloudflare Pages, Netlify, GitHub Pages. Ti guido con il token e il collegamento.') }}</p>
+  </a>
+  <a class="card pad kind" href="/connect?kind=webhook">
+    <h2>{{ _('Altro sistema') }}</h2>
+    <p>{{ _('Qualsiasi altro sito o gestionale: riceve gli articoli con un webhook firmato, come descrivono le linee guida pubbliche.') }}</p>
+  </a>
+</div>
+<section class="card pad">
+  <h2>{{ _('Collego più tardi') }}</h2>
+  <p class="hint">{{ _('Posso già leggere il sito e scrivere le bozze: le approvi e le copi tu. Il collegamento lo aggiungi quando vuoi.') }}</p>
+  <form method="post" action="/ui/connect/{{ site.id }}/later"><button class="btn" type="submit">{{ _('Analizza senza collegare') }}</button></form>
+</section>
+
+{% elif kind == 'wordpress' %}
+<section class="card pad">
+  <h2>{{ _('1 · La password applicativa') }}</h2>
+  <p class="hint">{{ _('Non è la password con cui entri: è una chiave a parte, che puoi revocare in qualsiasi momento senza cambiare la tua.') }}</p>
+  <ol class="how">
+    <li>{{ _('Entra nell\'area di amministrazione del sito come l\'utente che pubblicherà gli articoli (Editor o Amministratore).') }}</li>
+    <li>{{ _('Apri Utenti › Profilo e scendi fino a «Password applicazioni».') }}</li>
+    <li>{{ _('Scrivi un nome, per esempio Redazia, e premi «Aggiungi nuova password applicazione».') }}</li>
+    <li>{{ _('Copia la password che compare (24 caratteri, con gli spazi): WordPress la mostra una volta sola.') }}</li>
+  </ol>
+  <p class="hint">{{ _('Non vedi la sezione? Serve WordPress 5.6 o successivo e il sito in https; alcuni plugin di sicurezza la nascondono.') }}</p>
+</section>
+<section class="card pad">
+  <h2>{{ _('2 · Provo il collegamento') }}</h2>
+  <form method="post" action="/ui/connect/{{ site.id }}/check" class="target-form">
+    <input type="hidden" name="kind" value="wordpress">
+    <div class="cols">
+      <label class="field">{{ _('Indirizzo del sito') }}<input name="address" value="{{ form.address or ('https://' ~ site.domain) }}" required placeholder="https://esempio.it"></label>
+      <label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ form.user or '' }}" autocomplete="off" required></label>
+      <label class="field">{{ _('Password applicativa') }}<input name="secret" type="password" autocomplete="new-password" required></label>
+    </div>
+    <div class="row"><button class="btn pri" type="submit">{{ _('Verifica e collega') }}</button> <a class="btn" href="/connect">{{ _('Indietro') }}</a></div>
+  </form>
+  <p class="hint">{{ _('Provo l\'accesso, vedo se l\'utente può pubblicare e caricare immagini e scarico le categorie. La password viene salvata cifrata e non è più mostrata.') }}</p>
+</section>
+
+{% elif kind == 'github' %}
+<section class="card pad">
+  <h2>{{ _('1 · Il token di GitHub') }}</h2>
+  <p class="hint">{{ _('È la chiave con cui la redazione scrive gli articoli nel repository del sito. La limiti a quel solo repository.') }}</p>
+  <ol class="how">
+    <li>{{ _('Apri') }} <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>.</li>
+    <li>{{ _('Nome: Redazia. Scadenza: la più lunga che ti lascia scegliere (alla scadenza basta crearne un altro e sostituirlo qui).') }}</li>
+    <li>{{ _('«Repository access» › «Only select repositories» › scegli il repository del sito. Se il repository è di un\'organizzazione, scegli come proprietario l\'organizzazione.') }}</li>
+    <li>{{ _('Permissions › Repository permissions: Contents = Read and write; Pull requests = Read and write; Commit statuses = Read-only; Checks = Read-only.') }}</li>
+    <li>{{ _('«Generate token» e copia subito il codice (comincia con github_pat_): GitHub non lo mostra più.') }}</li>
+  </ol>
+</section>
+<section class="card pad">
+  <h2>{{ _('2 · Il servizio che pubblica il sito') }}</h2>
+  <p class="hint">{{ _('Il repository da solo non è un sito: un servizio lo costruisce e lo pubblica a ogni modifica. Dove sta, o dove vuoi metterlo?') }}</p>
+  <p>
+    {% for key, label in [('vercel', 'Vercel'), ('cloudflare', 'Cloudflare Pages'), ('netlify', 'Netlify'), ('github_pages', 'GitHub Pages'), ('other', _('Altro / non so'))] %}
+    <a class="btn {{ 'pri' if host == key else '' }}" href="/connect?kind=github&amp;host={{ key }}#h-host">{{ label }}</a>
+    {% endfor %}
+  </p>
+  <div id="h-host">
+  {% if host == 'vercel' %}
+  <ol class="how">
+    <li>{{ _('Apri') }} <a href="https://vercel.com/new" target="_blank" rel="noopener">vercel.com/new</a> {{ _('e accedi con GitHub.') }}</li>
+    <li>{{ _('«Import Git Repository»: scegli il repository del sito. Se non lo vedi, «Adjust GitHub App Permissions» e abilitalo.') }}</li>
+    <li>{{ _('Vercel riconosce il framework (Astro, Next.js…): lascia i comandi proposti e premi «Deploy».') }}</li>
+    <li>{{ _('In Settings › Domains aggiungi {domain} e imposta nel DNS i record che Vercel indica.', domain=site.domain) }}</li>
+    <li>{{ _('Da qui ogni commit va online e ogni pull request ha la sua anteprima: Redazia aspetta che sia verde prima di pubblicare.') }}</li>
+  </ol>
+  {% elif host == 'cloudflare' %}
+  <ol class="how">
+    <li>{{ _('Apri') }} <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/create" target="_blank" rel="noopener">dash.cloudflare.com › Workers &amp; Pages › Create</a>.</li>
+    <li>{{ _('Scegli «Pages» › «Connect to Git», autorizza GitHub e seleziona il repository del sito.') }}</li>
+    <li>{{ _('Imposta il comando di build e la cartella di output (per Astro: npm run build e dist) e premi «Save and Deploy».') }}</li>
+    <li>{{ _('In «Custom domains» aggiungi {domain}: se il dominio è già su Cloudflare il DNS si imposta da solo.', domain=site.domain) }}</li>
+    <li>{{ _('I rami diversi dal principale hanno la loro anteprima: Redazia aspetta che sia verde prima di pubblicare.') }}</li>
+  </ol>
+  {% elif host == 'netlify' %}
+  <ol class="how">
+    <li>{{ _('Apri') }} <a href="https://app.netlify.com/start" target="_blank" rel="noopener">app.netlify.com/start</a> {{ _('e scegli GitHub.') }}</li>
+    <li>{{ _('Autorizza e seleziona il repository del sito.') }}</li>
+    <li>{{ _('Controlla il comando di build e la cartella di pubblicazione (per Astro: npm run build e dist) e premi «Deploy».') }}</li>
+    <li>{{ _('In «Domain management» aggiungi {domain} e segui le istruzioni per il DNS.', domain=site.domain) }}</li>
+    <li>{{ _('Ogni pull request ha un\'anteprima: Redazia aspetta che sia verde prima di pubblicare.') }}</li>
+  </ol>
+  {% elif host == 'github_pages' %}
+  <ol class="how">
+    <li>{{ _('Nel repository apri Settings › Pages e come «Source» scegli «GitHub Actions».') }}</li>
+    <li>{{ _('Aggiungi il workflow di pubblicazione del tuo framework (Astro ne fornisce uno pronto: withastro/action) in .github/workflows.') }}</li>
+    <li>{{ _('In «Custom domain» scrivi {domain} e imposta nel DNS un CNAME verso il tuo-utente.github.io.', domain=site.domain) }}</li>
+    <li>{{ _('GitHub Pages non fa anteprime delle pull request: Redazia pubblica direttamente sul ramo del sito, senza aspettare.') }}</li>
+  </ol>
+  {% elif host == 'other' %}
+  <p>{{ _('Va bene qualunque servizio che costruisce e pubblica il sito da GitHub a ogni commit. Redazia scrive nel repository; da lì in poi è il tuo servizio a mettere online. Senza un\'anteprima da aspettare, pubblico direttamente sul ramo del sito.') }}</p>
+  {% else %}
+  <p class="hint">{{ _('Scegli un servizio per vedere i passi. Se il sito è già online, salta pure: lo riconosco dal repository.') }}</p>
+  {% endif %}
+  <p class="hint">{{ _('Non hai ancora un sito? Parti dal modello pubblico di Redazia (10 stili, 5 lingue, già pronto per ricevere gli articoli):') }} <a href="https://github.com/redazia/redazia-site-template" target="_blank" rel="noopener">github.com/redazia/redazia-site-template</a> {{ _('› «Use this template», poi collegalo al servizio come sopra.') }}</p>
+  </div>
+</section>
+<section class="card pad">
+  <h2>{{ _('3 · Provo il collegamento') }}</h2>
+  <form method="post" action="/ui/connect/{{ site.id }}/check" class="target-form">
+    <input type="hidden" name="kind" value="github">
+    <input type="hidden" name="host" value="{{ host }}">
+    <div class="cols">
+      <label class="field">{{ _('Repository del sito') }}<input name="address" value="{{ form.address or '' }}" required placeholder="proprietario/nome"></label>
+      <label class="field">{{ _('Token GitHub') }}<input name="secret" type="password" autocomplete="new-password" required placeholder="github_pat_…"></label>
+    </div>
+    <details class="act">
+      <summary>{{ _('Dettagli, solo se servono') }}</summary>
+      <div class="cols">
+        <label class="field">{{ _('Ramo del sito') }}<input name="branch" value="{{ form.branch or '' }}" autocomplete="off" placeholder="{{ _('quello predefinito') }}"></label>
+        <label class="field">{{ _('Cartella degli articoli') }}<input name="path" value="{{ form.path or '' }}" autocomplete="off" placeholder="{{ _('la riconosco dai tuoi articoli') }}"></label>
+      </div>
+    </details>
+    <div class="row"><button class="btn pri" type="submit">{{ _('Verifica e collega') }}</button> <a class="btn" href="/connect">{{ _('Indietro') }}</a></div>
+  </form>
+  <p class="hint">{{ _('Provo il token sul repository, leggo com\'è fatto il sito, dove stanno gli articoli e come sono scritti per copiarne il formato. Il token viene salvato cifrato e non è più mostrato.') }}</p>
+</section>
+
+{% else %}
+<section class="card pad">
+  <h2>{{ _('Il tuo sistema riceve gli articoli') }}</h2>
+  <p>{{ _('Redazia invia a un indirizzo tuo un evento firmato per ogni articolo pubblicato, aggiornato o ritirato. Le linee guida pubbliche spiegano formato, firma e regole, e contengono un prompt da dare a un\'AI perché costruisca il sito già compatibile:') }}</p>
+  <p><a class="btn" href="https://redazia.com/it/sites" target="_blank" rel="noopener">redazia.com/it/sites</a></p>
+</section>
+<section class="card pad">
+  <h2>{{ _('Indirizzo e chiave') }}</h2>
+  <form method="post" action="/ui/connect/{{ site.id }}/check" class="target-form">
+    <input type="hidden" name="kind" value="webhook">
+    <div class="cols">
+      <label class="field">{{ _('Indirizzo che riceve gli eventi') }}<input name="address" value="{{ form.address or '' }}" required placeholder="https://esempio.it/api/redazia"></label>
+      <label class="field">{{ _('Chiave per la firma (facoltativa)') }}<input name="secret" type="password" autocomplete="new-password"></label>
+    </div>
+    <div class="row"><button class="btn pri" type="submit">{{ _('Salva e analizza') }}</button> <a class="btn" href="/connect">{{ _('Indietro') }}</a></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
