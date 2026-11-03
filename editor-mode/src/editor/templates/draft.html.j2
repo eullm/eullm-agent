@@ -27,14 +27,16 @@
 {% if editing %}
 <form method="post" action="/ui/drafts/{{ d.id }}/edit" class="card pad" style="display: flex; flex-direction: column; gap: 12px;" lang="{{ d.language or 'it' }}">
   <h2>{{ _('Modifica la bozza') }}</h2>
-  <p class="hint">{{ _('Ogni frase tiene le sue fonti e viene ricontrollata (numeri presenti nelle fonti, niente testo copiato). Se la bozza era approvata, va riapprovata.') }}</p>
+  <p class="hint">{{ _("Scrivi liberamente: un rigo per frase, «## » all'inizio del rigo per un sottotitolo, [1] [2] dopo una frase per le sue fonti (l'elenco è qui sotto). Puoi aggiungere, togliere e spostare frasi e sottotitoli. Una frase senza fonte è tua e va online così com'è; le frasi con le fonti vengono ricontrollate. Se la bozza era approvata, va riapprovata.") }}</p>
   <label class="field">{{ _('Titolo') }}<input name="title" value="{{ d.title }}" required minlength="5" maxlength="160"></label>
   <label class="field">{{ _('Sottotitolo') }}<input name="subtitle" value="{{ d.subtitle or '' }}" maxlength="300"></label>
-  {% set ns = namespace(section=none) %}
-  {% for cl in claims %}
-    {% if loop.first or cl.section != ns.section %}{% set ns.section = cl.section %}{% if cl.section %}<h3>{{ cl.section }}</h3>{% endif %}{% endif %}
-    <label class="field"><span class="hint">{{ _('Frase {n}', n=loop.index) }}{% if cl.ordinal in flagged_ordinals %} · {{ _('da rivedere') }}{% endif %}</span><textarea name="claim-{{ cl.ordinal }}" rows="2" required>{{ cl.text }}</textarea></label>
-  {% endfor %}
+  <label class="field">{{ _('Testo') }}<textarea name="body" rows="{{ [12, (body_text.count('\n') + 4)]|max }}" required style="font: 15px/1.6 var(--mono, monospace);">{{ body_text }}</textarea></label>
+  {% if sources %}
+  <div class="dashed">
+    <strong>{{ _('Fonti da citare') }}</strong>
+    {% for src in sources %}<span class="hint">[{{ src.n }}] {{ src.title }} · {{ src.source }}</span>{% endfor %}
+  </div>
+  {% endif %}
   <h3>{{ _('Google e risposte AI') }}</h3>
   <label class="field">{{ _('Frase chiave') }}<input name="seo_keyphrase" value="{{ sd.keyphrase or '' }}" maxlength="80"></label>
   <label class="field">{{ _('Titolo per Google') }}<input name="seo_title" value="{{ sd.title or '' }}" maxlength="70"></label>
@@ -165,9 +167,58 @@
       <div class="list-row">
         <span>{{ p.name }} · {{ _('bozza') if p.mode == 'draft' else _('subito') }}</span>
         {% set ps = {'pending_approval': ('amber', _('In attesa del direttore')), 'approved': ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
-        {% if p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
+        {% if p.withdrawn_at %}<span class="chip">{{ _('Ritirata il {d}', d=when(p.withdrawn_at)) }}</span>
+        {% elif p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}{% if p.updated_at %} · {{ _('aggiornata il {d}', d=when(p.updated_at)) }}{% endif %}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
       </div>
+      {% if p.status == 'published' and p.mode == 'publish' and caller.can('owner') %}
+        {% if p.id in changing %}
+        <p class="hint"><span class="spin" aria-hidden="true"></span> {{ _('Modifica sul sito in corso: la segui nel riquadro Attività.') }}</p>
+        {% else %}
+        <div class="row" style="flex-wrap: wrap; gap: 8px;">
+          {% if d.status == 'approved' %}
+          <form class="inline" method="post" action="/ui/publications/{{ p.id }}/update"><button class="btn sm" type="submit">{{ _('Rimetti online') if p.withdrawn_at else _('Aggiorna sul sito') }}</button></form>
+          {% endif %}
+          {% if not p.withdrawn_at %}
+          <form class="inline row" method="post" action="/ui/publications/{{ p.id }}/withdraw" style="gap: 6px; align-items: center;">
+            <label class="hint" style="display: flex; gap: 4px; align-items: center;"><input type="checkbox" name="confirm" value="1" required> {{ _('confermo') }}</label>
+            <button class="btn sm" type="submit">{{ _('Ritira dal sito') }}</button>
+          </form>
+          {% endif %}
+        </div>
+        {% if p.error %}<p class="hint">{{ _("L'ultima modifica sul sito non è riuscita: {e}", e=p.error|truncate(160)) }}</p>{% endif %}
+        {% endif %}
+      {% endif %}
       {% endfor %}
+      {% if pubs and d.status != 'approved' and pubs|selectattr('status', 'equalto', 'published')|list %}
+      <p class="hint">{{ _('Hai modificato un articolo già pubblicato: approvalo di nuovo, poi «Aggiorna sul sito» lo sostituisce online allo stesso indirizzo.') }}</p>
+      {% endif %}
+      {% if replaces and online_old and caller.can('owner') %}
+      <div class="dashed">
+        <strong>{{ _('Questa è una nuova versione di un articolo già online') }}</strong>
+        {% if d.status == 'approved' %}
+          {% for o in online_old %}
+          <form class="inline" method="post" action="/ui/publications/{{ o.id }}/update"><input type="hidden" name="draft_id" value="{{ d.id }}"><button class="btn sm pri" type="submit">{{ _('Pubblica al posto della versione online ({name})', name=o.name) }}</button></form>
+          {% endfor %}
+          <span class="hint">{{ _('Stesso indirizzo: chi aveva il link legge la nuova versione.') }}</span>
+        {% else %}
+          <span class="hint">{{ _('Rileggila e approvala: poi la metti online al posto della <a href="/drafts/{id}">versione pubblicata</a>.', id=replaces) }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if pubs|selectattr('status', 'equalto', 'published')|list and caller.can('editor') and not d.translation_of %}
+      {% if redoing %}
+      <p class="hint"><span class="spin" aria-hidden="true"></span> {{ _('Nuova versione in scrittura.') }}</p>
+      {% else %}
+      <details>
+        <summary class="hint">{{ _("Rifai l'articolo") }}</summary>
+        <form method="post" action="/ui/drafts/{{ d.id }}/redo" class="form-grid">
+          <label class="field">{{ _('Cosa va cambiato') }}<textarea name="note" rows="3" required minlength="5" maxlength="1000" placeholder="{{ _('Es.: il titolo promette troppo; togli la parte sul mercato; usa il comunicato ufficiale per i numeri.') }}"></textarea></label>
+          <div><button class="btn sm" type="submit">{{ _('Scrivi una nuova versione') }}</button></div>
+        </form>
+        <p class="hint">{{ _("La nuova versione non va online da sola: la rileggi, la approvi e la pubblichi al posto di questa.") }}</p>
+      </details>
+      {% endif %}
+      {% endif %}
       {% if d.status == 'approved' and caller.can('editor') %}
         {% if targets %}
         <form method="post" action="/ui/drafts/{{ d.id }}/publish" class="form-grid">

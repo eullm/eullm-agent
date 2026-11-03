@@ -2,6 +2,32 @@
 
 ## 0.28.23
 
+### Added
+
+- The director keeps a published article in hand (Francesco: the automatic
+  newsroom is an extra, a person's control is needed in every newsroom):
+  - **free editor** of the whole article on the draft page: one sentence
+    per line, `## ` for a heading, `[1] [2]` for the sources from the list
+    beside it. Sentences can be added, removed and moved; a sentence
+    without a source is the director's and goes out as written; cited
+    ones are checked as usual. An approved draft is approved again;
+  - **Aggiorna sul sito**: the published article replaced with the
+    approved text, at the same address (WordPress: the same post;
+    GitHub: the same file, llms.txt line updated; webhook: event
+    `update`). A withdrawn article goes back online the same way;
+  - **Ritira dal sito**, with a confirmation: WordPress moves the post to
+    the bin, GitHub deletes the file and its cover and removes it from
+    llms.txt and the sitemap, webhook gets event `withdraw`, Telegram
+    deletes the message. The translations published from it go too, and
+    it is no longer linked by "Leggi anche";
+  - **Rifai l'articolo**, with a note on what to change: a new version of
+    the same proposal, which never goes out by itself; once approved,
+    "Pubblica al posto della versione online" puts it at the same
+    address.
+  Each change is a job of its own (Attività) and a failure leaves the
+  article as it was, with the reason on the draft page. Migration 0038 /
+  SQLite 0027: `publications.updated_at/by`, `withdrawn_at/by`.
+
 ### Changed
 
 - The newsroom sees its plan's units, never the model's euros: "Costo

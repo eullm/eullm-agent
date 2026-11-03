@@ -1497,7 +1497,9 @@ def register(app, ctx) -> None:
             targets = [x for x in s.execute(select(m.publish_targets).where(
                 m.publish_targets.c.site_id == d.site_id, m.publish_targets.c.enabled.is_not(False))).all()
                 if publishing.fits_language(x, d.language)]  # Italian text never goes to the English site
-            pubs = s.execute(select(m.publications.c.status, m.publications.c.mode, m.publications.c.external_url,
+            pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode,
+                                    m.publications.c.external_url, m.publications.c.withdrawn_at,
+                                    m.publications.c.updated_at, m.publications.c.published_at, m.publications.c.error,
                                     m.publish_targets.c.name)
                              .join(m.publish_targets, m.publish_targets.c.id == m.publications.c.target_id)
                              .where(m.publications.c.draft_id == draft_id).order_by(m.publications.c.id)).all()
@@ -1517,6 +1519,16 @@ def register(app, ctx) -> None:
             image = images.of(s, d.id)
             cover = {"cost": credits.cover_cost(s, root), "free": credits.free_covers_left(s, root),
                      "credits": credits.state(s)}
+            # A version written again: what of the old one is online, to replace.
+            replaces = (d.seo or {}).get("replaces")
+            online_old = s.execute(select(m.publications.c.id, m.publish_targets.c.name)
+                                   .join(m.publish_targets, m.publish_targets.c.id == m.publications.c.target_id)
+                                   .where(m.publications.c.draft_id == replaces, m.publications.c.status == "published",
+                                          m.publications.c.mode == "publish")).all() if replaces else []
+            changing = {a.get("publication_id") for a in s.execute(select(j.args).where(
+                j.kind == "change", j.status.in_(("queued", "running")))).scalars() if a}
+            redoing = any(a and a.get("replaces") == d.id for a in s.execute(select(j.args).where(
+                j.kind == "draft", j.status.in_(("queued", "running")))).scalars())
             have = {x.language for x in family}
             wanted = [x for x in tr.site_languages(s, d.site_id) if x not in have]
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
@@ -1527,7 +1539,9 @@ def register(app, ctx) -> None:
                           body_html=to_html(delivery.body_md(d.body_md)),
                           sources=[{"n": refs[i], **items[i]._mapping} for i in order if i in items],
                           flags=flags, checks=checks, targets=targets, pubs=pubs, kinds=TARGET_KINDS,
-                          sd=d.seo or {}, editing=bool(edit) and c.can("editor"), claims=claims, flagged_ordinals=flagged, seo_checks=[{"label": t(SEO_CHECKS[x["key"]]), "ok": x["ok"]}
+                          sd=d.seo or {}, editing=bool(edit) and c.can("editor"), claims=claims,
+                          body_text=drafts.as_text(claims), online_old=online_old, replaces=replaces,
+                          changing=changing, redoing=redoing, flagged_ordinals=flagged, seo_checks=[{"label": t(SEO_CHECKS[x["key"]]), "ok": x["ok"]}
                                                       for x in (d.seo or {}).get("checks", []) if x.get("key") in SEO_CHECKS])
 
     @app.post("/ui/drafts/{draft_id}/decision")
@@ -1670,6 +1684,56 @@ def register(app, ctx) -> None:
         except IntegrityError:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta."))
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
+
+    @app.post("/ui/publications/{pub_id}/update")
+    def ui_pub_update(pub_id: int, draft_id: int = Form(0), c: auth.Caller = Depends(ctx.need("owner"))):
+        """The director puts the current text (or a version written again)
+        online in place of the published one."""
+        with db.tenant(c.tenant_id) as s:
+            pub = s.execute(select(m.publications.c.draft_id, m.publications.c.status)
+                            .where(m.publications.c.id == pub_id)).first()
+            back = f"/drafts/{draft_id or (pub.draft_id if pub else '')}"
+            if pub is None or pub.status != "published":
+                return done(back, t("Questo articolo non è pubblicato."))
+            d = s.execute(select(m.drafts.c.status).where(m.drafts.c.id == (draft_id or pub.draft_id))).first()
+            if d is None or d.status != "approved":
+                return done(back, t("Approva prima la bozza: online va solo quello che un direttore ha approvato."))
+        queue.enqueue(db, c.tenant_id, "change", f"update {pub_id}",
+                      {"publication_id": pub_id, "op": "update", "draft_id": draft_id or None, "by": c.name})
+        return done(back, t("Aggiornamento in corso: lo segui nel riquadro Attività."))
+
+    @app.post("/ui/publications/{pub_id}/withdraw")
+    def ui_pub_withdraw(pub_id: int, confirm: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            pub = s.execute(select(m.publications.c.draft_id, m.publications.c.status)
+                            .where(m.publications.c.id == pub_id)).first()
+        if pub is None or pub.status != "published":
+            return done("/publications", t("Questo articolo non è pubblicato."))
+        if confirm != "1":
+            return done(f"/drafts/{pub.draft_id}", t("Spunta la conferma per ritirare l'articolo."))
+        queue.enqueue(db, c.tenant_id, "change", f"withdraw {pub_id}",
+                      {"publication_id": pub_id, "op": "withdraw", "by": c.name})
+        return done(f"/drafts/{pub.draft_id}", t("Ritiro in corso: lo segui nel riquadro Attività."))
+
+    @app.post("/ui/drafts/{draft_id}/redo")
+    def ui_redo_draft(draft_id: int, note: str = Form(""), c: auth.Caller = Depends(ctx.need("editor"))):
+        """Write the article again from its proposal, with what to change."""
+        note = " ".join(note.split())[:1000]
+        if len(note) < 5:
+            return done(f"/drafts/{draft_id}", t("Scrivi cosa va cambiato: la nuova versione parte da lì."))
+        if ctx.core is None:
+            return done(f"/drafts/{draft_id}", t("Nessun Core configurato: per riscrivere serve un modello."))
+        with db.tenant(c.tenant_id) as s:
+            d = s.execute(select(m.drafts.c.proposal_id, m.drafts.c.site_id, m.drafts.c.translation_of)
+                          .where(m.drafts.c.id == draft_id)).first()
+        if d is None:
+            raise HTTPException(404, "draft not found")
+        if d.translation_of:
+            return done(f"/drafts/{draft_id}", t("Una traduzione non si rifà: rifai l'originale e traducilo di nuovo."))
+        queue.enqueue(db, c.tenant_id, "draft", f"redo {draft_id}",
+                      {"proposal_id": d.proposal_id, "site_id": d.site_id, "notes": note, "replaces": draft_id})
+        return done(f"/drafts/{draft_id}", t("Nuova versione in scrittura: la trovi in Bozze quando è pronta. "
+                                             "La rileggi, la approvi e poi la metti online al posto di questa."))
 
     # --- Pubblicazioni --------------------------------------------------------------
 
@@ -2084,12 +2148,19 @@ def register(app, ctx) -> None:
                 texts[int(key[6:])] = str(value)
         search = {k: str(form.get(f"seo_{k}", "")) for k in ("keyphrase", "title", "description", "slug")}
         try:
-            res = drafts.edit(db, c.tenant_id, draft_id, str(form.get("title", "")), str(form.get("subtitle", "")),
-                              texts, search)
+            if "body" in form:  # the free editor
+                res = drafts.edit_text(db, c.tenant_id, draft_id, str(form.get("title", "")),
+                                       str(form.get("subtitle", "")), str(form.get("body", "")), search)
+            else:
+                res = drafts.edit(db, c.tenant_id, draft_id, str(form.get("title", "")),
+                                  str(form.get("subtitle", "")), texts, search)
         except LookupError:
             raise HTTPException(404, "draft not found") from None
         except ValueError as e:
+            ref = re.search(r"\[(\d+)\]", str(e))
             msg = (t("il titolo va da 5 a 160 caratteri.") if "title" in str(e)
+                   else t("la fonte [{n}] non è nell'elenco.", n=ref.group(1)) if ref
+                   else t("il testo è vuoto.") if "empty" in str(e)
                    else t("una frase non può restare vuota."))
             return done(f"/drafts/{draft_id}?edit=1", t("Modifiche non salvate: {e}", e=msg))
         notice = t("Modifiche salvate.")

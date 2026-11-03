@@ -538,6 +538,10 @@ publications = Table(
     Column("external_url", Text),
     Column("error", Text),
     Column("attempts", Integer),
+    Column("updated_at", _ts()),
+    Column("updated_by", Text),
+    Column("withdrawn_at", _ts()),
+    Column("withdrawn_by", Text),
 )
 
 jobs = Table(

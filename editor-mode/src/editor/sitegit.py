@@ -340,6 +340,19 @@ def add_to_sitemap(text: str, url: str, when: datetime) -> str | None:
     return text[:i] + entry + text[i:]
 
 
+def remove_from_llms(text: str, url: str) -> str | None:
+    """llms.txt without the article's line; None when it has none."""
+    lines = text.split("\n")
+    kept = [x for x in lines if not (x.lstrip().startswith("- [") and f"]({url})" in x)]
+    return None if len(kept) == len(lines) else "\n".join(kept)
+
+
+def remove_from_sitemap(text: str, url: str) -> str | None:
+    """sitemap.xml without the article; None when it is not there."""
+    out, n = re.subn(r"[ \t]*<url>\s*<loc>" + re.escape(url) + r"</loc>.*?</url>\n?", "", text, flags=re.S)
+    return out if n else None
+
+
 # --- GitHub ----------------------------------------------------------------------
 
 READ_RETRIES = (2, 5, 15)  # seconds before each new try of a read that failed on GitHub's side
@@ -427,11 +440,15 @@ class Repo:
     def head(self, branch: str) -> str:
         return self._ok(self.call("GET", f"/repos/{self.repo}/git/ref/heads/{quote(branch)}"), "branch")["object"]["sha"]
 
-    def commit(self, base_sha: str, files: list[tuple[str, bytes]], message: str) -> str:
-        """One commit on top of `base_sha` with `files`; returns its sha."""
+    def commit(self, base_sha: str, files: list[tuple[str, bytes | None]], message: str) -> str:
+        """One commit on top of `base_sha` with `files` (None removes the
+        file); returns its sha."""
         tree = self._ok(self.call("GET", f"/repos/{self.repo}/git/commits/{base_sha}"), "base commit")["tree"]["sha"]
         entries = []
         for path, content in files:
+            if content is None:  # the file is removed
+                entries.append({"path": path, "mode": "100644", "type": "blob", "sha": None})
+                continue
             blob = self._ok(self.call("POST", f"/repos/{self.repo}/git/blobs", json={
                 "content": base64.b64encode(content).decode(), "encoding": "base64"}), f"writing {path}")
             entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})

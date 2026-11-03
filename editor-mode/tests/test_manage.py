@@ -132,7 +132,7 @@ def test_a_draft_is_edited_checked_again_and_deleted(db, tenant):
     did, _ = approved_draft(db, tenant)
     editor = logged_in(db, tenant, "editor")
     form = editor.get(f"/drafts/{did}?edit=1").text
-    assert 'name="claim-0"' in form and 'name="seo_keyphrase"' in form
+    assert 'name="body"' in form and 'name="seo_keyphrase"' in form
 
     page = editor.post(f"/ui/drafts/{did}/edit", data={
         "title": "Bari cablata", "subtitle": "Fibra ovunque", "claim-0": "Open Fiber ha lavorato a Bari per 900 giorni.",

@@ -69,11 +69,14 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
 
     def draft(tenant: str, subject: str, args: dict) -> dict:
         need(core, "model (Core)")
+        notes = args.get("notes")  # written again: what the director wants changed
         if http_factory is None:
-            did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None)
+            did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, notes=notes)
         else:
             with http_factory() as client:
-                did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client)
+                did = drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, notes=notes)
+        if args.get("replaces"):
+            drafts.mark_replacement(db, tenant, did, args["replaces"])
         with db.tenant(tenant) as s:
             d = s.execute(select(m.drafts.c.title, m.drafts.c.status, m.drafts.c.site_id)
                           .where(m.drafts.c.id == did)).first()
@@ -164,6 +167,24 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             raise RuntimeError(res.get("error") or "publication failed")
         return {"url": res.get("url"), "indexnow": res.get("indexnow")}
 
+    def change(tenant: str, subject: str, args: dict) -> dict:
+        """The director's change to a published article: update or withdraw."""
+        pub = need(publisher, "publisher")
+        if args["op"] == "withdraw":
+            step(N_("Ritiro l'articolo dal sito"))
+            res = pub.withdraw(db, tenant, args["publication_id"], args.get("by") or "director")
+        else:
+            step(N_("Aggiorno l'articolo sul sito"))
+            res = pub.update(db, tenant, args["publication_id"], args.get("by") or "director", args.get("draft_id"))
+        if res.get("status") == "failed":
+            raise RuntimeError(res.get("error") or "change failed")
+        with db.tenant(tenant) as s:
+            row = s.execute(select(m.drafts.c.id, m.drafts.c.title, m.drafts.c.site_id)
+                            .join(m.publications, m.publications.c.draft_id == m.drafts.c.id)
+                            .where(m.publications.c.id == args["publication_id"])).first()
+        return {"op": args["op"], "url": res.get("url"), "draft_id": row.id if row else None,
+                "title": row.title if row else "", "site_id": row.site_id if row else None}
+
     def tick(tenant: str, subject: str, args: dict) -> None:
         done, failed = [], []
         need(runner, "scheduler").tenant_tick(tenant, datetime.now(UTC), done, failed)
@@ -183,7 +204,7 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         if failed:
             raise RuntimeError("; ".join(failed))
 
-    return {"analysis": analysis, "discovery": discovery, "draft": draft, "publish": publish, "tick": tick,
+    return {"analysis": analysis, "discovery": discovery, "draft": draft, "publish": publish, "change": change, "tick": tick,
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
             "deliver": deliver, "auto": auto, "brief": brief}

@@ -33,7 +33,7 @@ from urllib.parse import quote, urljoin, urlsplit
 
 import httpcore
 import httpx
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import drafts, models as m
@@ -288,6 +288,18 @@ def fits_language(target, language: str | None) -> bool:
     return not want or want == (language or "")[:2].lower()
 
 
+def build_payload(s, d) -> dict:
+    """What a site receives for a draft: text, HTML and search fields."""
+    body = d.body_md
+    settings = (s.execute(select(m.editorial_profiles.c.body).where(
+        m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
+        or {}).get("settings") or {}
+    if settings.get("sources_style") == "list":
+        body = drafts.discreet_sources(body)
+    return {"title": d.title, "subtitle": d.subtitle, "markdown": body, "html": to_html(body),
+            "language": d.language, **search_fields(s, d)}
+
+
 def request(db, tenant_id: str, draft_id: int, target_id: int, mode: str, by: str) -> int:
     with db.tenant(tenant_id) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
@@ -303,14 +315,7 @@ def request(db, tenant_id: str, draft_id: int, target_id: int, mode: str, by: st
         if not fits_language(t, d.language):
             raise PublishError(f"the destination {t.name} takes articles in {t.config.get('language')}, "
                                f"this one is in {d.language}")
-        body = d.body_md
-        settings = (s.execute(select(m.editorial_profiles.c.body).where(
-            m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
-            or {}).get("settings") or {}
-        if settings.get("sources_style") == "list":
-            body = drafts.discreet_sources(body)
-        payload = {"title": d.title, "subtitle": d.subtitle, "markdown": body, "html": to_html(body),
-                   "language": d.language, **search_fields(s, d)}
+        payload = build_payload(s, d)
         return s.execute(insert(m.publications).values(
             tenant_id=tenant_id, draft_id=draft_id, target_id=target_id, mode=mode, payload=payload, requested_by=by,
         ).returning(m.publications.c.id)).scalar_one()
@@ -396,6 +401,158 @@ class Publisher:
         if key and ext_url and pub.mode == "publish":
             out["indexnow"] = self.indexnow(ext_url, key)
         return out
+
+    # --- after publication: the director keeps the article in hand ----------------------
+
+    def update(self, db, tenant_id: str, pub_id: int, by: str, draft_id: int | None = None) -> dict:
+        """Replace the published article with the current text of its draft,
+        or with `draft_id`, a newer approved version of the same article
+        (written again): same destination, same address. A withdrawn
+        article goes back online."""
+        with db.tenant(tenant_id) as s:
+            pub = s.execute(select(m.publications).where(m.publications.c.id == pub_id)).first()
+            if pub is None:
+                raise PublishError("publication not found")
+            if pub.status != "published":
+                raise PublishError("only a published article can be updated")
+            old = s.execute(select(m.drafts).where(m.drafts.c.id == pub.draft_id)).first()
+            d = old if draft_id in (None, pub.draft_id) else s.execute(
+                select(m.drafts).where(m.drafts.c.id == draft_id)).first()
+            if d is None:
+                raise PublishError("draft not found")
+            if d.id != old.id and (d.proposal_id != old.proposal_id or d.language != old.language
+                                   or d.translation_of != old.translation_of):
+                raise PublishError("the new version must be of the same article, in the same language")
+            if d.status != "approved":
+                raise PublishError("approve the draft first: what goes online is what a person approved")
+            target = s.execute(select(m.publish_targets).where(m.publish_targets.c.id == pub.target_id)).first()
+            payload = build_payload(s, d)
+            if (pub.payload or {}).get("slug"):  # the address stays the same
+                payload["slug"] = pub.payload["slug"]
+            image = s.execute(select(m.draft_images.c.mime, m.draft_images.c.content, m.draft_images.c.alt,
+                                     m.draft_images.c.token)
+                              .where(m.draft_images.c.draft_id == d.id)).first()
+        result = self._change(db, tenant_id, pub, target, "update", payload, image)
+        if result["status"] == "failed":
+            return result
+        with db.tenant(tenant_id) as s:
+            s.execute(update(m.publications).where(m.publications.c.id == pub_id).values(
+                draft_id=d.id, payload=payload, updated_at=datetime.now(UTC), updated_by=by,
+                withdrawn_at=None, withdrawn_by=None, error=None,
+                external_url=result.get("url") or pub.external_url))
+        return {"status": "updated", "url": result.get("url") or pub.external_url}
+
+    def withdraw(self, db, tenant_id: str, pub_id: int, by: str) -> dict:
+        """Take the published article off the site; for an original, its
+        translations published on the site's other destinations too."""
+        with db.tenant(tenant_id) as s:
+            pub = s.execute(select(m.publications).where(m.publications.c.id == pub_id)).first()
+            if pub is None:
+                raise PublishError("publication not found")
+            if pub.status != "published":
+                raise PublishError("only a published article can be withdrawn")
+            p, d = m.publications, m.drafts
+            family = [pub] + list(s.execute(select(p).join(d, d.c.id == p.c.draft_id).where(
+                d.c.translation_of == pub.draft_id, p.c.status == "published", p.c.withdrawn_at.is_(None))).all())
+            targets = {x.target_id: s.execute(select(m.publish_targets).where(
+                m.publish_targets.c.id == x.target_id)).first() for x in family}
+        done, errors = [], []
+        for x in family:
+            if x.withdrawn_at is not None:
+                continue
+            result = self._change(db, tenant_id, x, targets[x.target_id], "withdraw", x.payload, None)
+            if result["status"] == "failed":
+                errors.append(result["error"])
+                continue
+            with db.tenant(tenant_id) as s:
+                s.execute(update(m.publications).where(m.publications.c.id == x.id).values(
+                    withdrawn_at=datetime.now(UTC), withdrawn_by=by, error=None))
+                if x.external_url:  # no longer further reading for the next articles
+                    s.execute(delete(m.site_posts).where(m.site_posts.c.url == x.external_url))
+            done.append(x.id)
+        if errors:
+            return {"status": "failed", "error": "; ".join(errors), "withdrawn": done}
+        return {"status": "withdrawn", "withdrawn": done}
+
+    def _change(self, db, tenant_id: str, pub, target, op: str, payload: dict, image) -> dict:
+        secret = None
+        try:
+            secret = resolve_secret(db, target) if target.secret_env else None
+            url = getattr(self, f"_{target.kind}_{op}")(target, pub, payload, secret, image)
+        except (PublishError, httpx.HTTPError, KeyError, ValueError) as e:
+            msg = f"{type(e).__name__}: {e}"
+            if secret:
+                msg = msg.replace(secret, "***")
+            with db.tenant(tenant_id) as s:
+                s.execute(update(m.publications).where(m.publications.c.id == pub.id).values(error=msg[:500]))
+            return {"status": "failed", "error": msg}
+        return {"status": "ok", "url": url}
+
+    def _wordpress_update(self, target, pub, payload, secret, image=None):
+        base = target.config["url"].rstrip("/")
+        check_public_url(base, self.resolver)
+        if not pub.external_id:
+            raise PublishError("the post's id on WordPress is unknown: change it from WordPress")
+        r = self.http.post(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}",
+                           auth=(target.config["user"], _need(secret, target)),
+                           json=self._wordpress_post(target, payload, pub.mode))
+        _ensure_no_redirect(r, base, self.resolver)
+        r.raise_for_status()
+        return r.json().get("link")
+
+    def _wordpress_withdraw(self, target, pub, payload, secret, image=None):
+        base = target.config["url"].rstrip("/")
+        check_public_url(base, self.resolver)
+        if not pub.external_id:
+            raise PublishError("the post's id on WordPress is unknown: remove it from WordPress")
+        # To WordPress's bin: it can still be restored from there.
+        r = self.http.delete(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}",
+                             auth=(target.config["user"], _need(secret, target)))
+        _ensure_no_redirect(r, base, self.resolver)
+        if r.status_code not in (404, 410):  # gone already counts as withdrawn
+            r.raise_for_status()
+        return None
+
+    def _webhook_event(self, target, pub, payload, secret, event: str):
+        url = target.config["url"]
+        check_public_url(url, self.resolver)
+        data = {"event": event, "mode": pub.mode, "publication_id": pub.id, "url": pub.external_url}
+        if event == "update":
+            data |= {k: payload.get(k) for k in ("title", "subtitle", "markdown", "html", "language", "slug", "section",
+                                                 "seo_title", "meta_description", "keyphrase", "jsonld")}
+        else:
+            data["slug"] = payload.get("slug")
+        raw = json.dumps(data, ensure_ascii=False).encode()
+        sig = hmac.new(_need(secret, target).encode(), raw, hashlib.sha256).hexdigest()
+        r = self.http.post(url, content=raw, headers={"Content-Type": "application/json", "X-Editor-Signature": f"sha256={sig}"})
+        _ensure_no_redirect(r, url, self.resolver)
+        r.raise_for_status()
+        return None
+
+    def _webhook_update(self, target, pub, payload, secret, image=None):
+        return self._webhook_event(target, pub, payload, secret, "update")
+
+    def _webhook_withdraw(self, target, pub, payload, secret, image=None):
+        return self._webhook_event(target, pub, payload, secret, "withdraw")
+
+    def _telegram_channel_update(self, target, pub, payload, secret, image=None):
+        return None  # a message announces the article: the link still leads to it
+
+    def _telegram_channel_withdraw(self, target, pub, payload, secret, image=None):
+        if not pub.external_id:
+            return None
+        endpoint = f"{self.telegram_api}/bot{_need(secret, target)}/deleteMessage"
+        r = self.http.post(endpoint, json={"chat_id": target.config["chat_id"], "message_id": int(pub.external_id)})
+        _ensure_no_redirect(r, endpoint, self.resolver)
+        if r.status_code != 400:  # too old to delete, or gone: Telegram keeps it, nothing more to do
+            r.raise_for_status()
+        return None
+
+    def _github_update(self, target, pub, payload, secret, image=None):
+        return self._github(target, pub, None, secret, image, op="update", payload=payload)[1]
+
+    def _github_withdraw(self, target, pub, payload, secret, image=None):
+        return self._github(target, pub, None, secret, None, op="withdraw", payload=payload)[1]
 
     def indexnow(self, url: str, key: str) -> str:
         """Tell Bing, and the engines that share IndexNow, that the page is
@@ -483,7 +640,7 @@ class Publisher:
         r.raise_for_status()
         return str(r.json().get("result", {}).get("message_id")), None
 
-    def _github(self, target, pub, cms_url, secret, image=None):
+    def _github(self, target, pub, cms_url, secret, image=None, op: str = "publish", payload: dict | None = None):
         """The article committed to the repository the site is deployed from
         (Vercel, Netlify, GitHub Pages), in the shape of the blog's own posts,
         with its cover, a line in llms.txt and, if the site keeps it as a
@@ -518,14 +675,14 @@ class Publisher:
         base = cfg.get("branch") or info.json()["default_branch"]
         gh = sitegit.Repo(call, repo, sleep=self.sleep)
         try:
-            return self._github_send(gh, cfg, pub, base, image, delivery, sitegit)
+            return self._github_send(gh, cfg, pub, base, image, delivery, sitegit, op, payload or pub.payload)
         except sitegit.GitHubError as e:
             raise PublishError(str(e)) from None
 
-    def _github_send(self, gh, cfg, pub, base, image, delivery, sitegit):
+    def _github_send(self, gh, cfg, pub, base, image, delivery, sitegit, op="publish", payload=None):
         import posixpath
 
-        payload = pub.payload
+        payload = payload or pub.payload
         title = payload["title"]
         slug = re.sub(r"[^a-z0-9-]+", "-", (payload.get("slug") or "").lower()).strip("-") or "article"
         published = next((x.get("datePublished") for x in payload.get("jsonld") or [] if x.get("datePublished")), None)
@@ -574,23 +731,41 @@ class Publisher:
         blob_url = f"https://github.com/{gh.repo}/blob/{base}/{post_path}"
 
         existing = gh.file(post_path, base)
-        if existing is not None:
+        if op == "withdraw":
+            files = [(post_path, None)] if existing is not None else []
+            # The cover sent with it: the article's own name, in the usual places.
+            for folder in dict.fromkeys(x for x in (cfg.get("image_path"), "public/images",
+                                                     post_dir if fmt.folder else None) if x):
+                for name in (f"{slug}.jpg", f"{slug}.png", "cover.jpg", "cover.png"):
+                    if name.startswith("cover") and folder != post_dir:
+                        continue
+                    if gh.file(f"{folder}/{name}", base) is not None:
+                        files.append((f"{folder}/{name}", None))
+        elif existing is not None and op == "publish":
             if existing == content:
                 return None, article_url or blob_url
             raise PublishError(f"{post_path} already exists in {gh.repo} with other content: not overwritten")
-        files.append((post_path, content))
+        elif existing == content and not files:
+            return None, article_url or blob_url
+        if op != "withdraw":
+            files.append((post_path, content))
         if article_url:
             for path, text_ in texts.items():
                 if path.endswith("llms.txt"):
-                    changed = sitegit.add_to_llms(text_, title, article_url,
-                                                  payload.get("meta_description") or payload.get("subtitle"),
-                                                  pattern.split("{slug}")[0])
+                    changed = text_ if op == "publish" else (sitegit.remove_from_llms(text_, article_url) or text_)
+                    if op != "withdraw":
+                        changed = sitegit.add_to_llms(changed, title, article_url,
+                                                      payload.get("meta_description") or payload.get("subtitle"),
+                                                      pattern.split("{slug}")[0]) or changed
                 else:
-                    changed = sitegit.add_to_sitemap(text_, article_url, when)
-                if changed:
+                    changed = sitegit.remove_from_sitemap(text_, article_url) if op == "withdraw" \
+                        else sitegit.add_to_sitemap(text_, article_url, when)
+                if changed and changed != text_:
                     files.append((path, changed.encode()))
+        if not files:  # nothing of it on the site any more
+            return None, article_url or blob_url
 
-        message = f"editor: {title}"
+        message = {"publish": "editor", "update": "editor: update", "withdraw": "editor: withdraw"}[op] + f": {title}"
         if pub.mode == "publish" and cfg.get("verify") is False:
             for attempt in (1, 2):  # the branch moved under us: once more on top of it
                 sha = gh.commit(gh.head(base), files, message)
@@ -602,10 +777,11 @@ class Publisher:
                         raise
             return sha, article_url or blob_url
 
-        branch = f"editor/publish-{pub.id}"
+        branch = f"editor/{op}-{pub.id}"
         sha = gh.commit(gh.head(base), files, message)
         gh.point(branch, sha, create=True)
-        note = "Articolo di Editor Mode." + (f" Indirizzo: {article_url}" if article_url else "")
+        note = {"publish": "Articolo di Redazia.", "update": "Articolo aggiornato da Redazia.",
+                "withdraw": "Articolo ritirato da Redazia."}[op] + (f" Indirizzo: {article_url}" if article_url else "")
         pr = gh.pull(branch, base, title, note)
         if pub.mode == "draft":
             return str(pr["number"]), pr["html_url"]
