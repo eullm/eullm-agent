@@ -1927,5 +1927,7 @@
  "Backup chiesto: il server lo fa subito, l'elenco qui sotto si aggiorna da solo.": "Sauvegarde demandée : le serveur la fait tout de suite, la liste ci-dessous se met à jour toute seule.",
  "Archivio {name} eliminato dal server.": "Archive {name} supprimée du serveur.",
  "Backup dal pannello non attivi su questo server.": "Les sauvegardes depuis le panneau ne sont pas actives sur ce serveur.",
- "Un backup è già in corso.": "Une sauvegarde est déjà en cours."
+ "Un backup è già in corso.": "Une sauvegarde est déjà en cours.",
+ "Scienza e ambiente": "Science et environnement",
+ "Cultura e spettacolo": "Culture et spectacles"
 }

@@ -1,7 +1,7 @@
 {% extends "base.html.j2" %}
 {% block title %}{{ _('Indice notizie') }}{% endblock %}
 {% block main %}
-{% set names = {'world': _('Mondo e politica'), 'economy': _('Economia'), 'tech': _('Tecnologia'), 'other': _('Dalle fonti dei siti')} %}
+{% set names = {'world': _('Mondo e politica'), 'economy': _('Economia'), 'tech': _('Tecnologia'), 'science': _('Scienza e ambiente'), 'culture': _('Cultura e spettacolo'), 'other': _('Dalle fonti dei siti')} %}
 <header class="head">
   <div>
     <span class="kicker">{{ _('tutti i siti') }}{% if snap %} · {{ _('aggiornato alle {time}', time=local(snap.taken_at).strftime('%H:%M')) }}{% endif %}</span>

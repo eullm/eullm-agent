@@ -1927,5 +1927,7 @@
  "Backup chiesto: il server lo fa subito, l'elenco qui sotto si aggiorna da solo.": "Backup angefordert: Der Server erstellt es sofort, die Liste unten aktualisiert sich selbst.",
  "Archivio {name} eliminato dal server.": "Archiv {name} vom Server gelöscht.",
  "Backup dal pannello non attivi su questo server.": "Backups über das Panel sind auf diesem Server nicht aktiv.",
- "Un backup è già in corso.": "Ein Backup läuft bereits."
+ "Un backup è già in corso.": "Ein Backup läuft bereits.",
+ "Scienza e ambiente": "Wissenschaft und Umwelt",
+ "Cultura e spettacolo": "Kultur und Unterhaltung"
 }

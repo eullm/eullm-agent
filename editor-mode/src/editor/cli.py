@@ -393,7 +393,7 @@ def main(argv=None):
     sp.add_argument("--tenant", required=True); sp.add_argument("--date"); sp.add_argument("--send", action="store_true")
     sp = add("serve", cmd_serve, "dashboard and API"); sp.add_argument("--host", default="127.0.0.1"); sp.add_argument("--port", type=int, default=8090)
     sp = add("worker", cmd_worker, "run queued work and every tenant's hourly tick")
-    sp.add_argument("--concurrency", type=int, default=int(os.environ.get("EDITOR_WORKER_CONCURRENCY", "2")),
+    sp.add_argument("--concurrency", type=int, default=int(os.environ.get("EDITOR_WORKER_CONCURRENCY", "4")),
                     help="jobs run at the same time, each for a different tenant (PostgreSQL only)")
     sp = add("tenant-export", cmd_tenant_export, "every row of a tenant as JSON, credentials left out")
     sp.add_argument("tenant"); sp.add_argument("--out", help="file to create (default: print)")
