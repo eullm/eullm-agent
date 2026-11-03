@@ -83,11 +83,12 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         if r.get("no_profile"):
             return [t("Prima approva il profilo: le fonti si cercano a partire dai suoi temi.")], \
                 _site_link(site_id, "/site"), t("Vedi il profilo")
+        why = [t("Note: {notes}", notes="; ".join(r["notes"]))] if r.get("notes") else []
         if not r.get("candidates"):
-            return [t("Nessuna fonte nuova da provare: quelle trovate sono già nell'elenco.")], \
+            return [t("Nessuna fonte nuova da provare: quelle trovate sono già nell'elenco.")] + why, \
                 _site_link(site_id, "/sources?status=all"), t("Vedi le fonti")
         return [t("{n} fonti provate: {a} attivate, {c} da valutare, {x} scartate.", n=r["candidates"],
-                  a=r.get("active", 0), c=r.get("candidate", 0), x=r.get("rejected", 0) + r.get("failed", 0))], \
+                  a=r.get("active", 0), c=r.get("candidate", 0), x=r.get("rejected", 0) + r.get("failed", 0))] + why, \
             _site_link(site_id, "/sources?status=candidate" if r.get("candidate") else "/sources"), t("Vedi le fonti")
     if kind == "collect":
         out = [t("{s} fonti lette, {n} notizie nuove, {k} temi nuovi.", s=r.get("sources", 0), n=r.get("new", 0),

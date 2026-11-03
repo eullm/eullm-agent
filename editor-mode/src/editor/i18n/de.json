@@ -2132,5 +2132,6 @@
  "Feed per altri strumenti": "Feed für andere Werkzeuge",
  "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "Für Zapier, Make, n8n oder eine Website, die einen Feed importiert: enthält die letzten 50 freigegebenen Artikel mit Text, Bild und Feldern für Google. Die eigentliche Website verbinden Sie unter <a href=\"/publications\">Veröffentlichungen</a>.",
  "Versioni del profilo": "Profilversionen",
- "Vedi tutti ({n})": "Alle ansehen ({n})"
+ "Vedi tutti ({n})": "Alle ansehen ({n})",
+ "Note: {notes}": "Hinweise: {notes}"
 }

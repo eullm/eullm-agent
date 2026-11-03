@@ -2132,5 +2132,6 @@
  "Feed per altri strumenti": "Flux pour d'autres outils",
  "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "Pour Zapier, Make, n8n ou un site qui importe un flux : il contient les 50 derniers articles approuvés, avec texte, image et champs pour Google. Le site lui-même se connecte depuis <a href=\"/publications\">Publications</a>.",
  "Versioni del profilo": "Versions du profil",
- "Vedi tutti ({n})": "Voir tout ({n})"
+ "Vedi tutti ({n})": "Voir tout ({n})",
+ "Note: {notes}": "Notes : {notes}"
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.28.30
+
+### Changed
+
+- **La ricerca fonti dice perché** (Francesco: le fonti restano 44): il
+  risultato in Attività riporta ora le note della ricerca (modello che non
+  risponde, limite di fonti del piano raggiunto, fonti illeggibili), invece
+  del solo "nessuna fonte nuova".
+
 ## 0.28.29
 
 ### Fixed
