@@ -21,7 +21,7 @@
     {% endif %}
   </div>
 </header>
-{% with page="today" %}{% include "_help.html.j2" %}{% endwith %}
+{% if starting or not sites %}{% with page="today" %}{% include "_help.html.j2" %}{% endwith %}{% endif %}
 
 {% if starting and sites %}
 {% set guide = (desk|selectattr('next')|list)[0] if desk else none %}
@@ -62,36 +62,43 @@
   {% elif last.accepted %}{{ _('ha scelto {n} proposte, le scrive e le pubblica.', n=last.accepted|length) }}
   {% else %}{{ _('nessuna proposta adatta in quest\'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.', o=cfg.min_opportunity|int, f=cfg.min_sources) }}{% endif %}</p>
   {% if day['items'] %}
-  <ul class="plain">{% for x in day['items'][:12] %}<li>
+  <ul class="plain">{% for x in day['items'][:8] %}<li>
     {% if x.publication == 'published' and a.urls.get(x.id) %}<a href="{{ a.urls[x.id] }}" target="_blank" rel="noopener">{{ x.title }}</a>{% else %}<a href="/drafts/{{ x.id }}">{{ x.title }}</a>{% endif %}
     · {% if x.discarded is not none %}<span class="chip" title="{{ x.discarded }}">{{ _('scartato') }}</span>{% elif x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}
     {% if x.publication == 'published' and caller.can('owner') %}<a class="hint" href="/drafts/{{ x.id }}">{{ _('modifica o ritira') }}</a>{% endif %}
   </li>{% endfor %}</ul>
+  {% if day['items']|length > 8 %}<p class="hint"><a href="/publications">{{ _('Vedi tutti ({n})', n=day['items']|length) }}</a></p>{% endif %}
   {% else %}<p class="hint">{{ _('Nessun articolo oggi per ora.') }}</p>{% endif %}
   {% if a.left_out %}
   <p class="notice-up">{{ _('Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.', n=a.left_out) }}
     {% if caller.can('owner') %}<a class="btn sm pri" href="/plan">{{ _('Sblocca più articoli') }}</a>{% endif %}</p>
   {% endif %}
-  <p class="hint">{{ _('Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in') }} <a href="/publications">{{ _('Pubblicazioni') }}</a>{% if caller.can('owner') %} · <a href="/switch?site={{ a.site.id }}&amp;back=/site#h-auto">{{ _('Cambia articoli al giorno e regole') }}</a>{% endif %}.</p>
+  <p class="hint">{{ _('Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in') }} <a href="/publications">{{ _('Pubblicazioni') }}</a>{% if caller.can('owner') %} · <a href="/switch?site={{ a.site.id }}&amp;back={{ '/site?tab=auto'|urlencode }}">{{ _('Cambia articoli al giorno e regole') }}</a>{% endif %}.</p>
 </section>
 {% endfor %}
 
 <section class="kpis" aria-label="{{ _('Riepilogo') }}">
-  <a class="card kpi{% if decisions %} warn{% endif %}" href="#h-decide">
+  {% if decisions %}
+  <a class="card kpi warn" href="#h-decide">
     <span class="label">{{ _('Da decidere') }}</span>
     <span class="value">{{ decisions }}</span>
     <span class="note">{{ profile_drafts|length|plural(_('profilo'), _('profili')) }} · {{ proposed_total|plural(_('proposta'), _('proposte')) }} · {{ pending_pubs|length|plural(_('pubblicazione'), _('pubblicazioni')) }}</span>
   </a>
+  {% endif %}
+  {% if proposed_total %}
   <a class="card kpi" href="/trends#h-plan">
     <span class="label">{{ _('Proposte nel piano') }}</span>
     <span class="value">{{ proposed_total }}</span>
     <span class="note">{{ _('{n} da stamattina', n=new_today|plural(_('nuova'), _('nuove'))) }}</span>
   </a>
+  {% endif %}
+  {% if drafts_ready %}
   <a class="card kpi" href="/drafts">
     <span class="label">{{ _('Bozze pronte') }}</span>
     <span class="value">{{ drafts_ready }}</span>
     <span class="note">{% if needs_review %}{{ _('{n} da rivedere a mano', n=needs_review) }}{% else %}{{ _('tutte con i controlli superati') }}{% endif %}</span>
   </a>
+  {% endif %}
   <a class="card kpi{% if sites and not news_day %} bad{% endif %}" href="/trends">
     <span class="label">{{ _('Notizie in 24 ore') }}</span>
     <span class="value">{{ news_day }}</span>
@@ -117,7 +124,8 @@
   {% endif %}
 </section>
 
-<div class="board">
+<div class="board{% if not decisions %} even{% endif %}">
+  {% if decisions %}
   <section class="card" aria-labelledby="h-decide">
     <div class="card-head"><h2 id="h-decide">{{ _('Da decidere') }}</h2><span class="hint">{{ _('Nulla esce senza il tuo sì') }}{% if proposed_total > 6 %} · <a href="/trends#h-plan">{{ _('Tutte ({n})', n=proposed_total) }}</a>{% endif %}</span></div>
     {% for p in profile_drafts %}
@@ -154,8 +162,8 @@
       </div>
     </details>
     {% endfor %}
-    {% if not decisions %}<p class="empty">{{ _('Niente da decidere adesso.') }}{% if sites and caller.can('editor') %} {{ _('Usa "Proponi" nella tabella dei siti per avere subito nuove proposte.') }}{% endif %}</p>{% endif %}
   </section>
+  {% endif %}
 
   <div class="stack">
     {% include "_activity.html.j2" %}
@@ -221,7 +229,7 @@
 </section>
 
 <div class="trio-cards">
-  {% if not one %}
+  {% if not one and desk|length > 1 %}
   <section class="card" aria-labelledby="h-busy">
     <div class="card-head"><h2 id="h-busy">{{ _('Siti più attivi') }}</h2><span class="hint">{{ _('notizie 24 ore · proposte e bozze 7 giorni') }}</span></div>
     <div class="pad rank">
@@ -235,7 +243,7 @@
       {% else %}<p class="hint">{{ _('Ancora nessuna attività: lancia la raccolta.') }}</p>{% endfor %}
     </div>
   </section>
-{% if caller.operator %}
+{% if caller.operator and desk|length > 1 %}
   <section class="card" aria-labelledby="h-cost">
     <div class="card-head"><h2 id="h-cost">{{ _('Siti più costosi') }}</h2><span class="hint">{{ _('30 giorni, ai prezzi di core.yaml') }}{% if caller.operator %} · <a href="/admin/usage">{{ _('Consumi') }}</a>{% endif %}</span></div>
     <div class="pad rank">

@@ -224,7 +224,7 @@ wheels = [
 
 [[package]]
 name = "eullm-editor-mode"
-version = "0.28.27"
+version = "0.28.28"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
