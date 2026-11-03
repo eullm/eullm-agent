@@ -205,10 +205,8 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
     article.faq = sd.faq
     first = next((c.section for c in article.claims), None)
     lead = " ".join(c.text for c in article.claims if c.section == first)
-    words = sum(len(c.text.split()) for c in article.claims)
-    # The length of the original is the target; no internal links (see above).
+    # No internal links (see above).
     sd.checks = [x for x in seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
-                                       words, sum(len(c["text"].split()) for c in claims),
                                        len({i for c in article.claims for i in c.sources}))
                  if x["key"] != "internal_links"]
     body = drafts.render(article, sources, language, [])

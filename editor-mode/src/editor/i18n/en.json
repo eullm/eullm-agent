@@ -1932,5 +1932,6 @@
  "Cultura e spettacolo": "Culture and entertainment",
  "Tutta la redazione in un file ZIP che si apre ovunque: gli articoli in Markdown e HTML con le copertine, i profili editoriali con le impostazioni della redazione automatica, le fonti, le destinazioni e lo storico delle pubblicazioni in CSV, più tutti i dati in JSON per un tecnico. Password, token e accessi restano sul server. Tienine una copia dove vuoi: è tua.": "The whole newsroom in a ZIP file that opens anywhere: the articles in Markdown and HTML with their covers, the editorial profiles with the automatic newsroom's settings, the sources, the destinations and the publication history in CSV, plus all the data in JSON for a technician. Passwords, tokens and access stay on the server. Keep a copy wherever you like: it is yours.",
  "Esporta la redazione (ZIP)": "Export the newsroom (ZIP)",
- "Solo i dati (JSON)": "Data only (JSON)"
+ "Solo i dati (JSON)": "Data only (JSON)",
+ "Lettura degli articoli di {n} notizie sullo stesso fatto": "Reading the articles of {n} reports of the same event"
 }

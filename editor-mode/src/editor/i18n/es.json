@@ -1932,5 +1932,6 @@
  "Cultura e spettacolo": "Cultura y espectáculos",
  "Tutta la redazione in un file ZIP che si apre ovunque: gli articoli in Markdown e HTML con le copertine, i profili editoriali con le impostazioni della redazione automatica, le fonti, le destinazioni e lo storico delle pubblicazioni in CSV, più tutti i dati in JSON per un tecnico. Password, token e accessi restano sul server. Tienine una copia dove vuoi: è tua.": "Toda la redacción en un archivo ZIP que se abre en cualquier sitio: los artículos en Markdown y HTML con sus portadas, los perfiles editoriales con la configuración de la redacción automática, las fuentes, los destinos y el historial de publicaciones en CSV, más todos los datos en JSON para un técnico. Contraseñas, tokens y accesos se quedan en el servidor. Guarda una copia donde quieras: es tuya.",
  "Esporta la redazione (ZIP)": "Exportar la redacción (ZIP)",
- "Solo i dati (JSON)": "Solo los datos (JSON)"
+ "Solo i dati (JSON)": "Solo los datos (JSON)",
+ "Lettura degli articoli di {n} notizie sullo stesso fatto": "Lectura de los artículos de {n} noticias sobre el mismo hecho"
 }

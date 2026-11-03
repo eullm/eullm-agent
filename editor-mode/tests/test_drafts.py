@@ -71,23 +71,17 @@ def test_draft_every_claim_has_a_source(db, tenant):
                            {"heading": "I lavori", "claims": [
                                {"text": "Il cantiere è durato 18 mesi in 3 quartieri.", "sources": [first]},
                                {"text": "Le velocità annunciate arrivano a 10 Gbit/s.", "sources": [first]}]}]})
-    # Far under the target length: asked once to expand, and the longer one is kept.
-    extra = [{"text": t, "sources": [first]} for t in (
-        "Il piano di Open Fiber per la città riguarda le aree dove la rete mancava.",
-        "Le famiglie dei quartieri coperti possono chiedere l'attivazione a un operatore.",
-        "Il cantiere ha toccato strade e cortili di tutti i quartieri previsti.")]
-    longer = json.loads(good)
-    longer["sections"].append({"heading": "Il contesto", "claims": extra})
-    answers = iter([bad, good, json.dumps(longer)])
+    # A short article stays short: it is never sent back to be padded.
+    answers = iter([bad, good])
     with respx.mock(assert_all_called=False) as router:
         router.get(url__regex=r"https://(news|rete)\.example/.*").mock(return_value=httpx.Response(200, text=ARTICLE_PAGE, headers={"content-type": "text/html"}))
         llm = router.post("http://core.test/v1/llm/chat").mock(side_effect=lambda r: chat(next(answers)))
         with httpx.Client() as client:
             did = drafts.write_draft(db, tenant, pid, CoreClient("http://core.test", "tok"), client)
         retry_prompt = json.loads(llm.calls[1].request.content)["messages"][-1]["content"]
-        assert "claim without sources" in retry_prompt
-        expand_prompt = json.loads(llm.calls[2].request.content)["messages"][-1]["content"]
-        assert f"the target is about {drafts.TARGET_WORDS}" in expand_prompt
+        assert "claim without sources" in retry_prompt and len(llm.calls) == 2
+        first_prompt = json.loads(llm.calls[0].request.content)["messages"][-1]["content"]
+        assert "MAIN" in first_prompt and "Nuova ricetta della pizza" not in first_prompt
     with db.tenant(tenant) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
         claims = s.execute(text("SELECT c.ordinal, count(cs.item_id) FROM editor.draft_claims c "
@@ -97,9 +91,9 @@ def test_draft_every_claim_has_a_source(db, tenant):
         content = s.execute(text("SELECT content FROM editor.source_items WHERE id = :i"), {"i": first}).scalar()
         usage = s.execute(text("SELECT count(*) FROM editor.llm_usage WHERE purpose = 'draft'")).scalar()
     assert d.status == "draft" and d.flags == [] and d.version == 1
-    assert len(claims) == 7 and all(n >= 1 for _, n in claims)
-    assert "## Il contesto" in d.body_md and "## I lavori" in d.body_md and "[^1]" in d.body_md and "## Fonti" in d.body_md and "https://news.example/" in d.body_md
-    assert pstatus == "drafted" and "120.000" in content and usage == 3
+    assert len(claims) == 4 and all(n >= 1 for _, n in claims)
+    assert "## I lavori" in d.body_md and "[^1]" in d.body_md and "## Fonti" in d.body_md and "https://news.example/" in d.body_md
+    assert pstatus == "drafted" and "120.000" in content and usage == 2
 
 
 def test_unfixable_draft_is_kept_for_review(db, tenant):
@@ -146,18 +140,39 @@ def test_article_text_is_not_read_where_robots_forbid_it(db, tenant):
     assert content is None and at is not None
 
 
-def test_related_items_give_the_article_context(db, tenant):
+def test_an_article_tells_one_event(db, tenant):
+    """Other outlets' reports of the same event come in; news of the same
+    sector does not, nor a cited item about something else."""
     from sqlalchemy import text as sql
 
-    from editor.drafts import related_items
+    from editor.drafts import event_items
     from test_proposals import setup_site
 
     setup_site(db, tenant)
     with db.tenant(tenant) as s:
         ids = {r.url: r.id for r in s.execute(sql("SELECT id, url FROM editor.source_items"))}
-        found = related_items(s, [ids["https://news.example/1"]])
-    assert ids["https://rete.example/2"] in found
-    assert ids["https://news.example/5"] not in found  # the pizza recipe has nothing to do with it
+        main, same = event_items(s, [ids["https://news.example/3"], ids["https://news.example/1"]],
+                                 "Bari cablata in fibra da Open Fiber")
+    assert main == [ids["https://news.example/1"]]  # Starlink's prices are another story
+    assert ids["https://rete.example/2"] in same
+    assert ids["https://news.example/5"] not in same and ids["https://news.example/3"] not in same
+
+
+def test_same_event_is_most_of_a_title_not_a_shared_word():
+    from editor.drafts import _same_event
+    from editor.text import item_terms, tokens
+
+    anchor = set(tokens("Pil Usa, crescita del 3,4% nel terzo trimestre"))
+    assert _same_event(anchor, item_terms("Usa, il Pil cresce del 3,4% nel terzo trimestre"))
+    assert not _same_event(anchor, item_terms("Aramco, utile in calo nel terzo trimestre"))
+    trump = set(tokens("Trump firma il decreto sui dazi ai chip"))
+    assert not _same_event(trump, item_terms("Amazon licenzia 14.000 dipendenti, Trump commenta"))
+
+
+def test_arxiv_is_read_in_full():
+    assert drafts.reading_url("https://arxiv.org/abs/2611.01234v2") == "https://arxiv.org/html/2611.01234v2"
+    assert drafts.reading_url("https://arxiv.org/pdf/2611.01234") == "https://arxiv.org/html/2611.01234"
+    assert drafts.reading_url("https://news.example/1") == "https://news.example/1"
 
 
 def test_machine_marks_are_taken_out_of_the_text():

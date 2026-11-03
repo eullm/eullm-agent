@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.28.20
+
+### Changed
+
+- Articles of the automatic newsroom, after an external audit of 14
+  articles on aitoday.it (2026-11-03):
+  - **one event per article.** The article is written from the cited news
+    closest to the proposal's title and from other outlets' reports of the
+    same event (at least half of its title's words, three at least). News
+    of the same sector that is about something else is no longer given to
+    the model nor counted as a second source: it made articles join
+    separate stories (Trump with Amazon and Oracle, the US GDP with
+    Aramco).
+  - **as long as the sources allow.** No minimum of 900 words and no
+    second call asking to "expand to the target": with one outlet, or only
+    a title or an abstract, the model writes a short news piece and says
+    what is not known yet. Questions and answers only when they add
+    something, no longer two to four in every article. One model call per
+    draft instead of two in most cases.
+  - **exact.** A number with what it is compared to, superlatives,
+    "firsts" and causes only when a source says them and attributed, the
+    date of the event and not of the republication, title and opening no
+    more certain than the body.
+  - **the AI editor-in-chief reads the sources.** It gets what was read
+    of each cited source and refuses an article that joins separate
+    events, states a number, superlative or cause the sources do not
+    state, or has a title or opening more certain than the body.
+  - **arXiv in full.** An arXiv abstract page is read as the paper's HTML
+    version.
+- The checklist of a draft no longer asks for two questions and answers
+  and for a length close to the site's articles.
+
 ## 0.28.19
 
 ### Added
