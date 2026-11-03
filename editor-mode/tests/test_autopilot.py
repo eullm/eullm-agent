@@ -312,3 +312,22 @@ def test_the_morning_takes_its_share(db, tenant):
         s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": seven})
     out = ap.run(db, tenant, site_id, None, seven, "Europe/Rome", lambda pid: None)
     assert out["wanted"] == 4  # half of the day at once, not 8 / 16 hours
+    assert ap.due_by({"per_day": 15, "hours": [7, 24], "morning_share": 50}, datetime(2026, 11, 3, 7)) == 8
+    assert ap.due_by({"per_day": 15, "hours": [7, 24], "morning_share": 50}, datetime(2026, 11, 3, 23)) == 15
+
+
+def test_a_late_start_catches_up_and_a_good_single_news_counts(db, tenant):
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=8, hours=[7, 23])
+    set_plan(db, tenant, max_drafts_month=None)
+    nine = datetime(2026, 11, 3, 8, tzinfo=UTC)  # 9:00 in Rome: the server came up after the first hour
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t, opportunity = 30"), {"t": nine})
+    cfg = {**ap.settings_of(None), "min_sources": 0, "avoid": [], "min_opportunity": 40}
+    with db.tenant(tenant) as s:
+        assert len(ap.choose(s, site_id, cfg, nine, 5)) > 0  # 30 is over half of 40
+        cfg["min_opportunity"] = 70
+        assert ap.choose(s, site_id, cfg, nine, 5) == []
+    out = ap.run(db, tenant, site_id, None, nine, "Europe/Rome", lambda pid: None)
+    assert out["wanted"] >= 4  # the morning's share is still owed, not 8 / 14 hours

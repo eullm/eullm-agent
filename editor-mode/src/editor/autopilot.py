@@ -163,6 +163,15 @@ def hours_left(cfg: dict, local: datetime) -> int:
     return max(1, n)
 
 
+def due_by(cfg: dict, local: datetime) -> int:
+    """Articles the day should have by the end of this hour: the morning's
+    share in the first hour, then the rest evenly over the window."""
+    total = hours_left(cfg, local.replace(hour=cfg["hours"][0] % 24))
+    done = total - hours_left(cfg, local) + 1  # hours of the window gone, this one included
+    morning = cfg["per_day"] * cfg["morning_share"] / 100
+    return math.ceil(morning + (cfg["per_day"] - morning) * (done - 1) / max(1, total - 1))
+
+
 def made_since(s, site_id: int, since: datetime) -> tuple[int, int]:
     """Articles of the automatic newsroom since the given time, as (kept,
     tried): kept are those not discarded (published, on their way or held
@@ -199,13 +208,21 @@ def source_count(s, proposal_id: int) -> int:
         items.join(m.source_items, si.id == items.c.item_id))).scalar() or 0
 
 
+# Below the minimum opportunity, the best proposals still go out down to
+# this share of it: the minimum says what to prefer, it must not leave the
+# day empty (a site with a broad profile scores lower on each single news).
+OPPORTUNITY_FLOOR = 0.5
+
+
 def choose(s, site_id: int, cfg: dict, now: datetime, n: int) -> list:
     """The best proposals of the last day and a half that pass the
-    guardrails; those on a topic to avoid are turned down for good."""
+    guardrails, those over the minimum opportunity first; those on a topic
+    to avoid are turned down for good."""
     pr = m.proposals.c
     rows = s.execute(select(m.proposals).where(
         pr.site_id == site_id, pr.status == "proposed", pr.created_at >= now - timedelta(hours=36),
-        pr.opportunity >= cfg["min_opportunity"]).order_by(pr.opportunity.desc(), pr.id.desc()).limit(40)).all()
+        pr.opportunity >= cfg["min_opportunity"] * OPPORTUNITY_FLOOR)
+        .order_by(pr.opportunity.desc(), pr.id.desc()).limit(80)).all()
     out = []
     for r in rows:
         if len(out) >= n:
@@ -251,10 +268,10 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         left = min(cfg["per_day"] - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
         # Spread over the hours left, so the day does not go in the first hour.
         want = math.ceil(left / hours_left(cfg, local))
-        # The morning goes first: the first hour of the day takes its share
-        # of the day's articles (half, by default), the rest is spread.
-        if local.hour == cfg["hours"][0]:
-            want = max(want, min(left, math.ceil(cfg["per_day"] * cfg["morning_share"] / 100) - kept))
+        # The morning goes first: by the end of the first hour the day has
+        # its share of articles (half, by default), the rest follows hour by
+        # hour. A newsroom behind that line (a slow night, a restart) catches up.
+        want = max(want, min(left, due_by(cfg, local) - kept))
         if month_left is not None:
             want = min(want, int(month_left))
         picked = choose(s, site_id, cfg, now, want)

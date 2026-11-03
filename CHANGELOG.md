@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.28.15
+
+### Fixed
+
+- The automatic newsroom no longer stops in the morning when the server
+  came up after the first hour of its window: each hour it checks how many
+  articles the day should have by then (the morning's share, then the rest
+  spread evenly) and catches up on what is missing.
+- A strong story told by one source is no longer left aside: the
+  newsroom takes stories down to half the minimum opportunity, best first,
+  when there are not enough above it. The "different sources" rule still
+  applies.
+- A site with its translations under /en is no longer read as an English
+  site: the language its home page declares stays when a fair share of the
+  articles read are in it. "Lingua del sito" shows the language of the
+  approved profile, the one the articles are written in.
+
 ## 0.28.14
 
 The v0.28.13 tag went on the 0.28.12 commit, so its images held 0.28.12:

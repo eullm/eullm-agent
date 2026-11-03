@@ -187,6 +187,16 @@ def test_site_wide_keywords_are_not_subtopics_and_languages_are_counted():
     _languages(snap)
     assert snap.site_keywords == wide and "EU AI infrastructure" not in snap.categories
     assert snap.languages == {"it": 5, "en": 2} and snap.language == "it" and snap.translations == 2
+    # More English articles in the sample, but the home says Italian and a
+    # fair share is Italian: the site stays Italian.
+    mixed = SiteSnapshot(domain="x.eu", language="it", posts=[
+        Post(f"https://x.eu/{i}/", "t", language="it") for i in range(3)] + [
+        Post(f"https://x.eu/en/{i}/", "t", language="en") for i in range(5)])
+    _languages(mixed)
+    assert mixed.language == "it"
+    mixed.language, mixed.posts = "en", [Post(f"https://x.eu/{i}/", "t", language="it") for i in range(9)]
+    _languages(mixed)
+    assert mixed.language == "it"  # a home that says English with no article in it does not count
     for p in snap.posts:
         for c in p.categories:
             snap.categories[c] = snap.categories.get(c, 0) + 1
