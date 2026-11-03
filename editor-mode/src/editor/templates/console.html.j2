@@ -15,7 +15,8 @@
   <div class="topbar">{% include "_lang.html.j2" %}</div>
   {% if notice and (not notice_at or notice_at in ('operatori', 'api', 'nuova')) %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-  {% if updates.newer and not updates.pending %}<p class="notice" role="status" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;"><span>{{ _('È disponibile la versione {version} (installata: {installed}).', version=updates.available.version, installed=updates.installed) }}</span><a href="/admin/updates">{{ _('Aggiorna') }}</a></p>{% endif %}
+  {% if updates.busy %}<p class="notice" role="status"><span>{{ _('Aggiornamento alla {version} in corso: non serve rilanciarlo.', version=(updates.pending or {}).version or (updates.status or {}).version) }}</span> <a href="/admin/updates">{{ _('Segui') }}</a></p>
+  {% elif updates.newer %}<p class="notice" role="status" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;"><span>{{ _('È disponibile la versione {version} (installata: {installed}).', version=updates.available.version, installed=updates.installed) }}</span><a href="/admin/updates">{{ _('Aggiorna') }}</a></p>{% endif %}
   {% if new %}
   <section class="card pad" style="border-color: var(--accent);" aria-labelledby="h-new">
     <h2 id="h-new">{{ new.what }}</h2>
@@ -498,6 +499,8 @@
         <button class="btn pri" type="submit">{{ _('Aggiorna alla {version}', version=av.version) }}</button>
       </form>
       <p class="hint">{{ _('Leggi le note della versione prima di aggiornare: il link è sul numero di versione.') }}</p>
+    {% elif updates.mismatch %}
+      <p class="error">{{ _('L\'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un\'altra versione. Rilanciarlo non serve: aspetta la prossima versione.', version=updates.mismatch, installed=updates.installed) }}</p>
     {% else %}
       <p class="hint">{{ _('Il server è aggiornato.') }}</p>
     {% endif %}

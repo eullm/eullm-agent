@@ -148,7 +148,7 @@ def state(where: Path | None, installed: str, now: datetime | None = None) -> di
     """What the console shows: installed and available versions, whether an
     update is asked or running, how the last one went."""
     out = {"enabled": where is not None, "installed": installed, "available": None, "newer": False,
-           "pending": None, "stale": False, "status": None, "log": ""}
+           "pending": None, "stale": False, "status": None, "log": "", "busy": False, "mismatch": None}
     if where is None:
         return out
     now = now or datetime.now(UTC)
@@ -159,6 +159,14 @@ def state(where: Path | None, installed: str, now: datetime | None = None) -> di
     if out["pending"] and out["pending"].get("at"):
         out["stale"] = now - datetime.fromisoformat(out["pending"]["at"]) > STALE_REQUEST
     out["status"] = _read(where / "status.json")
+    st = out["status"] or {}
+    out["busy"] = bool(out["pending"]) or st.get("state") == "running"
+    # Done, yet the server still says an older version: the release's images
+    # carry another version. Asking again would only do the same.
+    if st.get("state") == "done" and VERSION.match(str(st.get("version") or "")) and newer(st["version"], installed):
+        out["mismatch"] = st["version"]
+        if v == st["version"]:
+            out["newer"] = False
     try:
         out["log"] = "\n".join((where / "update.log").read_text(encoding="utf-8", errors="replace").splitlines()[-25:])
     except OSError:

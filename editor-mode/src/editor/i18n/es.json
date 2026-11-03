@@ -1852,5 +1852,8 @@
  "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "La lectura de las fuentes ha empezado: síguela en el recuadro Actividad. Las que tienen feed entran activas.",
  "Scrivi almeno un indirizzo.": "Escribe al menos una dirección.",
  "Quota degli articoli del giorno pubblicati alla prima ora: prima si esce, prima ci si posiziona. Il resto si distribuisce nella giornata.": "Parte de los artículos del día publicados en la primera hora: quien sale antes, se posiciona antes. El resto se reparte durante el día.",
- "Al mattino (%)": "Por la mañana (%)"
+ "Al mattino (%)": "Por la mañana (%)",
+ "Aggiornamento alla {version} in corso: non serve rilanciarlo.": "Actualización a la {version} en curso: no hace falta volver a lanzarla.",
+ "Segui": "Seguir",
+ "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un'altra versione. Rilanciarlo non serve: aspetta la prossima versione.": "La actualización a la {version} ha terminado, pero el servidor sigue respondiendo como {installed}: las imágenes publicadas como {version} contienen otra versión. Relanzarla no sirve: espera a la próxima versión."
 }
