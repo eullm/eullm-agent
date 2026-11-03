@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 
 from editor import updates
 from editor.console import INSTALLED
@@ -186,3 +187,59 @@ def test_an_update_in_progress_or_gone_wrong_is_not_offered_again(tmp_path):
     assert st["mismatch"] == "0.28.13" and not st["newer"] and not st["busy"]
     (tmp_path / "available.json").write_text(json.dumps({"version": "0.28.14"}))
     assert updates.state(tmp_path, "0.28.12", now)["newer"]  # a new version is offered again
+
+
+def test_backups_are_set_from_the_console_and_checked(db, tmp_path):
+    from editor import accounts, backups
+    from editor.api import create_app
+    from editor.db import Database
+    from fastapi.testclient import TestClient
+    from test_billing import unique
+
+    # The folder is written by root on the host: plain paths under the allowed roots only.
+    for bad in ("/etc/redazia", "/home/app/public_html/b", "/home/../etc", "backup", "/home/a b", "/opt"):
+        with pytest.raises(backups.Invalid):
+            backups.check_dir(bad)
+    assert backups.check_dir("/home/app/backup/") == "/home/app/backup"
+    with pytest.raises(backups.Invalid):
+        backups.check({"target": "-oProxyCommand=x@h:/b", "remote": "1"})
+    with pytest.raises(backups.Invalid):
+        backups.check({"remote": "1"})
+    assert backups.check({"dir": ""})["dir"] == ""
+
+    admin = Database.from_url(db.admin_url)
+    c = TestClient(create_app(db, updates_dir=str(tmp_path)))
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(admin, op, password="password operatore", operator=True)
+    c.post("/login", data={"email": op, "password": "password operatore"})
+    page = c.get("/admin/backups").text
+    assert "Backup del server" in page and "Nessun archivio ancora" in page
+    c.post("/admin/backups/settings", data={"enabled": "1", "frequency": "weekly", "time": "04:15", "weekday": "1",
+                                             "dir": "/home/app/backup", "keep": "30", "owner": "app:app",
+                                             "remote": "1", "target": "backup@nas.example.it:/backup/redazia"})
+    conf = (tmp_path / "backup.conf").read_text()
+    assert "ENABLED=1" in conf and "HOUR=4" in conf and "MINUTE=15" in conf and "DIR=/home/app/backup" in conf
+    assert "TARGET=backup@nas.example.it:/backup/redazia" in conf
+    # A refused setting leaves the saved ones as they were.
+    r = c.post("/admin/backups/settings", data={"dir": "/var/www/html"}, follow_redirects=False)
+    assert r.headers["location"] == "/admin/backups#backup" and "DIR=/home/app/backup" in (tmp_path / "backup.conf").read_text()
+
+    c.post("/admin/backups/now")
+    assert (tmp_path / "backup-now.json").exists() and c.get("/admin/backups/state").json()["pending"]
+    # The script took it and wrote how it went.
+    (tmp_path / "backup-now.json").unlink()
+    (tmp_path / "backup-status.json").write_text(json.dumps({
+        "state": "idle", "bad": "", "dir": "/home/app/backup", "pubkey": "ssh-ed25519 AAAA redazia-backup@host",
+        "result": {"at": "2026-11-03T10:00:00Z", "ok": True, "file": "redazia-2026-11-03_1000.tgz",
+                   "size": 20971520, "remote": "done"},
+        "archives": [{"name": "redazia-2026-11-03_1000.tgz", "size": 20971520, "at": "2026-11-03T10:00"}]}))
+    page = c.get("/admin/backups").text
+    assert "redazia-2026-11-03_1000.tgz" in page and "20.0 MB" in page and "ssh-ed25519 AAAA" in page
+    assert "Copiato sul server remoto" in page
+    c.post("/admin/backups/delete", data={"file": "../../etc/passwd"})
+    assert not (tmp_path / "backup-delete.json").exists()
+    c.post("/admin/backups/delete", data={"file": "redazia-2026-11-03_1000.tgz"})
+    assert json.loads((tmp_path / "backup-delete.json").read_text())["file"] == "redazia-2026-11-03_1000.tgz"
+
+    other = TestClient(create_app(db, updates_dir=str(tmp_path)))
+    assert other.post("/admin/backups/now").status_code in (401, 403)

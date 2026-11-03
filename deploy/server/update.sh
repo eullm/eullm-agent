@@ -78,22 +78,131 @@ EOF
   exit 0
 fi
 
-req=$dir/request.json
-[ -f "$req" ] || exit 0
-exec 9>"$dir/.lock"
+# Files of the shared folder are written by the dashboard's user: this
+# script, run by root, never writes through them (a link placed there would
+# point root elsewhere). It writes in its own folder and moves the result in:
+# a rename replaces a link, it does not follow it.
+work=$here/.work
+mkdir -p "$work"
+chmod 700 "$work"
+exec 9>"$work/lock"
 flock -n 9 || exit 0
 
+publish() {  # file in $work -> same name in the shared folder
+  cp "$work/$1" "$work/$1.pub" && chmod 644 "$work/$1.pub" && mv -f "$work/$1.pub" "$dir/$1"
+}
+
+# ---------------------------------------------------------------- backups
+# Settings from the console (backup.conf), checked again here: the folder
+# is written by root, so only plain paths under the allowed roots and never
+# a folder a web server publishes.
+conf() { sed -n "s/^$1=//p" "$dir/backup.conf" 2>/dev/null | tail -n 1; }
+num() { case $1 in ''|*[!0-9]*) return 1 ;; esac; }
+safe_dir() {
+  printf '%s' "$1" | grep -Eq '^/[A-Za-z0-9._/-]+$' || return 1
+  case "$1/" in *//*|*/./*|*/../*) return 1 ;; esac
+  case "$1/" in /home/?*|/var/backups/?*|/backup/?*|/backups/?*|/mnt/?*|/media/?*|/srv/?*|/opt/?*) ;; *) return 1 ;; esac
+  ! printf '%s' "$1" | grep -Eiq '/(public_html|www|htdocs|html|web|httpdocs|wwwroot)(/|$)'
+}
+settings() {
+  b_on=$(conf ENABLED); b_freq=$(conf FREQUENCY); b_hour=$(conf HOUR); b_min=$(conf MINUTE)
+  b_wday=$(conf WEEKDAY); b_dir=$(conf DIR); b_keep=$(conf KEEP); b_owner=$(conf OWNER)
+  b_name=$(conf NAME); b_remote=$(conf REMOTE); b_target=$(conf TARGET); b_port=$(conf PORT)
+  b_bad=
+  num "${b_hour:-3}" && num "${b_min:-30}" && num "${b_wday:-7}" && num "${b_keep:-14}" && num "${b_port:-22}" || b_bad=numbers
+  [ -z "$b_dir" ] || safe_dir "$b_dir" || b_bad=folder
+  [ -z "$b_owner" ] || { printf '%s' "$b_owner" | grep -Eq '^[a-z_][a-z0-9_-]*(:[a-z_][a-z0-9_-]*)?$' && id -u "${b_owner%%:*}" >/dev/null 2>&1; } || b_bad=owner
+  printf '%s' "${b_name:-redazia}" | grep -Eq '^[A-Za-z0-9_-]{1,40}$' || b_bad=name
+  [ -z "$b_target" ] || printf '%s' "$b_target" | grep -Eq '^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._/~-]+$' || b_bad=target
+  [ -n "$b_bad" ] && b_on=0
+  b_name=${b_name:-redazia}
+  bdir=${b_dir:-$here/backup}
+  # A folder that is a link counts where it leads.
+  [ -z "$b_dir" ] || [ ! -e "$bdir" ] || { real=$(readlink -f "$bdir") && safe_dir "$real"; } || { b_bad=folder; b_on=0; }
+}
+run_backup() {  # one archive with these settings; its path on the last line of the log
+  BACKUP_DIR=$bdir BACKUP_KEEP=${b_keep:-14} BACKUP_NAME=$b_name BACKUP_OWNER=$b_owner ./backup.sh
+}
+due() {  # the time set has come and no backup ran since
+  [ "$b_on" = 1 ] || return 1
+  now=$(date +%s)
+  slot=$(date -d "$(date +%F) ${b_hour:-3}:${b_min:-30}" +%s) || return 1
+  [ "$now" -ge "$slot" ] || return 1
+  [ "$b_freq" != weekly ] || [ "$(date +%u)" = "${b_wday:-7}" ] || return 1
+  last=$(cat "$work/backup-last" 2>/dev/null || echo 0)
+  num "$last" || last=0
+  [ "$last" -lt "$slot" ]
+}
+key=/root/.ssh/redazia_backup
+remote_copy() {
+  command -v rsync >/dev/null 2>&1 || { echo "rsync is not installed on this server (apt install rsync)"; return 1; }
+  rsync -a --delete --include="$b_name-*.tgz" --exclude='*' \
+    -e "ssh -i $key -p ${b_port:-22} -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20" \
+    "$bdir/" "$b_target/"
+}
+backup_status() {  # state: what the console shows; written only when it changes
+  pub=
+  if [ -n "$b_target" ] || [ "$b_remote" = 1 ]; then
+    [ -f "$key" ] || { mkdir -p -m 700 /root/.ssh && ssh-keygen -q -t ed25519 -N '' -C "redazia-backup@$(hostname)" -f "$key"; } || true
+    pub=$(cat "$key.pub" 2>/dev/null)
+  fi
+  list=$(find "$bdir" -maxdepth 1 -type f -name "$b_name-*.tgz" -printf '{"name": "%f", "size": %s, "at": "%TY-%Tm-%TdT%TH:%TM"}\n' 2>/dev/null | sort -r | paste -sd, -)
+  printf '{"state": "%s", "result": %s, "bad": "%s", "dir": "%s", "archives": [%s], "pubkey": "%s"}\n' \
+    "$1" "$(cat "$work/backup-result" 2>/dev/null || echo '{}')" "$b_bad" "$bdir" "$list" "$pub" > "$work/backup-status.json"
+  cmp -s "$work/backup-status.json" "$dir/backup-status.json" || publish backup-status.json
+}
+backups() {
+  settings
+  # An archive to delete, asked from the console: only a name of this folder.
+  if [ -f "$dir/backup-delete.json" ]; then
+    f=$(sed -n 's/.*"file": *"\([A-Za-z0-9_-]*-[0-9-]*_[0-9]*\.tgz\)".*/\1/p' "$dir/backup-delete.json" | head -n 1)
+    rm -f "$dir/backup-delete.json"
+    case $f in "$b_name"-*) [ -f "$bdir/$f" ] && rm -f "$bdir/$f" ;; esac
+  fi
+  asked=
+  [ -f "$dir/backup-now.json" ] && { asked=1; rm -f "$dir/backup-now.json"; }
+  if [ -n "$asked" ] && [ -n "$b_bad" ]; then
+    printf '{"at": "%s", "ok": false, "why": "settings"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$work/backup-result"
+    asked=
+  fi
+  if [ -n "$asked" ] || due; then
+    date +%s > "$work/backup-last"
+    backup_status running
+    blog=$work/backup.log
+    echo "$(date -u) backup into $bdir" > "$blog"
+    publish backup.log
+    ok=true; remote=off
+    run_backup >> "$blog" 2>&1 || ok=false
+    file=$(tail -n 1 "$blog" | sed -n 's|.*/\([A-Za-z0-9_-]*-[0-9-]*_[0-9]*\.tgz\)$|\1|p')
+    if $ok && [ "$b_remote" = 1 ] && [ -n "$b_target" ]; then
+      backup_status running
+      echo "copy to $b_target" >> "$blog"
+      if remote_copy >> "$blog" 2>&1; then remote=done; else remote=failed; fi
+    fi
+    size=0; [ -n "$file" ] && size=$(stat -c %s "$bdir/$file" 2>/dev/null || echo 0)
+    printf '{"at": "%s", "ok": %s, "file": "%s", "size": %s, "remote": "%s"}\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ok" "$file" "$size" "$remote" > "$work/backup-result"
+    publish backup.log
+  fi
+  backup_status idle
+}
+# A backup that goes wrong never stops an update.
+backups || true
+
+# ---------------------------------------------------------------- updates
+req=$dir/request.json
+[ -f "$req" ] || exit 0
 version=$(sed -n 's/.*"version": *"\([0-9]\{1,4\}\.[0-9]\{1,4\}\.[0-9]\{1,4\}\)".*/\1/p' "$req" | head -n 1)
 rm -f "$req"
 old=$(sed -n 's/^EULLM_VERSION=//p' .env | tail -n 1)
-log=$dir/update.log
+log=$work/update.log
 step=start
 
 status() {  # state [percent]
   printf '{"state": "%s", "step": "%s", "percent": %s, "version": "%s", "from": "%s", "at": "%s"}\n' \
-    "$1" "$step" "${2:-0}" "$version" "$old" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$dir/status.json.part"
-  chmod 644 "$dir/status.json.part"
-  mv "$dir/status.json.part" "$dir/status.json"
+    "$1" "$step" "${2:-0}" "$version" "$old" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$work/status.json"
+  publish status.json
+  publish update.log
 }
 fail() {
   echo "failed during: $step" >> "$log"
@@ -106,7 +215,7 @@ fail() {
 # 80 on the console's bar. Other lines go to the log. A compose that does
 # not know --progress json pulls the plain way.
 pull() {
-  rm -f "$dir/.pull-rc"
+  rm -f "$work/pull-rc"
   { EULLM_VERSION=$version docker compose --progress json pull 2>&1; echo "RC $?"; } | awk '
     function field(k,   r) { if (match($0, "\"" k "\":\"[^\"]*\"")) { r = substr($0, RSTART, RLENGTH); sub("^\"" k "\":\"", "", r); sub("\"$", "", r); return r } return "" }
     /^RC [0-9]+$/ { print; next }
@@ -126,36 +235,38 @@ pull() {
     { print "LOG " $0 }' | while read -r kind rest; do
       case $kind in
         PCT) status running "$rest" ;;
-        RC) echo "$rest" > "$dir/.pull-rc" ;;
+        RC) echo "$rest" > "$work/pull-rc" ;;
         *) echo "$rest" >> "$log" ;;
       esac
     done
-  [ "$(cat "$dir/.pull-rc" 2>/dev/null)" = 0 ] && return 0
+  [ "$(cat "$work/pull-rc" 2>/dev/null)" = 0 ] && return 0
   grep -q -- '--progress' "$log" && EULLM_VERSION=$version docker compose pull >> "$log" 2>&1
 }
 
-# The script of the version just installed takes this one's place (a new
-# file: the shell running this one keeps reading the old), and with it the
-# way it is started.
+# The scripts of the version just installed take these ones' place (a new
+# file: the shell running this one keeps reading the old), and with them the
+# way the script is started.
 renew() {
-  curl -fsSL "$REPO/v$version/deploy/server/update.sh" -o "$dir/update.sh.new" 2>> "$log" || return 0
-  if [ "$(head -n 1 "$dir/update.sh.new")" = "#!/bin/sh" ] && sh -n "$dir/update.sh.new" \
-     && ! cmp -s "$dir/update.sh.new" "$here/update.sh"; then
-    chmod 755 "$dir/update.sh.new"
-    mv "$dir/update.sh.new" "$here/update.sh"
-    echo "update.sh renewed from v$version" >> "$log"
-    "$here/update.sh" trigger >> "$log" 2>&1 || true
-  fi
-  rm -f "$dir/update.sh.new"
+  for f in update.sh backup.sh; do
+    curl -fsSL "$REPO/v$version/deploy/server/$f" -o "$work/$f.new" 2>> "$log" || continue
+    if [ "$(head -n 1 "$work/$f.new")" = "#!/bin/sh" ] && sh -n "$work/$f.new" && ! cmp -s "$work/$f.new" "$here/$f"; then
+      chmod 755 "$work/$f.new"
+      mv "$work/$f.new" "$here/$f"
+      echo "$f renewed from v$version" >> "$log"
+    fi
+    rm -f "$work/$f.new"
+  done
+  "$here/update.sh" trigger >> "$log" 2>&1 || true
+  publish update.log
 }
 
 : > "$log"
-chmod 644 "$log"
 if [ -z "$version" ]; then step=request; echo "no valid version in the request" >> "$log"; fail; fi
 echo "$(date -u) update from ${old:-latest} to $version" >> "$log"
 
+# The backup before the update goes where the console's backups go.
 step=backup; status running 2
-./backup.sh >> "$log" 2>&1 || fail
+run_backup >> "$log" 2>&1 || fail
 
 # The images of a new release appear a few minutes after its tag: try for 10 minutes.
 step=pull; status running 10

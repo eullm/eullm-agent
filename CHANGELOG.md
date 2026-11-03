@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.28.17
+
+### Added
+
+- Console › Backup: backups of the server set from the console. Daily or
+  weekly, at the time chosen, in the folder chosen (under /home,
+  /var/backups, /backup, /backups, /mnt, /media, /srv or /opt, never in a
+  folder a web server publishes), with the days to keep, the owner and
+  the file name; "Backup adesso"; the archives on the server, each one
+  deletable; the log. Optional copy to another server with rsync over SSH:
+  the server makes its own key and the console shows the public one to
+  add to the remote `authorized_keys`. `update.sh` runs them, as it runs
+  updates, and the backup before an update goes to the same folder.
+
+### Fixed
+
+- The automatic newsroom stopped for hours with "nessuna proposta adatta"
+  while 121 proposals waited: the "different sources" rule counted only
+  the news of a proposal's topic. It now counts every news the article is
+  written from, as the writer reads it: the cited news, those of its
+  topic and the other recent news on the same story from any outlet.
+
+### Security
+
+- `update.sh` no longer writes through files of the shared folder (the
+  dashboard's user writes there): it works in a folder of its own and
+  moves the results in, and renews itself from there.
+
 ## 0.28.16
 
 ### Changed

@@ -195,17 +195,27 @@ def made_since(s, site_id: int, since: datetime) -> tuple[int, int]:
 TRIES_PER_ARTICLE = 2
 
 
-def source_count(s, proposal_id: int) -> int:
-    """Distinct sources behind a proposal: its cited news and the other news
-    of its topic, which the article is written from too (drafts.write_draft).
-    A story picked from one feed but told by others counts all of them."""
+def source_count(s, proposal_id: int, need: int = 0) -> int:
+    """Distinct sources behind a proposal: the news the article is written
+    from (drafts.write_draft), that is its cited news, the news of its topic
+    and the other recent news on the same subject from any source. A story
+    picked from one feed but told by others counts all of them. With
+    `need`, the wider search runs only when the topic alone is short of it."""
+    from .drafts import related_items
+
     pc, si, ti = m.proposal_citations.c, m.source_items.c, m.topic_items.c
     topic = s.execute(select(m.proposals.c.topic_id).where(m.proposals.c.id == proposal_id)).scalar()
-    cited = select(pc.item_id.label("item_id")).where(pc.proposal_id == proposal_id)
-    same = select(ti.item_id.label("item_id")).where(ti.topic_id == topic)
-    items = cited.union(same).subquery()
-    return s.execute(select(func.count(func.distinct(si.source_id))).select_from(
-        items.join(m.source_items, si.id == items.c.item_id))).scalar() or 0
+    cited = list(s.execute(select(pc.item_id).where(pc.proposal_id == proposal_id)).scalars())
+    same = list(s.execute(select(ti.item_id).where(ti.topic_id == topic).limit(12)).scalars()) if topic else []
+    ids = list(dict.fromkeys(cited + same))
+
+    def count(items: list[int]) -> int:
+        return s.execute(select(func.count(func.distinct(si.source_id))).where(si.id.in_(items))).scalar() or 0 if items else 0
+
+    n = count(ids)
+    if need and n >= need:
+        return n
+    return count(ids + related_items(s, ids))
 
 
 # Below the minimum opportunity, the best proposals still go out down to
@@ -233,7 +243,7 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int) -> list:
                       .values(status="rejected", decided_by=AUTO))
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, f"topic to avoid: {word}", site_id)
             continue
-        if source_count(s, r.id) >= cfg["min_sources"]:
+        if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
             out.append(r)
     return out
 
