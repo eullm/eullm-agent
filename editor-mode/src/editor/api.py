@@ -11,6 +11,7 @@ the JSON routes.
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
@@ -22,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.exc import IntegrityError
 
-from . import accounts, auth, console, delivery, drafts, i18n, jobs, models as m, profile as prof, proposals as props, publishing, queue, quotas, repo, translate as tr, trials, ui, vault
+from . import accounts, auth, console, delivery, drafts, i18n, jobs, models as m, profile as prof, proposals as props, publishing, queue, quotas, repo, slowlog, translate as tr, trials, ui, vault
 from .briefing import TEMPLATES as _BRIEF_TEMPLATES
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -134,6 +135,18 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
         if request.url.scheme == "https":
             h.setdefault("Strict-Transport-Security", "max-age=31536000")
         return resp
+
+    slowlog.watch(db.engine)
+    slowlog.watch(admin.engine)
+
+    @app.middleware("http")
+    async def slow_pages(request: Request, call_next):
+        # The pages that take long write why in the log (editor/slowlog.py).
+        token, started = slowlog.start(), time.perf_counter()
+        try:
+            return await call_next(request)
+        finally:
+            slowlog.finish(token, started, f"{request.method} {request.url.path}")
 
     @app.middleware("http")
     async def language(request: Request, call_next):

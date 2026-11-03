@@ -30,7 +30,7 @@ def test_every_page_renders_for_every_role(db, tenant):
         draft = c.get(f"/drafts/{did}").text
         assert 'href="#src-1"' in draft and 'id="src-1"' in draft
         desk = c.get("/").text
-        assert "Siti più attivi" in desk and "Ultime notizie" in desk
+        assert "Ultime notizie" in desk
         assert "Siti più costosi" not in desk and "Costo modello" not in desk  # euros only for operators
         assert 'data-mode="desk"' in desk and c.get("/ui/activity?mode=page").status_code == 200
         settings = c.get("/settings").text

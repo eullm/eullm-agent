@@ -2131,5 +2131,6 @@
  "Manca la chiave di Google sul server (EDITOR_GSC_KEY).": "Google's key is missing on the server (EDITOR_GSC_KEY).",
  "Feed per altri strumenti": "Feed for other tools",
  "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "For Zapier, Make, n8n or a site that imports a feed: it holds the last 50 approved articles, with text, image and fields for Google. The real site is connected from <a href=\"/publications\">Publications</a>.",
- "Versioni del profilo": "Profile versions"
+ "Versioni del profilo": "Profile versions",
+ "Vedi tutti ({n})": "See all ({n})"
 }
