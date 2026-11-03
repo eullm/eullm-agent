@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.28.25
+
+### Changed
+
+- **Desk di un sito automatico** (Francesco: dalle 14:46 non pubblicava più
+  e non si capiva perché, né dove vedere gli articoli; "se è automatico
+  decidono loro"): un riquadro «La redazione automatica di … oggi» dice
+  quanti articoli ha pubblicato, scartato e fermato, **perché si è fermata**
+  («ha fatto gli articoli di oggi, 6 su 6, riprende domani alle 07:00»,
+  fuori orario, piano finito…) e li elenca con il link all'articolo online
+  e «modifica o ritira». Le proposte di un sito automatico non sono più
+  «da decidere» (né contate né elencate): quelle non usate scadono dopo un
+  giorno e mezzo (`autopilot.lapse`).
+- **Sito e profilo** più corto: numeri, versioni, lingue, Search Console,
+  come ricevi gli articoli, dati del sito e «aggiungi un dominio» sono
+  sezioni chiuse; la redazione automatica mostra lo stato e tiene le regole
+  in una sezione che si apre; il testo di spiegazione compare solo quando è
+  spenta.
+- **Più fonti per i siti generalisti**: la ricerca delle fonti chiede al
+  modello i siti da seguire una volta ogni 3 temi (fino a 8 domande) invece
+  di una sola da 25, e non ripropone quelli già seguiti, così ogni giro
+  quotidiano ne trova di nuovi.
+
 ## 0.28.24
 
 ### Added

@@ -260,6 +260,18 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int) -> list:
     return out
 
 
+def lapse(db, tenant_id: str, site_id: int, now: datetime) -> int:
+    """The proposals the newsroom did not use: past the day and a half it
+    chooses from they are closed, so nobody has to decide them one by one
+    (Francesco: if it is automatic, it decides)."""
+    pr = m.proposals.c
+    with db.tenant(tenant_id) as s:
+        res = s.execute(update(m.proposals).where(
+            pr.site_id == site_id, pr.status == "proposed", pr.created_at < now - timedelta(hours=36))
+            .values(status="rejected", decided_by=AUTO))
+    return res.rowcount or 0
+
+
 def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime, tz: str, enqueue) -> dict:
     """One hour of the automatic newsroom for a site: accept the articles
     of this hour and queue them. `enqueue(proposal_id)` queues one."""
@@ -271,6 +283,7 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
     cfg = settings_of(body)
     if body is None or not cfg["enabled"]:
         return {}
+    lapse(db, tenant_id, site_id, now)
     if not allowed:
         return {"waiting": "plan"}
     # The plan's articles of the month, set by the console: the automatic

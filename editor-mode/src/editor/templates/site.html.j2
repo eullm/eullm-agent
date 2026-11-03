@@ -42,6 +42,8 @@
 {% macro reason_label(r) %}{% if r == 'already_covered' %}{{ _('già trattato') }}{% elif r == 'off_topic' %}{{ _('fuori tema') }}{% elif r == 'too_generic' %}{{ _('troppo generico') }}{% elif r == 'unreliable_source' %}{{ _('fonte poco affidabile') }}{% else %}{{ _('senza motivo') }}{% endif %}{% endmacro %}
 {% if numbers %}
 {% set n = numbers %}
+<details class="fold-plain">
+<summary>{{ _('Il sito in numeri') }}</summary>
 <section class="kpis" aria-label="{{ _('Il sito in numeri') }}">
   <a class="card kpi{% if draft %} warn{% endif %}" href="#h-profile">
     <span class="label">{{ _('Profilo') }}</span>
@@ -87,6 +89,7 @@
   </a>
   {% endif %}
 </section>
+</details>
 {% if n.discards %}
 <p class="hint">{{ _('Perché hai scartato le proposte negli ultimi 30 giorni:') }}
   {% for reason, k in n.discards %}{{ reason_label(reason) }} {{ k }}{% if not loop.last %} · {% endif %}{% endfor %}.
@@ -131,7 +134,7 @@
     </div>
     {% else %}<span class="chip">{{ _('Spenta') }}</span>{% endif %}
   </div>
-  <p class="lead">{{ _("Il sito scrive e pubblica da solo: ogni ora sceglie le notizie migliori che rispettano le tue regole, scrive l'articolo con le fonti, fa la copertina, lo fa rileggere a un caporedattore AI e lo pubblica. Ogni articolo dice che è scritto dall'intelligenza artificiale senza revisione umana, come chiede l'AI Act.") }}</p>
+  {% if not a.enabled %}<p class="lead">{{ _("Il sito scrive e pubblica da solo: ogni ora sceglie le notizie migliori che rispettano le tue regole, scrive l'articolo con le fonti, fa la copertina, lo fa rileggere a un caporedattore AI e lo pubblica. Ogni articolo dice che è scritto dall'intelligenza artificiale senza revisione umana, come chiede l'AI Act.") }}</p>{% endif %}
   {% set last = numbers.auto_last %}
   {% if a.enabled %}
   <p class="hint" id="auto-last"><strong>{{ _('Ultimo giro') }}</strong>{% if last %} {{ when(last.at, 'time') }}{% endif %}:
@@ -148,7 +151,9 @@
   <p class="hint">{{ _('Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.', p=day.published, d=day.discarded, h=day.held) }}</p>
   <ul class="plain">{% for x in day['items'][:10] %}<li><a href="/drafts/{{ x.id }}">{{ x.title }}</a> · {% if x.discarded is not none %}<span class="chip" title="{{ x.discarded }}">{{ _('scartato') }}</span>{% elif x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}</li>{% endfor %}</ul>
   {% endif %}
-  <form method="post" action="/ui/sites/{{ site.id }}/auto" style="display: flex; flex-direction: column; gap: 12px;">
+  <details class="fold-plain" {% if not a.enabled %}open{% endif %}>
+<summary>{{ _('Regole e impostazioni') }}</summary>
+<form method="post" action="/ui/sites/{{ site.id }}/auto" style="display: flex; flex-direction: column; gap: 12px;">
     <label class="field">{{ _('Contesto: di cosa parla il sito, per chi, con quale obiettivo') }}<textarea name="brief" rows="4" maxlength="4000" placeholder="{{ _('Es.: notizie dal mondo per lettori italiani curiosi; obiettivo: più lettori possibili, titoli che invogliano senza ingannare.') }}">{{ a.brief }}</textarea></label>
     <label class="field">{{ _('Rubriche, una per riga') }}<textarea name="sections" rows="4">{{ a.sections|join('\n') }}</textarea></label>
     <label class="field">{{ _('Direttive: come scrivere, cosa preferire') }}<textarea name="directives" rows="3" maxlength="4000">{{ a.directives }}</textarea></label>
@@ -178,6 +183,7 @@
       <span class="hint">{{ _('Per un sito nuovo, senza articoli da leggere: il profilo nasce dal contesto e dalle rubriche, poi lo approvi.') }}</span>
     </div>
   </form>
+</details>
 </section>
 {% endif %}
 
@@ -356,8 +362,8 @@
 {% endif %}
 
 {% if profiles %}
-<section class="card pad" aria-labelledby="h-ver">
-  <h2 id="h-ver">{{ _('Versioni') }}</h2>
+<details class="card pad fold">
+  <summary><h2 id="h-ver">{{ _('Versioni') }}</h2></summary>
   <div class="scroll">
     <table style="min-width: 560px;">
       <thead><tr><th>{{ _('Versione') }}</th><th>{{ _('Origine') }}</th><th>{{ _('Stato') }}</th><th>{{ _('Decisione') }}</th>{% if caller.can('owner') %}<th></th>{% endif %}</tr></thead>
@@ -374,13 +380,13 @@
       </tbody>
     </table>
   </div>
-</section>
+</details>
 {% endif %}
 {% endif %}
 
 {% if site %}
-<section class="card pad" aria-labelledby="h-languages-t" id="h-languages">
-  <h2 id="h-languages-t">{{ _('Lingue degli articoli') }}</h2>
+<details class="card pad fold" id="h-languages">
+  <summary><h2 id="h-languages-t">{{ _('Lingue degli articoli') }}</h2></summary>
   <p class="hint">{{ _("Gli articoli si scrivono nella lingua del sito ({language}). Scegli in quali altre lingue tradurli: quando approvi un articolo, l'agente scrive una traduzione per ogni lingua, con le stesse fonti e gli stessi controlli, da approvare a parte. Ogni traduzione conta come un articolo del piano.", language=langs.get(own_language, own_language or '?')) }}{% if max_languages %} {{ _('Il tuo piano permette {n} lingue per sito, compresa la sua.', n=max_languages) }}{% endif %}</p>
   {% if caller.can('owner') %}
   <form method="post" action="/ui/sites/{{ site.id }}/languages" class="form-grid">
@@ -394,12 +400,12 @@
   {% else %}
   <p>{{ site_langs|map('extract', langs)|join(', ') or _('Solo la lingua del sito.') }}</p>
   {% endif %}
-</section>
+</details>
 {% endif %}
 
 {% if site and gsc %}
-<section class="card pad" aria-labelledby="h-gsc-t" id="h-gsc">
-  <h2 id="h-gsc-t">{{ _('Google Search Console') }}</h2>
+<details class="card pad fold" id="h-gsc">
+  <summary><h2 id="h-gsc-t">{{ _('Google Search Console') }}</h2></summary>
   <p class="hint">{{ _('Collegando Search Console la redazione vede cosa cerca la gente su Google per arrivare al sito e quali articoli cliccano: i temi più cercati salgono nelle proposte e i numeri arrivano nel rapporto del lunedì.') }}</p>
   {% if gsc.property %}
   <div class="list-row"><span>{{ _('Proprietà') }}</span><span class="num">{{ gsc.property }}</span></div>
@@ -449,12 +455,12 @@
   {% endif %}
   {% endif %}
   {% endif %}
-</section>
+</details>
 {% endif %}
 
 {% if site %}
-<section class="card pad" aria-labelledby="h-delivery-t" id="h-delivery">
-  <h2 id="h-delivery-t">{{ _('Come ricevi gli articoli') }}</h2>
+<details class="card pad fold" id="h-delivery">
+  <summary><h2 id="h-delivery-t">{{ _('Come ricevi gli articoli') }}</h2></summary>
   <p class="hint">{{ _('Ogni articolo approvato si può pubblicare in quattro modi, anche insieme:') }}</p>
   <ul>
     <li>{{ _('<strong>Collegando il sito</strong> (WordPress, webhook, canale Telegram) da <a href="/publications">Pubblicazioni</a>: l\'articolo parte con immagine e campi per Google dopo il sì di un direttore.') }}</li>
@@ -472,12 +478,12 @@
   {% elif caller.can('owner') %}
   <form class="inline" method="post" action="/ui/sites/{{ site.id }}/feed"><button class="btn" type="submit">{{ _('Crea il feed') }}</button></form>
   {% endif %}
-</section>
+</details>
 {% endif %}
 
 {% if site and caller.can('owner') %}
-<section class="card pad" aria-labelledby="h-site-data" id="h-danger">
-  <h2 id="h-site-data">{{ _('Dati del sito') }}</h2>
+<details class="card pad fold" id="h-danger">
+  <summary><h2 id="h-site-data">{{ _('Dati del sito') }}</h2></summary>
   <form method="post" action="/ui/sites/{{ site.id }}/edit" class="form-grid">
     <label class="field">{{ _('Nome') }}<input name="name" value="{{ site.name }}" maxlength="100"></label>
     {% if domain_free %}
@@ -492,16 +498,16 @@
     <label class="field">{{ _('Scrivi {domain} per confermare', domain=site.domain) }}<input name="confirm" autocomplete="off" required></label>
     <div><button class="btn danger" type="submit">{{ _('Elimina il sito') }}</button></div>
   </form>
-</section>
+</details>
 {% endif %}
 
 {% if caller.can('owner') and not site %}
-<section class="card pad" aria-labelledby="h-add">
-  <h2 id="h-add">{{ _('Aggiungi un dominio') }}</h2>
+<details class="card pad fold">
+  <summary><h2 id="h-add">{{ _('Aggiungi un dominio') }}</h2></summary>
   <form method="post" action="/ui/sites" class="form-grid">
     <label class="field">{{ _('Dominio') }}<input name="domain" placeholder="{{ _('esempio.it') }}" required></label>
     <div><button class="btn" type="submit">{{ _('Analizza il sito') }}</button></div>
   </form>
-</section>
+</details>
 {% endif %}
 {% endblock %}
