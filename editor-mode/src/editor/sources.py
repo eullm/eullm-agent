@@ -309,6 +309,10 @@ def api_candidates(body: dict) -> list[Candidate]:
     return out
 
 
+# Topics asked about in one question, and questions at most (a site on 24 subjects or more is cut there).
+SUGGEST_TOPICS_PER_CALL = 3
+SUGGEST_GROUPS = 8
+
 SUGGEST_SYSTEM = (
     "You help an editor find sources. Given the editorial profile of a site, reply with JSON only: "
     '{"search_terms": ["<up to 6 short English search queries for the site\'s main subtopics>"], '
@@ -382,16 +386,29 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
     suggestions = {"search_terms": [], "domains": []}
     if core is not None and body.get("subtopics") and urls is None:
         step(N_("Il modello suggerisce dove cercare le fonti per {domain}"), domain=domain)
-        try:
-            prompt = "Profile:\n" + "\n".join(
-                f"- {x['name']}: {', '.join(x.get('keywords', []))}" for x in body["subtopics"]
-            ) + (f"\nSector: {body.get('sector', {}).get('value')}\nLanguage: {body.get('language')}"
-                 f"\nLanguages of the site: {', '.join(body.get('languages') or {}) or body.get('language')}"
-                 f"\nSummary: {body.get('summary') or '-'}\nSite: {domain}")
-            with usage.tagged(db, tenant_id, "source_discovery", site_id=site_id):
-                suggestions, calls = core.chat_json(SUGGEST_SYSTEM, prompt, _validate_suggestions)
-        except CoreError as e:
-            report.notes.append(f"model suggestions unavailable: {e}")
+        # One question for every few topics: a site on many subjects (world news) gets as many
+        # outlets as it has subjects, not the same twenty-five as a site on one; the ones it
+        # already follows are not asked again, so each round finds new ones.
+        from urllib.parse import urlparse
+
+        followed = sorted({(urlparse(u).hostname or "").removeprefix("www.") for _k, u, _c in existing if u} - {""})[:120]
+        subs = body["subtopics"][:SUGGEST_GROUPS * SUGGEST_TOPICS_PER_CALL]
+        groups = [subs[i:i + SUGGEST_TOPICS_PER_CALL] for i in range(0, len(subs), SUGGEST_TOPICS_PER_CALL)]
+        for group in groups:
+            try:
+                prompt = "Profile:\n" + "\n".join(
+                    f"- {x['name']}: {', '.join(x.get('keywords', []))}" for x in group
+                ) + (f"\nSector: {body.get('sector', {}).get('value')}\nLanguage: {body.get('language')}"
+                     f"\nLanguages of the site: {', '.join(body.get('languages') or {}) or body.get('language')}"
+                     f"\nSummary: {body.get('summary') or '-'}\nSite: {domain}"
+                     + (f"\nAlready followed, do not repeat: {', '.join(followed)}" if followed else ""))
+                with usage.tagged(db, tenant_id, "source_discovery", site_id=site_id):
+                    got, calls = core.chat_json(SUGGEST_SYSTEM, prompt, _validate_suggestions)
+            except CoreError as e:
+                report.notes.append(f"model suggestions unavailable: {e}")
+                continue
+            suggestions["search_terms"] = list(dict.fromkeys(suggestions["search_terms"] + got["search_terms"]))[:8]
+            suggestions["domains"] = list(dict.fromkeys(suggestions["domains"] + got["domains"]))
     body["search_terms"] = suggestions["search_terms"]
 
     finder = Discoverer(client)

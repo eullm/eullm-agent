@@ -91,6 +91,14 @@ details.mini[open] > summary { margin-bottom: 6px; }
 .kinds .kind { flex: 1 1 240px; display: block; color: inherit; text-decoration: none; padding: 16px; }
 .kinds .kind:hover { border-color: var(--accent); }
 .kinds .kind h2 { margin-top: 0; }
+details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary h2 { margin: 0; }
+details.fold > summary::after { content: "▾"; color: var(--muted); }
+details.fold[open] > summary::after { content: "▴"; }
+details.fold[open] > summary { margin-bottom: 12px; }
+details.fold-plain { margin: 8px 0 12px; }
+details.fold-plain > summary { cursor: pointer; font-weight: 600; padding: 6px 0; color: var(--muted); }
 ol.how { margin: 10px 0 10px 1.2em; padding: 0; }
 ol.how li { margin: 6px 0; }
 ol.steps { list-style: none; margin: 16px 0 0; padding: 0; }

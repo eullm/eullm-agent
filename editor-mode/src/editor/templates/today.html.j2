@@ -45,6 +45,33 @@
 </section>
 {% endif %}
 
+{% for a in auto_cards %}
+{% set day = a.day %}{% set last = a.last %}{% set cfg = a.cfg %}
+<section class="card pad" aria-labelledby="h-auto-{{ a.site.id }}" style="border-left: 4px solid var(--teal);">
+  <div class="row" style="justify-content: space-between; align-items: center;">
+    <h2 id="h-auto-{{ a.site.id }}">{{ _('La redazione automatica di {domain}, oggi', domain=a.site.domain) }}</h2>
+    <span class="chip green">{{ _('Accesa') }}</span>
+  </div>
+  <p class="lead"><strong>{{ _('Oggi: {p} pubblicati, {d} scartati, {h} fermati per te.', p=day.published, d=day.discarded, h=day.held) }}</strong>
+  {% if not last %}{{ _('Non ha ancora fatto un giro: parte al prossimo giro orario.') }}
+  {% elif last.waiting == 'plan' %}{{ _('fermo, il piano della redazione non comprende la redazione automatica.') }}
+  {% elif last.waiting == 'month' %}{{ _('fermo, finiti gli articoli del mese del piano: riparte il mese prossimo, oppure chiedi più articoli.') }}
+  {% elif last.waiting == 'hours' %}{{ _('fuori orario, riparte alle {h}.', h=cfg.hours[0]) }}
+  {% elif last.done %}{{ _('Ha fatto gli articoli di oggi ({n} su {tot}) e riprende domani alle {h}:00.', n=last.done, tot=cfg.per_day, h='%02d'|format(cfg.hours[0])) }}
+  {% elif last.tried %}{{ _('fermo per oggi: ha già provato {t} articoli e ne ha tenuti {k}, gli altri non passavano i controlli. Riparte domani.', t=last.tried, k=last.kept) }}
+  {% elif last.accepted %}{{ _('ha scelto {n} proposte, le scrive e le pubblica.', n=last.accepted|length) }}
+  {% else %}{{ _('nessuna proposta adatta in quest\'ora: servono opportunità almeno {o} e notizie da almeno {f} fonti diverse. Riprova al prossimo giro.', o=cfg.min_opportunity|int, f=cfg.min_sources) }}{% endif %}</p>
+  {% if day['items'] %}
+  <ul class="plain">{% for x in day['items'][:12] %}<li>
+    {% if x.publication == 'published' and a.urls.get(x.id) %}<a href="{{ a.urls[x.id] }}" target="_blank" rel="noopener">{{ x.title }}</a>{% else %}<a href="/drafts/{{ x.id }}">{{ x.title }}</a>{% endif %}
+    · {% if x.discarded is not none %}<span class="chip" title="{{ x.discarded }}">{{ _('scartato') }}</span>{% elif x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}
+    {% if x.publication == 'published' and caller.can('owner') %}<a class="hint" href="/drafts/{{ x.id }}">{{ _('modifica o ritira') }}</a>{% endif %}
+  </li>{% endfor %}</ul>
+  {% else %}<p class="hint">{{ _('Nessun articolo oggi per ora.') }}</p>{% endif %}
+  <p class="hint">{{ _('Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in') }} <a href="/publications">{{ _('Pubblicazioni') }}</a>{% if caller.can('owner') %} · <a href="/switch?site={{ a.site.id }}&amp;back=/site#h-auto">{{ _('Cambia articoli al giorno e regole') }}</a>{% endif %}.</p>
+</section>
+{% endfor %}
+
 <section class="kpis" aria-label="{{ _('Riepilogo') }}">
   <a class="card kpi{% if decisions %} warn{% endif %}" href="#h-decide">
     <span class="label">{{ _('Da decidere') }}</span>

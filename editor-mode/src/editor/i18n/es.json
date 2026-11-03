@@ -2103,5 +2103,13 @@
  "Il ramo {branch} non esiste in questo repository.": "La rama {branch} no existe en este repositorio.",
  "GitHub ha risposto con un errore: {detail}": "GitHub respondió con un error: {detail}",
  "Collegamento non salvato: {e}.": "Conexión no guardada: {e}.",
- "Indirizzo non valido: {e}.": "Dirección no válida: {e}."
+ "Indirizzo non valido: {e}.": "Dirección no válida: {e}.",
+ "Regole e impostazioni": "Reglas y ajustes",
+ "La redazione automatica di {domain}, oggi": "La redacción automática de {domain}, hoy",
+ "Non ha ancora fatto un giro: parte al prossimo giro orario.": "Todavía no ha hecho una ronda: empieza en la próxima ronda horaria.",
+ "Ha fatto gli articoli di oggi ({n} su {tot}) e riprende domani alle {h}:00.": "Ha hecho los artículos de hoy ({n} de {tot}) y reanuda mañana a las {h}:00.",
+ "modifica o ritira": "modificar o retirar",
+ "Nessun articolo oggi per ora.": "Todavía ningún artículo hoy.",
+ "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "Elige sola entre las propuestas: las que no usa caducan al día y medio, no tienes que decidirlas. Todos los artículos están en",
+ "Cambia articoli al giorno e regole": "Cambiar artículos al día y reglas"
 }

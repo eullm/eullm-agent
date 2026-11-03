@@ -2103,5 +2103,13 @@
  "Il ramo {branch} non esiste in questo repository.": "The branch {branch} does not exist in this repository.",
  "GitHub ha risposto con un errore: {detail}": "GitHub answered with an error: {detail}",
  "Collegamento non salvato: {e}.": "Connection not saved: {e}.",
- "Indirizzo non valido: {e}.": "Invalid address: {e}."
+ "Indirizzo non valido: {e}.": "Invalid address: {e}.",
+ "Regole e impostazioni": "Rules and settings",
+ "La redazione automatica di {domain}, oggi": "The automatic newsroom of {domain}, today",
+ "Non ha ancora fatto un giro: parte al prossimo giro orario.": "It has not done a round yet: it starts at the next hourly round.",
+ "Ha fatto gli articoli di oggi ({n} su {tot}) e riprende domani alle {h}:00.": "It has done today's articles ({n} of {tot}) and resumes tomorrow at {h}:00.",
+ "modifica o ritira": "edit or withdraw",
+ "Nessun articolo oggi per ora.": "No article today yet.",
+ "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "It chooses by itself among the proposals: those it does not use lapse after a day and a half, you don't have to decide them. All the articles are in",
+ "Cambia articoli al giorno e regole": "Change articles per day and rules"
 }

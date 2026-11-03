@@ -639,8 +639,7 @@ def register(app, ctx) -> None:
             site_lines = [{"id": x.id, "domain": x.domain, "approved": lines.get(x.id), "pending": pending.get(x.id)}
                           for x in sites]
             # The Desk: decisions, work and numbers of every site, or of the one chosen.
-            proposed = proposal_rows(s, sid, ("proposed",), limit=12)
-            explained = proposal_details(s, proposed)
+            proposed = proposal_rows(s, sid, ("proposed",), limit=60)
             pending_pubs = s.execute(
                 select(m.publications.c.id, m.publications.c.mode, m.publications.c.requested_by,
                        m.drafts.c.id.label("draft_id"), m.drafts.c.title, m.publish_targets.c.name.label("target"),
@@ -684,9 +683,19 @@ def register(app, ctx) -> None:
             core_trouble = {"n": len(troubles), "limit": any("limit" in e for e in troubles)} if troubles else None
             briefing = s.execute(select(m.briefings).where(
                 m.briefings.c.briefing_date == datetime.now(zone(s)).date())).first()
+            # Sites whose automatic newsroom picks the proposals by itself.
+            auto_bodies = {r.site_id: r.body for r in s.execute(select(m.editorial_profiles.c.site_id, m.editorial_profiles.c.body)
+                                                                .where(m.editorial_profiles.c.status == "approved")).all()
+                           if autopilot.settings_of(r.body)["enabled"]}
+            auto_sites = set(auto_bodies)
             # Every proposal waiting, not only the ones listed.
+            # Those of a site on automatic are not: the newsroom picks from them, or lets them lapse.
             proposed_total = s.execute(select(func.count()).select_from(m.proposals).where(
                 m.proposals.c.status == "proposed", *of(m.proposals.c.site_id))).scalar() or 0
+            auto_pending = s.execute(select(func.count()).select_from(m.proposals).where(
+                m.proposals.c.status == "proposed", m.proposals.c.site_id.in_(auto_bodies or [0]),
+                *of(m.proposals.c.site_id))).scalar() or 0
+            proposed_total -= auto_pending
             # The numbers of the collection: the plan's for the newsroom, or the site's.
             collected = {"sources": usage.used.get("active_sources", 0) if usage else 0,
                          "today": usage.used.get("items_today", 0) if usage else 0}
@@ -697,9 +706,20 @@ def register(app, ctx) -> None:
                     "today": s.execute(select(func.count()).select_from(m.source_items).where(
                         repo.followed_by(sid), m.source_items.c.fetched_at >= start_of_day(s))).scalar() or 0}
             # Sites whose automatic newsroom picks the proposals by itself.
-            auto_sites = {r.site_id for r in s.execute(select(m.editorial_profiles.c.site_id, m.editorial_profiles.c.body)
-                                                       .where(m.editorial_profiles.c.status == "approved")).all()
-                          if autopilot.settings_of(r.body)["enabled"]}
+            proposed = [p for p in proposed if p.site_id not in auto_sites][:12]
+            explained = proposal_details(s, proposed)
+            # The automatic newsrooms' day: what was published, what it is doing, why it stopped.
+            auto_cards = []
+            for x in ([one] if one else sites):
+                if x.id not in auto_bodies:
+                    continue
+                body = auto_bodies[x.id]
+                day = autopilot.today(s, x.id, start_of_day(s))
+                urls = dict(s.execute(select(m.publications.c.draft_id, m.publications.c.external_url).where(
+                    m.publications.c.draft_id.in_([i["id"] for i in day["items"]] or [0]),
+                    m.publications.c.status == "published", m.publications.c.withdrawn_at.is_(None))).all())
+                auto_cards.append({"site": x, "cfg": autopilot.settings_of(body), "day": day, "urls": urls,
+                                   "last": auto_last((body.get("settings") or {}))})
             # A source the maintenance suspended is news, not a decision.
             decisions = len(profile_drafts) + proposed_total + len(pending_pubs)
             desk = desk_rows(s, [one] if one else sites, lines, pending)
@@ -723,7 +743,7 @@ def register(app, ctx) -> None:
                           news_day=news_day, latest=latest,
                           activity=act.recent(s, zone(s), problem, full=True, site=sid),
                           profile_drafts=profile_drafts, lines=lines, site_lines=site_lines,
-                          proposed=proposed, explained=explained, pending_pubs=pending_pubs, auto_sites=auto_sites,
+                          proposed=proposed, explained=explained, pending_pubs=pending_pubs, auto_sites=auto_sites, auto_cards=auto_cards,
                           stopped=stopped, drafts_ready=sum(draft_counts.values()),
                           needs_review=draft_counts.get("needs_review", 0), new_today=new_today,
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,

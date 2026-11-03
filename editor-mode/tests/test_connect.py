@@ -247,3 +247,25 @@ def test_only_owners_connect(db, tenant):
         c = logged_in(db, tenant, role)
         assert c.get("/connect").status_code == 403
         assert c.post("/ui/connect/1/later").status_code == 403
+
+
+def test_the_desk_of_an_automatic_site_shows_its_day_and_does_not_ask_to_decide(db, tenant):
+    from datetime import UTC, datetime, timedelta
+
+    from editor import autopilot, profile as prof
+
+    c = logged_in(db, tenant, "owner")
+    did, site_id = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        assert prof.approved_profile(s, site_id) is not None
+        autopilot.save(s, site_id, {"enabled": True, "per_day": 6})
+        s.execute(text("UPDATE editor.proposals SET status = 'proposed', created_at = :t WHERE site_id = :s"),
+                  {"t": datetime.now(UTC) - timedelta(hours=40), "s": site_id})
+    desk = c.get("/").text
+    assert "La redazione automatica di blog.example, oggi" in desk and "Oggi:" in desk
+    assert "la sceglie la redazione automatica" not in desk  # it picks by itself: nothing to decide one by one
+    # What it did not use lapses.
+    assert autopilot.lapse(db, tenant, site_id, datetime.now(UTC)) >= 1
+    with db.tenant(tenant) as s:
+        assert not s.execute(text("SELECT 1 FROM editor.proposals WHERE site_id = :s AND status = 'proposed'"),
+                             {"s": site_id}).first()

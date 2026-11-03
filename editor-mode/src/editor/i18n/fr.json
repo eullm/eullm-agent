@@ -2103,5 +2103,13 @@
  "Il ramo {branch} non esiste in questo repository.": "La branche {branch} n'existe pas dans ce dépôt.",
  "GitHub ha risposto con un errore: {detail}": "GitHub a répondu par une erreur : {detail}",
  "Collegamento non salvato: {e}.": "Connexion non enregistrée : {e}.",
- "Indirizzo non valido: {e}.": "Adresse non valide : {e}."
+ "Indirizzo non valido: {e}.": "Adresse non valide : {e}.",
+ "Regole e impostazioni": "Règles et paramètres",
+ "La redazione automatica di {domain}, oggi": "La rédaction automatique de {domain}, aujourd'hui",
+ "Non ha ancora fatto un giro: parte al prossimo giro orario.": "Elle n'a pas encore fait de tour : elle démarre au prochain tour horaire.",
+ "Ha fatto gli articoli di oggi ({n} su {tot}) e riprende domani alle {h}:00.": "Elle a fait les articles du jour ({n} sur {tot}) et reprend demain à {h}:00.",
+ "modifica o ritira": "modifier ou retirer",
+ "Nessun articolo oggi per ora.": "Aucun article aujourd'hui pour l'instant.",
+ "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "Elle choisit seule parmi les propositions : celles qu'elle n'utilise pas expirent au bout d'un jour et demi, vous n'avez pas à les trancher. Tous les articles sont dans",
+ "Cambia articoli al giorno e regole": "Modifier les articles par jour et les règles"
 }
