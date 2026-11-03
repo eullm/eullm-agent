@@ -389,6 +389,8 @@ class Publisher:
         with db.tenant(tenant_id) as s:
             s.execute(update(m.publications).where(m.publications.c.id == pub_id).values(
                 status="published", published_at=datetime.now(UTC), external_id=ext_id, external_url=ext_url, error=None))
+            if target.kind in seo.SITE_TARGETS and pub.mode == "publish":
+                seo.remember_published(s, tenant_id, target.site_id)
         out = {"status": "published", "url": ext_url}
         key = (target.config or {}).get("indexnow_key")
         if key and ext_url and pub.mode == "publish":

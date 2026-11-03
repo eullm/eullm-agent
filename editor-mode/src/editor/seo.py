@@ -15,8 +15,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
 from .text import tokens
@@ -74,22 +76,74 @@ def parse(value, title: str) -> Seo:
     return seo
 
 
+# Where a published article becomes a page of the site itself.
+SITE_TARGETS = ("wordpress", "github", "webhook")
+
+
+def remember_published(s, tenant_id: str, site_id: int) -> int:
+    """The articles this newsroom published on the site, among the site's
+    own posts: a new article links them as further reading, and the
+    proposals know the site already told that story. Only the original
+    language: a translation lives at another address in another language.
+    Returns how many were added."""
+    from .dedup import minhash
+    from .normalize import url_hash
+
+    pub, d, tg = m.publications, m.drafts, m.publish_targets
+    rows = s.execute(
+        select(pub.c.external_url, pub.c.published_at, d.c.title, d.c.subtitle)
+        .join(d, d.c.id == pub.c.draft_id).join(tg, tg.c.id == pub.c.target_id)
+        .where(d.c.site_id == site_id, d.c.translation_of.is_(None), pub.c.status == "published",
+               pub.c.mode == "publish", tg.c.kind.in_(SITE_TARGETS), pub.c.external_url.like("http%"))).all()
+    if not rows:
+        return 0
+    have = set(s.execute(select(m.site_posts.c.url_hash).where(m.site_posts.c.site_id == site_id)).scalars())
+    added = 0
+    for r in rows:
+        h = url_hash(r.external_url)
+        if h in have:
+            continue
+        have.add(h)
+        s.execute(insert(m.site_posts).values(
+            tenant_id=tenant_id, site_id=site_id, url=r.external_url, url_hash=h, title=r.title,
+            summary=r.subtitle, published_at=r.published_at or datetime.now(UTC),
+            minhash=minhash(f"{r.title} {r.subtitle or ''}"),
+        ).on_conflict_do_nothing(index_elements=["site_id", "url_hash"]))
+        added += 1
+    return added
+
+
+# A word in more than this share of the site's titles says little on its
+# own ("intelligenza artificiale" on a site about AI).
+COMMON = 0.08
+
+
 def site_links(s, site_id: int, title: str, keyphrase: str, limit: int = INTERNAL_LINKS) -> list[dict]:
     """The site's own articles closest to this one, to link as further
-    reading: internal links help readers and crawlers alike."""
+    reading: internal links help readers and crawlers alike. Two shared
+    words make a link, or one the site rarely uses (a company, a person,
+    a product); the closest first, then the newest."""
     terms = set(tokens(f"{title} {keyphrase}"))
     if not terms:
         return []
     p = m.site_posts
     rows = s.execute(select(p.c.title, p.c.url).where(p.c.site_id == site_id)
                      .order_by(p.c.published_at.desc().nulls_last()).limit(2000)).all()
+    words = [set(tokens(r.title)) for r in rows]
+    df: dict[str, int] = {}
+    for w in words:
+        for t in w & terms:
+            df[t] = df.get(t, 0) + 1
+    rare = {t for t, n in df.items() if len(rows) < 25 or n / len(rows) <= COMMON}
     scored = []
-    for r in rows:
-        shared = len(terms & set(tokens(r.title)))
-        if shared >= 2 or (shared == 1 and len(terms) <= 3):
-            scored.append((shared, r.title, r.url))
-    scored.sort(key=lambda x: -x[0])
-    return [{"title": t, "url": u} for _, t, u in scored[:limit]]
+    for i, (r, w) in enumerate(zip(rows, words, strict=True)):
+        shared = terms & w
+        if r.title.strip().lower() == title.strip().lower():
+            continue
+        if len(shared) >= 2 or shared & rare:
+            scored.append((-len(shared & rare), -len(shared), i, r.title, r.url))
+    scored.sort()
+    return [{"title": t, "url": u} for *_, t, u in scored[:limit]]
 
 
 def merge_links(*lists: list[dict], limit: int = INTERNAL_LINKS) -> list[dict]:

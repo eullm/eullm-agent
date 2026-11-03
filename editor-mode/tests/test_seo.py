@@ -164,3 +164,57 @@ def test_draft_page_and_publication_form(db, tenant, monkeypatch):
     if isinstance(config, str):
         config = json.loads(config)
     assert config["indexnow_key"] == "abcd1234efgh" and config["jsonld"] is True
+
+
+def test_a_published_article_becomes_further_reading_for_the_next(db, tenant, monkeypatch):
+    did, site_id = seo_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "WP_PASS"), "app-pass-123")
+    target = pub.add_target(db, tenant, site_id, "wordpress", "Sito", {"url": "https://blog.example", "user": "e"}, "WP_PASS")
+    drafted = pub.request(db, tenant, did, target, "draft", "r")
+    pub.decide(db, tenant, drafted, True, "francesco")
+    publisher = pub.Publisher(resolver=public_resolver)
+    with respx.mock() as router:
+        router.post("https://blog.example/wp-json/wp/v2/posts").mock(side_effect=[
+            httpx.Response(201, json={"id": 1, "link": "https://blog.example/?p=1"}),
+            httpx.Response(201, json={"id": 2, "link": "https://blog.example/fibra-bari-rete-completa/"})])
+        publisher.run(db, tenant, drafted)
+        with db.tenant(tenant) as s:  # a draft on the CMS is not a page of the site
+            assert seo.site_links(s, site_id, "Open Fiber completa la rete", "") == []
+        live = pub.request(db, tenant, did, target, "publish", "r")
+        pub.decide(db, tenant, live, True, "francesco")
+        publisher.run(db, tenant, live)
+    with db.tenant(tenant) as s:
+        links = seo.site_links(s, site_id, "Fibra a Bari, Open Fiber accelera", "")
+        assert {"title": "Fibra a Bari: la rete è completa", "url": "https://blog.example/fibra-bari-rete-completa/"} in links
+        assert seo.remember_published(s, tenant, site_id) == 0  # once
+
+
+def test_published_articles_missing_from_the_site_are_added_before_writing(db, tenant):
+    did, site_id = seo_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        t = s.execute(m.publish_targets.insert().values(
+            tenant_id=tenant, site_id=site_id, kind="github", name="Sito", config={}).returning(m.publish_targets.c.id)).scalar()
+        s.execute(m.publications.insert().values(
+            tenant_id=tenant, draft_id=did, target_id=t, mode="publish", payload={}, status="published",
+            requested_by="r", decided_by="f", published_at=datetime.now(UTC),
+            external_url="https://blog.example/articoli/fibra"))
+        assert seo.remember_published(s, tenant, site_id) == 1
+        assert seo.remember_published(s, tenant, site_id) == 0
+        url = s.execute(select(m.site_posts.c.url).where(m.site_posts.c.title == "Fibra a Bari: la rete è completa")).scalar()
+    assert url == "https://blog.example/articoli/fibra"
+
+
+def test_one_rare_word_is_enough_a_common_one_is_not(db, tenant):
+    from test_drafts import accepted_proposal
+    pid, _ = accepted_proposal(db, tenant)
+    with db.tenant(tenant) as s:
+        site_id = s.execute(select(m.proposals.c.site_id).where(m.proposals.c.id == pid)).scalar()
+        titles = [f"Intelligenza artificiale, notizia numero {i}" for i in range(30)] + ["Apple rinvia il visore"]
+        for i, title in enumerate(titles):
+            url = f"https://blog.example/{i}"
+            s.execute(m.site_posts.insert().values(tenant_id=tenant, site_id=site_id, url=url, url_hash=url_hash(url),
+                                                   title=title, minhash=minhash(title), published_at=datetime.now(UTC)))
+        links = seo.site_links(s, site_id, "Apple e l'intelligenza artificiale nel robot domestico", "")
+        assert links[0]["title"] == "Apple rinvia il visore"
+        assert seo.site_links(s, site_id, "Robot e intelligenza in casa", "") == []
