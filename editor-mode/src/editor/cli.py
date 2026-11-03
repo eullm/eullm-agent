@@ -310,6 +310,26 @@ def cmd_worker(a):
     queue.Worker(db, handlers(), concurrency=slots, hourly=hourly).run()
 
 
+def cmd_redraft(a):
+    """Write again, as a new version that is not published, the articles a
+    site published since a date: to compare a change of the writing with
+    what went out (the drafts page shows both versions)."""
+    from . import queue
+
+    db = _db()
+    since = datetime.fromisoformat(a.since).replace(tzinfo=UTC) if "T" not in a.since else datetime.fromisoformat(a.since)
+    with db.tenant(a.tenant) as s:
+        rows = s.execute(text(
+            "SELECT DISTINCT d.proposal_id, max(d.title) AS title FROM editor.drafts d "
+            "JOIN editor.sites x ON x.id = d.site_id WHERE x.domain = :dom AND d.status = 'approved' "
+            "AND d.translation_of IS NULL AND d.created_at >= :since GROUP BY d.proposal_id "
+            "ORDER BY d.proposal_id LIMIT :n"), {"dom": a.domain, "since": since, "n": a.limit}).all()
+    for r in rows:
+        queue.enqueue(db, a.tenant, "draft", f"proposal {r.proposal_id}", {"proposal_id": r.proposal_id, "compare": True})
+        print(f"proposal {r.proposal_id}: {r.title}")
+    print(f"{len(rows)} articles queued to be written again; the new versions wait in Bozze, nothing is published")
+
+
 def cmd_tenant_export(a):
     from . import tenant_data
     data = tenant_data.export_json(_db(), a.tenant)
@@ -395,6 +415,9 @@ def main(argv=None):
     sp = add("worker", cmd_worker, "run queued work and every tenant's hourly tick")
     sp.add_argument("--concurrency", type=int, default=int(os.environ.get("EDITOR_WORKER_CONCURRENCY", "4")),
                     help="jobs run at the same time, each for a different tenant (PostgreSQL only)")
+    sp = add("redraft", cmd_redraft, "write again, unpublished, the articles a site published since a date (to compare)")
+    sp.add_argument("domain"); sp.add_argument("--tenant", required=True)
+    sp.add_argument("--since", required=True, help="date, e.g. 2026-11-02"); sp.add_argument("--limit", type=int, default=14)
     sp = add("tenant-export", cmd_tenant_export, "every row of a tenant as JSON, credentials left out")
     sp.add_argument("tenant"); sp.add_argument("--out", help="file to create (default: print)")
     sp = add("tenant-delete", cmd_tenant_delete, "delete a tenant and all its data, for good (owner connection)")

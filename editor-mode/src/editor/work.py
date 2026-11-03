@@ -77,7 +77,7 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         with db.tenant(tenant) as s:
             d = s.execute(select(m.drafts.c.title, m.drafts.c.status, m.drafts.c.site_id)
                           .where(m.drafts.c.id == did)).first()
-        if imager is not None:  # the cover image follows, as a job of its own
+        if imager is not None and not args.get("compare"):  # the cover follows, as a job of its own
             enqueue(db, tenant, "image", f"draft {did}", {"draft_id": did, "site_id": d.site_id})
         return {"draft_id": did, "title": d.title, "status": d.status, "site_id": d.site_id}
 

@@ -15,6 +15,7 @@ problems listed next to the claims, never silently published.
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -37,14 +38,26 @@ from .text import item_terms, tokens
 log = logging.getLogger(__name__)
 
 MAX_CONTENT = 20_000
-RELATED = 12  # more items on the same subject, for context
-RELATED_DAYS = 30
+RELATED = 8  # other outlets' reports of the same event
+# An article tells one event. Another item is about the same event when it
+# shares at least half of the content words of the main news title (and at
+# least three of them), and came at most EVENT_DAYS before it: two stories
+# of the same sector or period share one or two words ("Pil Usa nel terzo
+# trimestre" and "Aramco nel terzo trimestre"), not most of a title.
+EVENT_SHARE = 0.5
+EVENT_MIN = 3
+EVENT_DAYS = 3
+# Context: a few earlier items on the same subject (two shared words, the
+# last 30 days), given apart from the event. The model uses one only for an
+# explicit purpose (a precedent, a comparison, the rule that applies) and
+# never as a second story; they do not count as sources of the event.
+CONTEXT = 4
+CONTEXT_DAYS = 30
 TARGET_WORDS = 1000  # when the site's own length is unknown
-# An article is never shorter than this, whatever the site's pages are
-# (their median counts short pages too): below it a piece reads as a note
-# and gives search engines and AI answers little to take.
-MIN_WORDS, MAX_WORDS = 900, 2000
-EXPAND_BELOW = 0.75  # under this share of the target, the model is asked once to expand
+# The longest an article may be: it is as long as its sources allow, never
+# padded to reach a length (an external audit found padded articles
+# repeating themselves and stretching thin sources).
+MIN_WORDS, MAX_WORDS = 600, 2000
 
 
 def target_words(profile: dict) -> int:
@@ -238,26 +251,44 @@ def discreet_sources(md: str) -> str:
 
 
 SYSTEM = (
-    "You write original articles for a website. You receive the editorial profile, the accepted proposal and "
+    "You write original news articles for a website. You receive the editorial profile, the accepted proposal and "
     "the source items, each with an id and its text. Write the article as claims: every claim is one to three "
     "sentences and lists the ids of the items that support it. Use only facts found in the cited items; do not "
     "add facts, numbers or quotes from elsewhere, and do not copy sentences from the sources: write in your own "
-    "words, in the site's language and tone. Write a full article, not a summary of one source: what happened, "
-    "the context and background the other items give (earlier releases, competitors, the market, regulation), "
-    "why it matters to the site's audience and what they can do with it. Use every item that is relevant and "
-    "skip those that are not. Reach the target length when the items allow it: give each section several claims "
-    "with the details the items carry (who, what, numbers, dates, how it works, what changes for the reader); "
-    "never pad with vague sentences. Write like a journalist of the site, not like an assistant: vary the length "
+    "words, in the site's language and tone. "
+    "The article tells ONE event: the one in the items marked MAIN. Unmarked items are other outlets' reports "
+    "of that same event: use them to confirm it and to add its details. Items marked ORIGINAL are the original "
+    "documents the news reports on (official data, a decision, a law, a paper): the central numbers, records "
+    "and decisions follow them, and when a news item says something different, write what the document says "
+    "and cite the document. Items marked CONTEXT are earlier news: use one only when it helps the reader "
+    "understand the event, as a precedent, a comparison or the rule that applies, say plainly which of these it "
+    "is, keep it to a sentence or two, and never tell it as a second story; leave out the others. Never join "
+    "separate stories into one article. "
+    "Write only what the items say. Length follows the material: when the items give only a title, a summary or "
+    "an abstract, or come from one outlet, write a short news piece of 200 to 400 words, attributed to its "
+    "source, and say what is not known yet; write longer only when the items carry the details (who, what, "
+    "numbers, dates, how it works, what changes for the reader). A short piece must still give what its title "
+    "promises (the figure, the decision, what the study found): if the items do not give it, the title does not "
+    "promise it. Never pad: no background the items do not give, no repeating a point in other words. "
+    "Be exact: give a number with what it is compared to, as the items do (the rate and the period, not "
+    "'strong growth'); write a superlative or a first (record, fastest, biggest, first, only) or a cause "
+    "(because, thanks to, after) only when an item says it, and say who says it; an allegation, a forecast or a "
+    "study's result stays one, attributed to its source. The date of the event is the one the items give for "
+    "it, not the day an outlet republished it. The title, the subtitle and the first sentences are not more "
+    "certain, larger or newer than the body and the items. "
+    "Write like a journalist of the site, not like an assistant: vary the length "
     "of sentences, prefer concrete nouns and verbs to adjectives, no stock openings or closings (\"in today's "
     "world\", \"it is worth noting\", \"in conclusion\", \"game changer\", their equivalents in any language), no "
-    "no em dashes, en dashes or double hyphens as pauses, no ellipses, no triplets of adjectives, no rhetorical "
+    "em dashes, en dashes or double hyphens as pauses, no ellipses, no triplets of adjectives, no rhetorical "
     "questions in the text, no summary of what was just said, no colon-split titles: it must read as written by a "
     "person. "
     "Write it so search engines and AI answer engines pick it up: the first section has no heading and answers "
-    "the reader's main question in two or three sentences; the other headings are the questions people search "
-    "for, in plain words; then two to four frequently asked questions, each answered with sourced claims like "
-    "the rest. Choose the key phrase readers would type to find this article and use it naturally in the title "
-    "and the first sentence, never stuffed. Reply with JSON only: "
+    "the reader's main question in two or three sentences; in a longer article the other headings are the "
+    "questions people search for, in plain words. Add frequently asked questions (one to three, each answered "
+    "with sourced claims like the rest) only when readers would ask something the items answer and the article "
+    "does not already say; otherwise leave the list empty: never repeat the article as questions. Choose the key "
+    "phrase readers would type to find this article and use it naturally in the title and the first sentence, "
+    "never stuffed. Reply with JSON only: "
     '{"title": "...", "subtitle": "...", "sections": [{"heading": "<or null>", "claims": '
     '[{"text": "...", "sources": [<ids>]}]}], '
     '"faq": [{"question": "...", "claims": [{"text": "...", "sources": [<ids>]}]}], '
@@ -266,21 +297,71 @@ SYSTEM = (
 )
 
 
-def fetch_contents(db, tenant_id: str, item_ids: list[int], client: httpx.Client | None) -> None:
-    """Read the full text of cited items once, through the Core."""
+_ARXIV = re.compile(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/([\w.\-/]+?)(?:\.pdf)?/?$")
+
+
+def reading_url(url: str) -> str:
+    """Where the full text of an item is: an arXiv abstract page links the
+    paper, which arXiv also publishes as HTML; an article written from the
+    abstract alone stretched it (external audit, 2026-11-03)."""
+    found = _ARXIV.match(url or "")
+    return f"https://arxiv.org/html/{found.group(1)}" if found else url
+
+
+# Hosts of original documents: official statistics, laws and decisions,
+# authorities, papers. A news story that links one is checked against it:
+# the outlet may have the figure or the record wrong (the US GDP article of
+# 2026-11-03 repeated an outlet's "fastest growth in five years").
+OFFICIAL = (".gov", ".gov.uk", ".gov.it", ".gouv.fr", ".gob.es", ".bund.de", ".admin.ch", ".gv.at", "europa.eu",
+            ".int", "arxiv.org", "doi.org", "gazzettaufficiale.it", "garanteprivacy.it", "istat.it", "bancaditalia.it",
+            "consob.it", "agcm.it", "agcom.it", "governo.it", "camera.it", "senato.it", "normattiva.it",
+            "bundesbank.de", "destatis.de", "banque-france.fr", "insee.fr", "bde.es", "ine.es", "bankofengland.co.uk",
+            "ons.gov.uk", "imf.org", "worldbank.org", "oecd.org", "un.org", "who.int")
+DOCUMENTS = 2  # original documents read for each main news item
+DOCUMENTS_SOURCE = "https://documents.redazia.invalid/"  # the newsroom's source row for them, never collected
+
+
+def _host(url: str) -> str:
+    try:
+        return (httpx.URL(url).host or "").lower().removeprefix("www.")
+    except (httpx.InvalidURL, TypeError):
+        return ""
+
+
+def document_links(page, url: str) -> list[str]:
+    """Links of an article to original documents on official hosts, in the
+    text and not in menus; at most DOCUMENTS."""
+    own = _host(url)
+    out = []
+    for link in page.links:
+        host = _host(link.url)
+        if link.in_nav or not host or host == own or not link.url.startswith("https://"):
+            continue
+        if any(host == x.lstrip(".") or host.endswith(x if x.startswith(".") else "." + x) for x in OFFICIAL):
+            if link.url not in out:
+                out.append(link.url)
+    return out[:DOCUMENTS]
+
+
+def fetch_contents(db, tenant_id: str, item_ids: list[int], client: httpx.Client | None) -> dict[int, list[str]]:
+    """Read the full text of cited items once, through the Core. Returns,
+    for each item read, the original documents its text links."""
+    found: dict[int, list[str]] = {}
     if client is None:
-        return
+        return found
     with db.tenant(tenant_id) as s:
         todo = s.execute(select(m.source_items.c.id, m.source_items.c.url).where(
             m.source_items.c.id.in_(item_ids), m.source_items.c.content_fetched_at.is_(None))).all()
     robots = RobotsCache(client)
     for row in todo:
-        content = None
+        content, url = None, reading_url(row.url)
         try:
-            if robots.allowed(row.url):
-                r = client.get(row.url, headers={"Accept": "text/html"})
+            if robots.allowed(url):
+                r = client.get(url, headers={"Accept": "text/html"})
                 if r.status_code == 200 and "html" in r.headers.get("content-type", "html"):
-                    content = parse_html(r.text, row.url).text[:MAX_CONTENT] or None
+                    page = parse_html(r.text, url)
+                    content = page.text[:MAX_CONTENT] or None
+                    found[row.id] = document_links(page, url)
             else:
                 log.info("robots.txt forbids reading %s: drafting from its summary", row.url)
         except httpx.HTTPError as e:
@@ -291,6 +372,62 @@ def fetch_contents(db, tenant_id: str, item_ids: list[int], client: httpx.Client
             with db.tenant(tenant) as s:
                 s.execute(update(m.source_items).where(m.source_items.c.id == row.id).values(
                     content=content, content_fetched_at=datetime.now(UTC)))
+    return found
+
+
+def _documents_source(s, tenant_id: str) -> int:
+    """The newsroom's source row for original documents: rejected, so it is
+    never collected nor followed, and with no site, so no list shows it."""
+    src = m.sources.c
+    found = s.execute(select(src.id).where(src.url == DOCUMENTS_SOURCE, repo.own())).scalar()
+    if found is not None:
+        return found
+    return s.execute(insert(m.sources).values(
+        tenant_id=tenant_id, kind="rss", name="Documenti originali", url=DOCUMENTS_SOURCE, config={}, weight=1.0,
+        site_id=None, status="rejected", origin="manual", evidence={}, shared=False,
+    ).returning(m.sources.c.id)).scalar_one()
+
+
+def read_documents(db, tenant_id: str, links: dict[int, list[str]], client: httpx.Client | None) -> list[int]:
+    """Read the original documents the main news link and store them as
+    items the article can cite: marked as copies of the news that linked
+    them, so they never become news of their own."""
+    from .normalize import canonical_url, content_hash, sha256_hex
+
+    out: list[int] = []
+    if client is None:
+        return out
+    robots = RobotsCache(client)
+    for item_id, urls in links.items():
+        for url in urls:
+            with db.tenant(tenant_id) as s:
+                known = s.execute(select(m.source_items.c.id).where(
+                    m.source_items.c.url_hash == sha256_hex(canonical_url(url)))).scalar()
+            if known is not None:
+                out.append(known)
+                continue
+            try:
+                if not robots.allowed(url):
+                    continue
+                r = client.get(url, headers={"Accept": "text/html"})
+            except httpx.HTTPError as e:
+                log.info("cannot read the document %s: %s", url, e)
+                continue
+            if r.status_code != 200 or "html" not in r.headers.get("content-type", "html"):
+                continue
+            page = parse_html(r.text, url)
+            text = page.text[:MAX_CONTENT]
+            if len(text.split()) < 80:  # a landing page, not a document
+                continue
+            title = " ".join((page.title or page.h1 or url).split())[:300]
+            with db.tenant(tenant_id) as s:
+                out.append(s.execute(insert(m.source_items).values(
+                    tenant_id=tenant_id, source_id=_documents_source(s, tenant_id), url=url,
+                    canonical_url=canonical_url(url), url_hash=sha256_hex(canonical_url(url)),
+                    content_hash=content_hash(title, text[:500]), title=title, summary="", metrics={},
+                    minhash=[], duplicate_of=item_id, content=text, content_fetched_at=datetime.now(UTC),
+                ).returning(m.source_items.c.id)).scalar_one())
+    return list(dict.fromkeys(out))
 
 
 def _sources(s, ids: list[int]) -> dict[int, Source]:
@@ -298,12 +435,15 @@ def _sources(s, ids: list[int]) -> dict[int, Source]:
         select(m.source_items, m.sources.c.name.label("source_name"))
         .join(m.sources, m.sources.c.id == m.source_items.c.source_id)
         .where(m.source_items.c.id.in_(ids))).all()
-    return {r.id: Source(r.id, r.title, r.url, r.source_name, r.summary or "", r.content or "",
+    return {r.id: Source(r.id, r.title, r.url, _host(r.url) if r.source_name == "Documenti originali" else r.source_name,
+                         r.summary or "", r.content or "",
                          r.published_at.date().isoformat() if r.published_at else None) for r in rows}
 
 
-def _prompt(profile: dict, proposal, sources: dict[int, Source], main: set[int] | None = None,
+def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int, str] | None = None,
             posts: list[dict] | None = None) -> str:
+    """`roles`: MAIN, ORIGINAL or CONTEXT for each item that has one; the
+    others are other outlets' reports of the same event."""
     from .autopilot import brief_lines
 
     style = profile.get("style", {})
@@ -311,18 +451,20 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], main: set[int] 
     lines = [
         f"Site: {profile.get('name')} ({profile.get('domain')}), language: {profile.get('language')}",
         f"Audience: {(profile.get('audience') or {}).get('value') or 'not determined'}",
-        f"Tone: {style.get('tone') or 'not determined'}; target length: about {target} words",
+        f"Tone: {style.get('tone') or 'not determined'}; length: as the items allow, at most about {target} words",
         f"Proposal: {proposal.title}",
         f"Angle: {proposal.angle}",
         f"Format: {proposal.format}",
         *brief_lines(profile),
         *_post_lines(posts or []),
-        "Items (those marked MAIN are the news the article is about; the others give context):",
+        ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
+         "earlier news for context only; unmarked: other outlets' reports of the same event):"),
     ]
+    roles = roles or {}
     for src in sources.values():
-        mark = " MAIN" if main and src.id in main else ""
-        lines.append(f"[{src.id}]{mark} {src.title} ({src.name}, {src.published or 'undated'})\n"
-                     f"{(src.summary + ' ' + src.content)[:6000 if mark else 2500]}")
+        role = roles.get(src.id, "")
+        lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'})\n"
+                     f"{(src.summary + ' ' + src.content)[:6000 if role in ('MAIN', 'ORIGINAL') else 2500]}")
     return "\n".join(lines)
 
 
@@ -341,19 +483,16 @@ def _post_lines(posts: list[dict]) -> list[str]:
             + "; ".join(f"«{p['title']}»" for p in posts)]
 
 
-def related_items(s, ids: list[int], limit: int = RELATED, now: datetime | None = None) -> list[int]:
-    """Other recent items on the same subject (sharing at least two words
-    with the news the article is about), so the article has context and
-    not only one source to retell."""
+def context_items(s, main: list[int], skip: list[int], limit: int = CONTEXT) -> list[int]:
+    """Earlier news on the subject of the main news, for context."""
     si = m.source_items
-    base = s.execute(select(si.c.title, si.c.summary).where(si.c.id.in_(ids))).all()
+    base = s.execute(select(si.c.title, si.c.summary).where(si.c.id.in_(main))).all()
     terms = set().union(*(item_terms(r.title, r.summary or "") for r in base)) if base else set()
     if not terms:
         return []
-    since = (now or datetime.now(UTC)) - timedelta(days=RELATED_DAYS)
     rows = s.execute(select(si.c.id, si.c.title, si.c.summary).where(
-        si.c.duplicate_of.is_(None), si.c.fetched_at > since, si.c.id.not_in(ids))
-        .order_by(si.c.id.desc()).limit(3000)).all()
+        si.c.duplicate_of.is_(None), si.c.fetched_at > datetime.now(UTC) - timedelta(days=CONTEXT_DAYS),
+        si.c.id.not_in(main + skip)).order_by(si.c.id.desc()).limit(3000)).all()
     scored = []
     for r in rows:
         shared = len(terms & (set(tokens(r.title)) | set(tokens(r.summary or ""))))
@@ -362,38 +501,40 @@ def related_items(s, ids: list[int], limit: int = RELATED, now: datetime | None 
     return [i for _, i in sorted(scored, reverse=True)[:limit]]
 
 
-def _words(article) -> int:
-    return sum(len(c.text.split()) for c in article.claims)
+def _same_event(anchor: set[str], terms: set[str]) -> bool:
+    return len(anchor & terms) >= min(len(anchor), max(EVENT_MIN, math.ceil(len(anchor) * EVENT_SHARE)))
 
 
-def expand(db, tenant_id: str, prop, core: CoreClient, messages: list, last, article, sources: dict, target: int):
-    """A draft well under its length is sent back once, with the items it
-    left out: the longer version is kept only if it passes every check."""
-    words = _words(article)
-    if article.flags or words >= target * EXPAND_BELOW:
-        return article
-    from .core_client import extract_json
-
-    used = {i for c in article.claims for i in c.sources}
-    unused = [i for i in sources if i not in used]
-    step(N_("Il modello arricchisce la bozza: {words} parole su {target}"), words=words, target=target)
-    ask = (f"The article has {words} words; the target is about {target}. Expand it to the target with facts from the "
-           f"items: background and context, earlier events, competitors and market, numbers and dates, how it works, "
-           f"what it means for the site's audience and what they can do. "
-           + (f"Items you have not used yet: {', '.join(map(str, unused))}. " if unused else "")
-           + "Keep every rule: only facts from the cited items, every claim with its sources, your own words. "
-           "Reply with the whole JSON again.")
-    with usage.tagged(db, tenant_id, "draft", site_id=prop.site_id, ref=f"proposal:{prop.id}"):
-        res = core.chat(messages + [{"role": "assistant", "content": last.content}, {"role": "user", "content": ask}])
-    try:
-        longer = check(parse_article(extract_json(res.content), set(sources)), sources)
-    except ValueError as e:
-        log.info("expanded draft refused: %s", e)
-        return article
-    if longer.flags or _words(longer) <= words:
-        log.info("expanded draft not kept: %s flags, %d words", len(longer.flags), _words(longer))
-        return article
-    return longer
+def event_items(s, cited: list[int], title: str = "", limit: int = RELATED) -> tuple[list[int], list[int]]:
+    """The news an article is about and other outlets' reports of the same
+    event. The main news is the cited item closest to the proposal's title;
+    the other cited items stay only if they are about the same event, so a
+    proposal built on a sector (two companies, two attacks, a figure and an
+    unrelated deal) is written about one story. Items from the same sector
+    that are not the same event are left out: they made articles that joined
+    separate news (found by an external audit, 2026-11-03)."""
+    si = m.source_items
+    rows = s.execute(select(si.c.id, si.c.title, si.c.summary, si.c.fetched_at).where(si.c.id.in_(cited))).all()
+    if not rows:
+        return [], []
+    order = {i: n for n, i in enumerate(cited)}
+    want = set(tokens(title))
+    lead = max(rows, key=lambda r: (len(want & item_terms(r.title, r.summary or "")), -order.get(r.id, 0)))
+    anchor = set(tokens(lead.title))
+    if len(anchor) < 3:  # a title too short to tell an event: its summary helps
+        anchor = item_terms(lead.title, lead.summary or "")
+    main = [r.id for r in sorted(rows, key=lambda r: order.get(r.id, 0))
+            if r.id == lead.id or _same_event(anchor, item_terms(r.title, r.summary or ""))]
+    since = min((r.fetched_at for r in rows if r.id in main and r.fetched_at), default=datetime.now(UTC))
+    rows = s.execute(select(si.c.id, si.c.title, si.c.summary).where(
+        si.c.duplicate_of.is_(None), si.c.fetched_at > since - timedelta(days=EVENT_DAYS), si.c.id.not_in(main))
+        .order_by(si.c.id.desc()).limit(3000)).all()
+    scored = []
+    for r in rows:
+        terms = item_terms(r.title, r.summary or "")
+        if _same_event(anchor, terms):
+            scored.append((len(anchor & terms), r.id))
+    return main, [i for _, i in sorted(scored, reverse=True)[:limit]]
 
 
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
@@ -408,26 +549,30 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
-        more = list(s.execute(select(m.topic_items.c.item_id).where(m.topic_items.c.topic_id == prop.topic_id)
-                              .limit(12)).scalars())
-        ids = list(dict.fromkeys(cited + more))
-        ids += related_items(s, ids)
+        cited, same = event_items(s, cited, prop.title)
+        context = context_items(s, cited, same)
+        ids = cited + same + context
         profile = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.id == prop.profile_id)).scalar()
         from .opportunity import related_posts
 
         news = list(s.execute(select(m.source_items.c.title).where(m.source_items.c.id.in_(cited))).scalars())
         posts = related_posts(s, prop.site_id, [prop.title, *news])
-    step(N_("Lettura degli articoli di {n} notizie collegate"), n=len(ids))
-    fetch_contents(db, tenant_id, ids, client)
+    step(N_("Lettura degli articoli di {n} notizie sullo stesso fatto"), n=len(ids))
+    links = fetch_contents(db, tenant_id, ids, client)
+    documents = read_documents(db, tenant_id, {i: u for i, u in links.items() if i in cited}, client)
+    if documents:
+        step(N_("Lettura di {n} documenti originali citati dalla notizia"), n=len(documents))
+    ids = list(dict.fromkeys(ids + documents))
     with db.tenant(tenant_id) as s:
         sources = _sources(s, ids)
 
     allowed = set(sources)
-    prompt = _prompt(profile, prop, sources, set(cited), posts)
+    roles = {**{i: "CONTEXT" for i in context}, **{i: "MAIN" for i in cited}, **{i: "ORIGINAL" for i in documents}}
+    prompt = _prompt(profile, prop, sources, roles, posts)
     if notes:  # a version written again: what was wrong with the last one
         prompt += f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}"
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
-    article, calls = None, []
+    article = None
     from .core_client import extract_json
 
     for attempt in range(3):
@@ -435,7 +580,6 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
              else N_("Il modello corregge la bozza: frasi senza fonte o numeri che le fonti non riportano"))
         with usage.tagged(db, tenant_id, purpose, site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
             res = core.chat(messages)
-        calls.append(res)
         try:
             article = check(parse_article(extract_json(res.content), allowed), sources)
         except ValueError as e:
@@ -448,7 +592,6 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
                      {"role": "user", "content": f"Fix these problems and reply with the whole JSON again: {problem}"}]
     if article is None:
         raise CoreError("the model did not produce a valid article")
-    article = expand(db, tenant_id, prop, core, messages, calls[-1], article, sources, target_words(profile))
 
     sd = seo.parse(article.seo, article.title)
     sd.faq = article.faq
@@ -457,10 +600,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     body = render(article, sources, profile.get("language"), sd.links)
     first = next((c.section for c in article.claims), None)
     lead = " ".join(c.text for c in article.claims if c.section == first)
-    style = profile.get("style", {})
-    target = target_words(profile)
     sd.checks = seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
-                           sum(len(c.text.split()) for c in article.claims), target,
                            len({i for c in article.claims for i in c.sources}))
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
@@ -524,9 +664,6 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
             raise LookupError(draft_id)
         stored = stored_claims(s, draft_id)
         sources = _sources(s, list({i for c in stored for i in c["sources"]}))
-        profile = s.execute(select(m.editorial_profiles.c.body).join(
-            m.proposals, m.proposals.c.profile_id == m.editorial_profiles.c.id)
-            .where(m.proposals.c.id == d.proposal_id)).scalar() or {}
     claims = []
     for c in stored:
         text = " ".join((texts.get(c["ordinal"], c["text"]) or "").split())
@@ -539,9 +676,8 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
     article = check(Article(title, " ".join((subtitle or "").split())[:300], claims, sd.faq, {}), sources)
     first = next((c.section for c in claims), None)
     lead = " ".join(c.text for c in claims if c.section == first)
-    target = target_words(profile)
     sd.checks = seo.checks(sd, title, lead, list(dict.fromkeys(c.section for c in claims)),
-                           sum(len(c.text.split()) for c in claims), target, len({i for c in claims for i in c.sources}))
+                           len({i for c in claims for i in c.sources}))
     status = "needs_review" if article.flags else "draft"
     with db.tenant(tenant_id) as s:
         for c, new in zip(stored, claims):

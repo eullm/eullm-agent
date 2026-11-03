@@ -39,9 +39,9 @@ def test_checks_say_what_is_missing():
                  description="La rete in fibra di Bari è completa: chi è coperto, quanto va veloce e cosa fare per attivarla da subito.",
                  faq=["Chi è coperto?", "Quanto costa?"], links=[{"title": "x", "url": "https://blog.example/x"}])
     lead = "A Bari la rete in fibra è completa: raggiunge 120.000 case con velocità fino a 10 Gbit/s, dopo diciotto mesi di lavori."
-    ok = {c["key"]: c["ok"] for c in seo.checks(sd, sd.title, lead, [None, "I lavori", "Chi è coperto?"], 600, 700, 3)}
+    ok = {c["key"]: c["ok"] for c in seo.checks(sd, sd.title, lead, [None, "I lavori", "Chi è coperto?"], 3)}
     assert all(ok.values()), ok
-    bad = {c["key"]: c["ok"] for c in seo.checks(seo.Seo(title="Breve"), "Breve", "Poche parole.", [None], 100, 700, 1)}
+    bad = {c["key"]: c["ok"] for c in seo.checks(seo.Seo(title="Breve"), "Breve", "Poche parole.", [None], 1)}
     assert not any(bad.values()), bad
 
 
@@ -96,7 +96,7 @@ def test_draft_carries_faq_links_and_search_fields(db, tenant):
     assert "## Quanto sono durati i lavori?" in d.body_md and "Domanda senza risposta" not in d.body_md
     assert "## Leggi anche" in d.body_md and d.body_md.index("## Leggi anche") < d.body_md.index("## Fonti")
     ok = {c["key"]: c["ok"] for c in d.seo["checks"]}
-    assert ok["keyphrase_title"] and ok["keyphrase_lead"] and ok["faq"] and ok["internal_links"]
+    assert ok["keyphrase_title"] and ok["keyphrase_lead"] and ok["internal_links"]
 
 
 def test_wordpress_gets_slug_description_structured_data_and_indexnow(db, tenant, monkeypatch):

@@ -128,7 +128,10 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
     with respx.mock() as router:
         check = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True, "problems": [], "section": "rete"})))
         out = ap.finish(db, tenant, did, core(), sent.append, lambda language, d: translations.append(language))
-        assert "editor-in-chief" in json.loads(check.calls[0].request.content)["messages"][0]["content"]
+        asked = json.loads(check.calls[0].request.content)["messages"]
+        assert "editor-in-chief" in asked[0]["content"] and "superlative" in asked[0]["content"]
+        # It checks the article against what the sources say, not against itself.
+        assert "Cited sources" in asked[-1]["content"]
     assert out["target"] == "sito" and translations == ["en"] and sent == [out["publication_id"]]
     with db.tenant(tenant) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()

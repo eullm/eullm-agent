@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.28.20
+
+### Changed
+
+- Articles of the automatic newsroom, after an external audit of 14
+  articles on aitoday.it (2026-11-03):
+  - **one event per article.** The article is written from the cited news
+    closest to the proposal's title and from other outlets' reports of the
+    same event (at least half of its title's words, three at least). News
+    of the same sector that is about something else is no longer given to
+    the model nor counted as a second source: it made articles join
+    separate stories (Trump with Amazon and Oracle, the US GDP with
+    Aramco). Up to 4 earlier news on the subject come apart, marked as
+    context: the model uses one only as a precedent, a comparison or the
+    rule that applies, says which, and never as a second story; they do
+    not count as sources.
+  - **the original document.** When the main news links an official
+    document (statistics offices, central banks, governments, the EU,
+    authorities, laws, papers), it is read and given to the model as
+    citable, and the central numbers, records and decisions follow it,
+    not the outlet: the GDP article repeated the outlet's mistake.
+  - **as long as the sources allow.** No minimum of 900 words and no
+    second call asking to "expand to the target": with one outlet, or only
+    a title or an abstract, the model writes a short news piece and says
+    what is not known yet; even short, it must give what its title
+    promises (the figure, the decision, what the study found). Questions and answers only when they add
+    something, no longer two to four in every article. One model call per
+    draft instead of two in most cases.
+  - **exact.** A number with what it is compared to, superlatives,
+    "firsts" and causes only when a source says them and attributed, the
+    date of the event and not of the republication, title and opening no
+    more certain than the body.
+  - **the AI editor-in-chief reads the sources.** It gets what was read
+    of each cited source and refuses an article that joins separate
+    events, states a number, superlative or cause the sources do not
+    state, has a title or opening more certain than the body, misses the
+    essential information its title promises, or gives a central figure
+    different from the original document.
+  - **arXiv in full.** An arXiv abstract page is read as the paper's HTML
+    version.
+- The checklist of a draft no longer asks for two questions and answers
+  and for a length close to the site's articles.
+
+### Added
+
+- `editor redraft <domain> --tenant <t> --since <date>`: writes again,
+  with the current writing and without publishing, the articles a site
+  published since a date (14 at most by default, no new cover), so the
+  new version can be compared with the one that went out in Bozze.
+
 ## 0.28.19
 
 ### Added

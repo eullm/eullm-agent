@@ -50,6 +50,16 @@ RULES = [
     "describes violence, suicide or self-harm in graphic detail",
     "presents a rumour or a single unconfirmed claim as an established fact",
     "has a title that promises something the article does not say",
+    "joins separate news events into one article (two companies, two incidents, a figure and an unrelated "
+    "deal) instead of telling one event",
+    "states a number, a record or superlative (fastest, biggest, first, only) or a cause that the cited sources "
+    "do not state, or a number without what it is compared to when the sources give it",
+    "has a title, subtitle or opening more certain, larger or newer than the body and the sources (a forecast, "
+    "an allegation or a study's result told as a fact, an old event told as new)",
+    "does not give the essential information its title promises (the figure, the decision, what the study "
+    "found), or tells context (a precedent, a comparison) as a second story",
+    "gives a central number or a record that differs from an original document among the sources (an "
+    "official statistic, a decision, a paper): the document wins over the outlets reporting it",
 ]
 
 CHECK_SYSTEM = (
@@ -57,7 +67,9 @@ CHECK_SYSTEM = (
     "whether the article below can be published as it is. Refuse it if it breaks any of these rules: "
     + "; ".join(f"({n}) {r}" for n, r in enumerate(RULES, 1))
     + ". Refuse it also if it goes against the newsroom's directives or is about a topic it must avoid. Do not "
-    "refuse for style, length or a dull title. Reply with JSON only: "
+    "refuse for style, length or a dull title. Check every number, superlative and cause against the source "
+    "excerpts given after the article; a source given only by its title cannot support details. Reply with JSON "
+    "only: "
     '{"publish": true|false, "problems": ["<each rule broken, one sentence each, in English>"], '
     '"section": "<the one of the site\'s sections the article belongs to, written exactly as listed, or null>"}'
 )
@@ -196,26 +208,26 @@ TRIES_PER_ARTICLE = 2
 
 
 def source_count(s, proposal_id: int, need: int = 0) -> int:
-    """Distinct sources behind a proposal: the news the article is written
-    from (drafts.write_draft), that is its cited news, the news of its topic
-    and the other recent news on the same subject from any source. A story
-    picked from one feed but told by others counts all of them. With
-    `need`, the wider search runs only when the topic alone is short of it."""
-    from .drafts import related_items
+    """Distinct sources telling the event a proposal is about: the news the
+    article is written from (drafts.event_items), that is its main news
+    and the other outlets' reports of the same event. Items of the same
+    sector that are about something else do not count: counted, they made
+    articles join separate stories to reach two sources. With `need`, the
+    wider search runs only when the main news alone is short of it."""
+    from .drafts import event_items
 
-    pc, si, ti = m.proposal_citations.c, m.source_items.c, m.topic_items.c
-    topic = s.execute(select(m.proposals.c.topic_id).where(m.proposals.c.id == proposal_id)).scalar()
+    pc, si = m.proposal_citations.c, m.source_items.c
+    title = s.execute(select(m.proposals.c.title).where(m.proposals.c.id == proposal_id)).scalar() or ""
     cited = list(s.execute(select(pc.item_id).where(pc.proposal_id == proposal_id)).scalars())
-    same = list(s.execute(select(ti.item_id).where(ti.topic_id == topic).limit(12)).scalars()) if topic else []
-    ids = list(dict.fromkeys(cited + same))
 
     def count(items: list[int]) -> int:
         return s.execute(select(func.count(func.distinct(si.source_id))).where(si.id.in_(items))).scalar() or 0 if items else 0
 
-    n = count(ids)
+    main, same = event_items(s, cited, title)
+    n = count(main)
     if need and n >= need:
         return n
-    return count(ids + related_items(s, ids))
+    return count(main + same)
 
 
 # Below the minimum opportunity, the best proposals still go out down to
@@ -342,10 +354,31 @@ def _check_validator(v) -> dict:
     return {"publish": v["publish"], "problems": problems, "section": str(v.get("section") or "").strip()[:80]}
 
 
+EXCERPT = 2500  # characters of each cited source the editor-in-chief reads
+
+
+def _excerpts(db, tenant_id: str, draft_id: int) -> list[str]:
+    """What the cited sources say, in the order of their notes, so the
+    editor-in-chief checks the article against them and not against itself."""
+    cs, c, si = m.draft_claim_sources.c, m.draft_claims.c, m.source_items.c
+    with db.tenant(tenant_id) as s:
+        rows = s.execute(select(si.id, si.title, si.summary, si.content, si.published_at, m.sources.c.url.label("feed"))
+                         .join(m.sources, m.sources.c.id == si.source_id)
+                         .where(si.id.in_(select(cs.item_id).join(m.draft_claims, c.id == cs.claim_id)
+                                          .where(c.draft_id == draft_id)))).all()
+    out = ["Cited sources (title, date and what was read of each):"]
+    for r in rows:
+        text = " ".join(f"{r.summary or ''} {r.content or ''}".split())[:EXCERPT]
+        date = r.published_at.date().isoformat() if r.published_at else "undated"
+        kind = "ORIGINAL DOCUMENT, " if r.feed == drafts.DOCUMENTS_SOURCE else ""
+        out.append(f"- {r.title} ({kind}{date}): {text or 'only the title was read'}")
+    return out if rows else []
+
+
 def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
-    prompt = "\n".join(lines + [f"Language: {d.language}", "Article:", d.body_md[:14000]])
+    prompt = "\n".join(lines + [f"Language: {d.language}", "Article:", d.body_md[:14000], *_excerpts(db, tenant_id, d.id)])
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
         verdict, _calls = core.chat_json(CHECK_SYSTEM, prompt, _check_validator)
     return verdict
