@@ -186,8 +186,8 @@
 </section>
 <section class="card pad" aria-labelledby="h-data">
   <h2 id="h-data">{{ _('I tuoi dati') }}</h2>
-  <p class="hint">{{ _('Tutti i dati della redazione in un file JSON: siti, profili, fonti, articoli raccolti, bozze, pubblicazioni, consumi. Credenziali e accessi sono esclusi.') }}</p>
-  <a class="btn" href="/ui/export">{{ _('Scarica i dati') }}</a>
+  <p class="hint">{{ _('Tutta la redazione in un file ZIP che si apre ovunque: gli articoli in Markdown e HTML con le copertine, i profili editoriali con le impostazioni della redazione automatica, le fonti, le destinazioni e lo storico delle pubblicazioni in CSV, più tutti i dati in JSON per un tecnico. Password, token e accessi restano sul server. Tienine una copia dove vuoi: è tua.') }}</p>
+  <div class="row" style="gap: 8px; flex-wrap: wrap;"><a class="btn pri" href="/ui/export">{{ _('Esporta la redazione (ZIP)') }}</a><a class="btn" href="/ui/export?format=json">{{ _('Solo i dati (JSON)') }}</a></div>
 </section>
 {% endif %}
 {% endblock %}

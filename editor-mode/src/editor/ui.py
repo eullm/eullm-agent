@@ -178,8 +178,11 @@ def score100(value) -> str:
     return "–" if value is None else str(round(value))
 
 
-def export_response(db, tenant_id: str) -> Response:
+def export_response(db, tenant_id: str, as_zip: bool = True) -> Response:
     day = datetime.now(UTC).date().isoformat()
+    if as_zip:
+        return Response(tenant_data.export_zip(db, tenant_id), media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="redazia-{tenant_id}-{day}.zip"'})
     return Response(tenant_data.export_json(db, tenant_id), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{tenant_id}-{day}.json"'})
 
@@ -1892,8 +1895,8 @@ def register(app, ctx) -> None:
         return done("/settings", t("Destinatario rimosso."))
 
     @app.get("/ui/export")
-    def ui_export(c: auth.Caller = Depends(ctx.need("owner"))):
-        return export_response(db, c.tenant_id)
+    def ui_export(format: str = "zip", c: auth.Caller = Depends(ctx.need("owner"))):
+        return export_response(db, c.tenant_id, as_zip=format != "json")
 
     @app.post("/ui/tokens", response_class=HTMLResponse)
     def ui_new_token(request: Request, name: str = Form(...), role: str = Form(...),

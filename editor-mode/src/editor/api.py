@@ -448,7 +448,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
     @app.get("/api/export")
     def get_export(c: auth.Caller = Depends(need("owner"))):
         """Every row of the tenant, credentials left out."""
-        return ui.export_response(db, c.tenant_id)
+        return ui.export_response(db, c.tenant_id, as_zip=False)
 
     @app.get("/api/usage")
     def get_usage(c: auth.Caller = Depends(need("owner"))):

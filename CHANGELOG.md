@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.19
+
+### Added
+
+- Impostazioni › I tuoi dati › "Esporta la redazione (ZIP)": the whole
+  newsroom in a file anyone can open. The approved and published articles
+  (and, apart, the other drafts) as Markdown with front matter and as an
+  HTML page, each with its cover; the approved editorial profile of each
+  site with the automatic newsroom's settings; sources, destinations and
+  publications in CSV; every row in `data.json` for a technician; a
+  README. Passwords, tokens and access stay on the server, as before. The
+  JSON alone is still there ("Solo i dati (JSON)", and `/api/export`).
+
 ## 0.28.18
 
 ### Changed

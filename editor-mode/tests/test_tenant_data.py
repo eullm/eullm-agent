@@ -110,8 +110,23 @@ def test_the_owner_downloads_the_data(db, tenant, monkeypatch):
     assert r.json()["tenant"] == tenant
     assert c.get("/api/export", headers={"Authorization": f"Bearer {editor}"}).status_code == 403
     c.post("/login", data={"token": owner})
-    assert "Scarica i dati" in c.get("/settings").text
-    assert c.get("/ui/export").json()["tenant"] == tenant
+    assert "Esporta la redazione (ZIP)" in c.get("/settings").text
+    assert c.get("/ui/export?format=json").json()["tenant"] == tenant
+    # The ZIP anyone can open: articles as files, CSV lists, the data for a technician.
+    import io
+    import zipfile
+
+    r = c.get("/ui/export")
+    assert r.headers["content-type"] == "application/zip" and "redazia-" in r.headers["content-disposition"]
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = z.namelist()
+    assert {"README.txt", "sources.csv", "destinations.csv", "publications.csv", "data.json"} <= set(names)
+    articles = [n for n in names if n.startswith(("articles/", "drafts/")) and n.endswith(".md")]
+    assert articles and all(n[:-3] + ".html" in names for n in articles)
+    assert z.read(articles[0]).decode().startswith("---\ntitle: ")
+    data = json.loads(z.read("data.json"))
+    assert data["tenant"] == tenant and all("content" not in i for i in data["tables"]["draft_images"])
+    assert all("token_sha256" not in x for x in data["tables"]["access_tokens"])
 
 
 def test_the_cli_asks_for_the_tenant_twice(db, tenant, monkeypatch):
