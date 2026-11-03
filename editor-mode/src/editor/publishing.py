@@ -262,7 +262,14 @@ def search_fields(s, d) -> dict:
     section = sd.get("section")
     if not section and d.translation_of:  # a translation is in its original's section
         section = (s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == d.translation_of)).scalar() or {}).get("section")
+    original = None
+    if d.translation_of:  # the original's address, so the site links the two languages
+        pub = s.execute(select(m.publications.c.payload).where(m.publications.c.draft_id == d.translation_of)
+                        .order_by(m.publications.c.id.desc()).limit(1)).scalar() or {}
+        oseo = s.execute(select(m.drafts.c.seo, m.drafts.c.title).where(m.drafts.c.id == d.translation_of)).first()
+        original = pub.get("slug") or (oseo and ((oseo.seo or {}).get("slug") or seo.slugify(oseo.title)))
     return {
+        "translation_of": original,
         "site_domain": site.domain if site else None, "section": section,
         "slug": sd.get("slug") or seo.slugify(d.title), "seo_title": sd.get("title") or d.title,
         "meta_description": description, "keyphrase": sd.get("keyphrase") or "",
