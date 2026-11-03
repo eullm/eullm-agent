@@ -37,7 +37,7 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
 
     def found(rep) -> dict:
         return {"candidates": rep.candidates, "active": rep.active, "candidate": rep.candidate,
-                "rejected": rep.rejected, "failed": rep.failed,
+                "rejected": rep.rejected, "failed": rep.failed, "notes": [n[:160] for n in rep.notes[:3]],
                 "no_profile": any("no approved profile" in n for n in rep.notes)}
 
     def analysis(tenant: str, domain: str, args: dict) -> dict:
