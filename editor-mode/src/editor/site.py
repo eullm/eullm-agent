@@ -464,6 +464,12 @@ def _languages(snap: SiteSnapshot) -> None:
         return
     snap.languages = dict(langs.most_common())
     main = langs.most_common(1)[0][0]
+    # The language the home page declares stays when a fair share of the
+    # articles read are in it: a site with its translations under /en can
+    # show more English articles in a sample and still be Italian.
+    declared = (snap.language or "").split("-")[0].lower()
+    if declared and declared != "und" and langs.get(declared, 0) * 3 >= sum(langs.values()):
+        main = declared
     if snap.language != main:
         snap.language_evidence.append(f"most articles are in {main}")
         snap.language = main

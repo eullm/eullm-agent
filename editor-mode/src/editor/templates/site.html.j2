@@ -153,7 +153,7 @@
       <label class="field">{{ _('Dalle ore') }}<input name="start" type="number" min="0" max="23" value="{{ a.hours[0] }}" style="width: 5em;"></label>
       <label class="field">{{ _('Alle ore') }}<input name="end" type="number" min="1" max="24" value="{{ a.hours[1] }}" style="width: 5em;"></label>
       <label class="field">{{ _('Destinazione') }}<select name="target_id"><option value="">{{ _('La prima adatta') }}</option>{% for x in numbers.auto_targets %}<option value="{{ x.id }}" {% if a.target_id == x.id %}selected{% endif %}>{{ x.name }} ({{ x.kind }})</option>{% endfor %}</select></label>
-      <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (site.language or 'it')[:2] == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+      <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (own_language or site.language or 'it')[:2] == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
     </div>
     <label class="field">{{ _('Se un articolo non passa i controlli o il caporedattore AI') }}<select name="on_problem">
       <option value="fix" {% if a.on_problem != 'hold' %}selected{% endif %}>{{ _('Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico') }}</option>
