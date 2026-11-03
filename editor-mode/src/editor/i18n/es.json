@@ -1855,5 +1855,10 @@
  "Al mattino (%)": "Por la mañana (%)",
  "Aggiornamento alla {version} in corso: non serve rilanciarlo.": "Actualización a la {version} en curso: no hace falta volver a lanzarla.",
  "Segui": "Seguir",
- "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un'altra versione. Rilanciarlo non serve: aspetta la prossima versione.": "La actualización a la {version} ha terminado, pero el servidor sigue respondiendo como {installed}: las imágenes publicadas como {version} contienen otra versión. Relanzarla no sirve: espera a la próxima versión."
+ "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un'altra versione. Rilanciarlo non serve: aspetta la prossima versione.": "La actualización a la {version} ha terminado, pero el servidor sigue respondiendo como {installed}: las imágenes publicadas como {version} contienen otra versión. Relanzarla no sirve: espera a la próxima versión.",
+ "Aggiornamento alla {version} chiesto: il server lo prende in pochi secondi (al più un minuto, su un server senza systemd).": "Actualización a la {version} solicitada: el servidor la toma en pocos segundos (como mucho un minuto en un servidor sin systemd).",
+ "in attesa del server": "esperando al servidor",
+ "fatto": "hecho",
+ "Avanzamento dell'aggiornamento": "Progreso de la actualización",
+ "Aggiornamento alla {version} chiesto: il server fa il backup, scarica la versione e riavvia; la barra mostra a che punto è. Il pannello resta irraggiungibile per qualche secondo.": "Actualización a la {version} solicitada: el servidor hace la copia de seguridad, descarga la versión y reinicia; la barra muestra en qué punto está. El panel no responde durante unos segundos."
 }

@@ -293,11 +293,15 @@ In a checkout of the sources (`deploy/server`) it is the same, with
 (read every six hours, or with "Controlla adesso"; see below), and with
 "Aggiorna alla X.Y.Z" updates the server without a terminal. The dashboard
 has no Docker socket and no root: it only writes the version asked in
-`updates/request.json`. `update.sh`, run every minute by root's cron,
-takes the request, runs `backup.sh`, pulls the images of that version
+`updates/request.json`. `update.sh`, started by systemd as soon as the
+request is written (`eullm-update.path`; every minute by root's cron as a
+fallback, and on servers without systemd), takes the request, runs `backup.sh`, pulls the images of that version
 (retrying for 10 minutes while the release publishes them), writes it in
 `.env`, restarts and waits for the dashboard to answer. How it went shows
-in the console, with the log. It never goes back on its own: if the new
+in the console with a progress bar (the download's percentage comes from
+`docker compose --progress json pull`) and the log. After an update
+`update.sh` replaces itself with the one of the installed version, and
+installs what that one needs to start. It never goes back on its own: if the new
 version does not answer, the backup made just before is in `backup/`.
 
 Once, as root, in the installation folder (`server-init` writes
@@ -308,7 +312,8 @@ Once, as root, in the installation folder (`server-init` writes
     sudo sh update.sh install
 
 `install` creates `updates/` (owned by the dashboard's user, uid 999),
-adds `/etc/cron.d/eullm-update`, and, when `compose.yaml` comes from a
+adds `/etc/cron.d/eullm-update` and, with systemd,
+`eullm-update.path` and `eullm-update.service`, and, when `compose.yaml` comes from a
 release before this one, writes `compose.override.yaml` with the shared
 folder; then it restarts. The backups of `update.sh` use the `BACKUP_*`
 settings of `backup.sh`: to keep them elsewhere, put them in the cron line.

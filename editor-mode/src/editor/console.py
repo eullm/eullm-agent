@@ -445,6 +445,16 @@ def register(app, ctx) -> None:
             return back(t("È disponibile la versione {version}.", version=v), "aggiornamenti")
         return back(t("Nessun aggiornamento: la {version} è l'ultima.", version=INSTALLED), "aggiornamenti")
 
+    @app.get("/admin/updates/progress")
+    def ui_updates_progress(s=Depends(need_console)):
+        """Where the update is, for the console's bar (read every 2 seconds)."""
+        st = updates.state(updates.folder(ctx.updates_dir), INSTALLED)
+        status = st["status"] or {}
+        return JSONResponse({"busy": st["busy"], "pending": bool(st["pending"]), "state": status.get("state"),
+                             "step": status.get("step"), "percent": updates.percent(st),
+                             "version": status.get("version"), "installed": INSTALLED},
+                            headers={"Cache-Control": "no-store"})
+
     @app.post("/admin/updates/apply")
     def ui_updates_apply(version: str = Form(...), s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
@@ -457,8 +467,9 @@ def register(app, ctx) -> None:
         if known["pending"] or (known["status"] or {}).get("state") == "running":
             return back(t("Un aggiornamento è già in corso."), "aggiornamenti")
         updates.request(where, version, s.email)
-        return back(t("Aggiornamento alla {version} chiesto: entro un minuto il server fa il backup, scarica la "
-                      "versione e riavvia. Il pannello resta irraggiungibile per qualche secondo.", version=version),
+        return back(t("Aggiornamento alla {version} chiesto: il server fa il backup, scarica la versione e "
+                      "riavvia; la barra mostra a che punto è. Il pannello resta irraggiungibile per qualche "
+                      "secondo.", version=version),
                     "aggiornamenti")
 
     @app.post("/admin/newsrooms", response_class=HTMLResponse)

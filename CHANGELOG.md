@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.16
+
+### Changed
+
+- Updates from the console start at once: `update.sh` is started by a
+  systemd path unit as soon as the request is written, instead of waiting
+  for the cron minute (kept as a fallback, and for servers without
+  systemd).
+- Console › Aggiornamenti shows a progress bar with the percentage:
+  backup, download of the images (from the progress of each layer),
+  restart and check, read every 2 seconds; the page reloads by itself when
+  the new version answers.
+- `update.sh` renews itself after each update with the script of the
+  installed version, and installs the systemd units on its own: from now
+  on nothing to run by hand. A server whose `update.sh` is older than
+  0.28.16 cannot renew it (the old script does not know how): there, once,
+  as root, `curl -fsSL -o update.sh
+  https://raw.githubusercontent.com/eullm/eullm-agent/v0.28.16/deploy/server/update.sh
+  && sh update.sh install`.
+
 ## 0.28.15
 
 ### Fixed

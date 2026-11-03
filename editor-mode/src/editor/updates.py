@@ -16,8 +16,10 @@ EDITOR_TELEMETRY=off asks GitHub directly and sends nothing. If our address
 does not answer, GitHub is asked.
 
 Files in the folder: available.json (the latest release, written here),
-request.json (written here, removed by the script), status.json and
-update.log (written by the script).
+request.json (written here, removed by the script), status.json (with the
+step and a percentage, read by the console's bar every 2 seconds) and
+update.log (written by the script). The script starts as soon as the request
+is written (a systemd path unit), or within a minute from cron.
 """
 
 from __future__ import annotations
@@ -144,6 +146,18 @@ def request(where: Path, version: str, by: str, now: datetime | None = None) -> 
     _write(where / "request.json", {"version": version, "by": by, "at": (now or datetime.now(UTC)).isoformat()})
 
 
+def percent(st: dict) -> int:
+    """How far the update is, 0-100: the script's percentage (an older
+    script writes none: the step gives one)."""
+    status = st.get("status") or {}
+    if st.get("pending") or status.get("state") != "running":
+        return 100 if status.get("state") == "done" and not st.get("pending") else 0
+    try:
+        return max(0, min(100, int(status.get("percent"))))
+    except (TypeError, ValueError):
+        return {"backup": 2, "pull": 10, "restart": 80, "check": 90}.get(status.get("step"), 0)
+
+
 def state(where: Path | None, installed: str, now: datetime | None = None) -> dict:
     """What the console shows: installed and available versions, whether an
     update is asked or running, how the last one went."""
@@ -167,6 +181,7 @@ def state(where: Path | None, installed: str, now: datetime | None = None) -> di
         out["mismatch"] = st["version"]
         if v == st["version"]:
             out["newer"] = False
+    out["percent"] = percent(out)
     try:
         out["log"] = "\n".join((where / "update.log").read_text(encoding="utf-8", errors="replace").splitlines()[-25:])
     except OSError:
