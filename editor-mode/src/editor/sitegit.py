@@ -224,7 +224,7 @@ def front_matter(fmt: Format, payload: dict, slug: str, when: datetime, image_re
     if not fmt.learned:
         fm = {"title": payload["title"], "description": description, "slug": slug, "date": when.isoformat(),
               "lang": payload.get("language"), "section": payload.get("section"), "keywords": tags,
-              "image": image_ref, "image_alt": image_alt}
+              "image": image_ref, "image_alt": image_alt, "translation_of": payload.get("translation_of")}
         return "---\n" + "\n".join(f"{k}: {_q(v)}" for k, v in fm.items() if v not in (None, "")) + "\n---\n"
     values = {"title": payload["title"], "description": description, "slug": slug,
               "lang": payload.get("language"), "section": payload.get("section"), "tags": tags,
@@ -262,6 +262,10 @@ def front_matter(fmt: Format, payload: dict, slug: str, when: datetime, image_re
             lines.append(f"{key}: {fmt.constants[key]}")
     if "title" not in fmt.roles:
         lines.insert(0, f"title: {_q(payload['title'])}")
+    # The original's slug, for the site's language switch: a key the blog's
+    # posts may not have yet, added for translations.
+    if payload.get("translation_of"):
+        lines.append(f"translation_of: {_q(payload['translation_of'])}")
     return "---\n" + "\n".join(lines) + "\n---\n"
 
 

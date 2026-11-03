@@ -1850,5 +1850,7 @@
  "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Addresses of sites or feeds, one per line (up to 20)",
  "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "For each site the agent looks for its feed and reads it. The ones you choose enter active, within the plan's limit.",
  "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "Reading the sources has started: follow it in the Activity box. Those with a feed enter active.",
- "Scrivi almeno un indirizzo.": "Write at least one address."
+ "Scrivi almeno un indirizzo.": "Write at least one address.",
+ "Quota degli articoli del giorno pubblicati alla prima ora: prima si esce, prima ci si posiziona. Il resto si distribuisce nella giornata.": "Share of the day's articles published in the first hour: out first, ranked first. The rest is spread over the day.",
+ "Al mattino (%)": "In the morning (%)"
 }

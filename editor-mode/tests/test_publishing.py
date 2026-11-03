@@ -380,3 +380,19 @@ def test_an_article_goes_only_to_the_destinations_of_its_language(db, tenant, mo
     from test_ui import logged_in
     page = logged_in(db, tenant, "owner").get(f"/drafts/{did}").text
     assert "Sito IT" in page and f'<option value="{en}">' not in page
+
+
+def test_a_translation_names_its_original_for_the_language_switch():
+    from datetime import UTC, datetime
+
+    from editor import sitegit
+
+    payload = {"title": "Ban on the term", "language": "en", "translation_of": "divieto-del-termine"}
+    when = datetime(2026, 11, 3, 7, tzinfo=UTC)
+    plain = sitegit.front_matter(sitegit.Format(), payload, "ban-on-the-term", when, None, None)
+    assert 'translation_of: "divieto-del-termine"' in plain
+    learned = sitegit.Format(keys=["title", "slug", "date"], roles={"title": "title", "slug": "slug", "date": "date"},
+                             learned=True)
+    fm = sitegit.front_matter(learned, payload, "ban-on-the-term", when, None, None)
+    assert fm.rstrip().endswith('translation_of: "divieto-del-termine"\n---')
+    assert "translation_of" not in sitegit.front_matter(learned, {"title": "Divieto"}, "divieto", when, None, None)

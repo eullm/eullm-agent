@@ -1083,7 +1083,7 @@ def register(app, ctx) -> None:
                 avoid: str = Form(""), per_day: int = Form(6), min_opportunity: float = Form(40),
                 min_sources: int = Form(2), start: int = Form(7), end: int = Form(23), target_id: str = Form(""),
                 enabled: str = Form(""), credit: str = Form(""), language: str = Form("it"),
-                on_problem: str = Form("fix"),
+                on_problem: str = Form("fix"), morning_share: int = Form(50),
                 action: str = Form("save"), c: auth.Caller = Depends(ctx.need("owner"))):
         def lines(x: str) -> list[str]:
             return [y.strip() for y in re.split(r"[\n,;]", x) if y.strip()]
@@ -1091,7 +1091,8 @@ def register(app, ctx) -> None:
                   "directives": directives.strip(), "avoid": lines(avoid), "per_day": per_day,
                   "min_opportunity": min_opportunity, "min_sources": min_sources, "hours": [start, end],
                   "target_id": int(target_id) if target_id.isdigit() else None, "credit": bool(credit),
-                  "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix"}
+                  "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix",
+                  "morning_share": morning_share}
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:

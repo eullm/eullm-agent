@@ -300,3 +300,15 @@ def test_the_automatic_newsroom_looks_for_sources_once_a_day():
     assert ap.sources_due(None, now) and ap.sources_due("not a date", now)
     assert not ap.sources_due(datetime(2026, 11, 2, 7, tzinfo=UTC).isoformat(), now)
     assert ap.sources_due(datetime(2026, 11, 1, 19, tzinfo=UTC).isoformat(), now)
+
+
+def test_the_morning_takes_its_share(db, tenant):
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=8, hours=[7, 23])
+    set_plan(db, tenant, max_drafts_month=None)
+    seven = datetime(2026, 11, 3, 6, tzinfo=UTC)  # 7:00 in Rome, the first hour of the window
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": seven})
+    out = ap.run(db, tenant, site_id, None, seven, "Europe/Rome", lambda pid: None)
+    assert out["wanted"] == 4  # half of the day at once, not 8 / 16 hours

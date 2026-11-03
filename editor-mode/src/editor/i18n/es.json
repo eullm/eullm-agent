@@ -1850,5 +1850,7 @@
  "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Direcciones de sitios o feeds, una por línea (hasta 20)",
  "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "Para cada sitio el agente busca el feed y lo lee. Las que eliges entran activas, dentro del límite del plan.",
  "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "La lectura de las fuentes ha empezado: síguela en el recuadro Actividad. Las que tienen feed entran activas.",
- "Scrivi almeno un indirizzo.": "Escribe al menos una dirección."
+ "Scrivi almeno un indirizzo.": "Escribe al menos una dirección.",
+ "Quota degli articoli del giorno pubblicati alla prima ora: prima si esce, prima ci si posiziona. Il resto si distribuisce nella giornata.": "Parte de los artículos del día publicados en la primera hora: quien sale antes, se posiciona antes. El resto se reparte durante el día.",
+ "Al mattino (%)": "Por la mañana (%)"
 }
