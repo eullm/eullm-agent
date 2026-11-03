@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
@@ -647,6 +647,118 @@ def stored_claims(s, draft_id: int) -> list[dict]:
     rows = s.execute(select(c.c.id, c.c.ordinal, c.c.section, c.c.text)
                      .where(c.c.draft_id == draft_id).order_by(c.c.ordinal))
     return [dict(r._mapping, sources=sources.get(r.id, [])) for r in rows]
+
+
+# --- the director's free editor ---------------------------------------------------------
+# The whole article as text: one sentence per line, "## " for a heading,
+# [1] [2] after a sentence for its sources (numbered as on the draft page).
+REF = re.compile(r"\s*\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def source_order(claims: list[dict]) -> list[int]:
+    order: list[int] = []
+    for c in claims:
+        order += [i for i in c["sources"] if i not in order]
+    return order
+
+
+def as_text(claims: list[dict]) -> str:
+    """The article in the free editor's form."""
+    ref = {i: n + 1 for n, i in enumerate(source_order(claims))}
+    out, section = [], object()
+    for c in claims:
+        if c["section"] != section:
+            section = c["section"]
+            if c["section"]:
+                out += ["", f"## {c['section']}"] if out else [f"## {c['section']}"]
+        marks = " ".join(f"[{ref[i]}]" for i in c["sources"] if i in ref)
+        out.append(f"{c['text']} {marks}".rstrip())
+    return "\n".join(out).strip() + "\n"
+
+
+def parse_text(text: str, order: list[int]) -> list[Claim]:
+    """The free editor's text back into sentences with their sources. A
+    number that is not on the list of sources is an error."""
+    claims, section = [], None
+    for raw in (text or "").replace("\r", "").split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            section = line.lstrip("#").strip() or None
+            continue
+        refs: list[int] = []
+        for mark in REF.finditer(line):
+            for n in mark.group(1).split(","):
+                k = int(n)
+                if not 1 <= k <= len(order):
+                    raise ValueError(f"source [{k}] is not on the list")
+                if order[k - 1] not in refs:
+                    refs.append(order[k - 1])
+        sentence = " ".join(REF.sub("", line).split())
+        if sentence.startswith(("- ", "* ")):
+            sentence = sentence[2:]
+        if sentence:
+            claims.append(Claim(sentence, refs, section))
+    if not claims:
+        raise ValueError("the article is empty")
+    return claims
+
+
+def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text: str,
+              search: dict | None = None) -> dict:
+    """The director's free edit of the whole article: sentences added,
+    removed or rewritten, headings changed. A sentence without sources is
+    the director's own and is published as written; a cited sentence is
+    checked against its sources as usual (flags, never a refusal). An
+    approved draft goes back to be approved."""
+    title = " ".join((title or "").split())
+    if not 5 <= len(title) <= 160:
+        raise ValueError("title must be 5 to 160 characters")
+    with db.tenant(tenant_id) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
+        if d is None:
+            raise LookupError(draft_id)
+        order = source_order(stored_claims(s, draft_id))
+        sources = _sources(s, order)
+    claims = parse_text(text, order)
+    old = d.seo or {}
+    sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
+    sd.links = old.get("links") or []
+    sections = list(dict.fromkeys(c.section for c in claims))
+    sd.faq = [q for q in old.get("faq") or [] if q in sections]
+    article = check(Article(title, " ".join((subtitle or "").split())[:300], claims, sd.faq, {}), sources)
+    for c in article.claims:  # the director's own sentence: no source asked
+        if not c.sources:
+            c.flags = []
+    first = next((c.section for c in claims), None)
+    lead = " ".join(c.text for c in claims if c.section == first)
+    sd.checks = seo.checks(sd, title, lead, sections, len({i for c in claims for i in c.sources}))
+    status = "needs_review" if article.flags else "draft"
+    keep = {k: old[k] for k in ("section", "replaces") if k in old}
+    with db.tenant(tenant_id) as s:
+        ids = list(s.execute(select(m.draft_claims.c.id).where(m.draft_claims.c.draft_id == draft_id)).scalars())
+        if ids:
+            s.execute(delete(m.draft_claim_sources).where(m.draft_claim_sources.c.claim_id.in_(ids)))
+            s.execute(delete(m.draft_claims).where(m.draft_claims.c.id.in_(ids)))
+        for n, c in enumerate(article.claims):
+            cid = s.execute(insert(m.draft_claims).values(
+                tenant_id=tenant_id, draft_id=draft_id, ordinal=n, section=c.section, text=c.text,
+            ).returning(m.draft_claims.c.id)).scalar_one()
+            for i in c.sources:
+                s.execute(insert(m.draft_claim_sources).values(tenant_id=tenant_id, claim_id=cid, item_id=i))
+        s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
+            title=title, subtitle=article.subtitle, body_md=render(article, sources, d.language, sd.links),
+            flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
+    return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}
+
+
+def mark_replacement(db, tenant_id: str, draft_id: int, replaces: int) -> None:
+    """A version written again at the director's request: once approved, it
+    can go online in place of `replaces`, at the same address."""
+    with db.tenant(tenant_id) as s:
+        sd = s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == draft_id)).scalar() or {}
+        s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(seo={**sd, "replaces": replaces}))
 
 
 def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: dict[int, str],

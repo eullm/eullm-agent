@@ -28,6 +28,7 @@ KINDS = {
     "image": N_("Immagine di copertina"),
     "deliver": N_("Invio dell'articolo per email"),
     "publish": N_("Pubblicazione"),
+    "change": N_("Articolo sul sito"),
     "tick": N_("Giro orario automatico"),
     "auto": N_("Redazione automatica"),
     "brief": N_("Profilo dal contesto"),
@@ -174,6 +175,11 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         elif r.get("indexnow"):
             out.append(t("Segnalazione IndexNow non riuscita: la pagina resta pubblicata."))
         return out, r.get("url") or "/publications", t("Apri")
+    if kind == "change":
+        if r.get("op") == "withdraw":
+            return [t("Ritirato dal sito: «{title}».", title=r.get("title", ""))], \
+                f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/publications", t("Apri l'articolo")
+        return [t("Aggiornato sul sito: «{title}».", title=r.get("title", ""))], r.get("url") or "/publications", t("Apri")
     return [], None, None
 
 

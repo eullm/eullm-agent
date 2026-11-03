@@ -73,11 +73,19 @@
     <span class="value">{{ n.publications.get('published', 0) }}</span>
     <span class="note">{% if n.publications.get('failed') %}{{ _('{n} non riuscite', n=n.publications.failed) }}{% elif n.publications.get('pending_approval') %}{{ _('{n} da approvare', n=n.publications.pending_approval) }}{% else %}{{ n.targets|plural(_('destinazione'), _('destinazioni')) }}{% endif %}</span>
   </a>
+  {% if caller.operator %}
   <div class="card kpi">
     <span class="label">{{ _('Costo modello, 30 giorni') }}</span>
     <span class="value">{{ n.cost|num(2) }}</span>
     <span class="note" title="{{ _('ai prezzi di core.yaml') }}">{{ _('{n} chiamate', n=n.calls|tok) }}</span>
   </div>
+  {% elif credit_state and credit_state.enabled %}
+  <a class="card kpi{% if credit_state.pct >= 100 %} bad{% elif credit_state.pct >= 80 %} warn{% endif %}" href="/plan#crediti">
+    <span class="label">{{ _('Crediti del mese') }}</span>
+    <span class="value">{{ credit_state.month_left }}</span>
+    <span class="note">{{ _('rimasti su {n}', n=credit_state.month) }}{% if credit_state.extra %} · {{ _('{n} extra', n=credit_state.extra) }}{% endif %}</span>
+  </a>
+  {% endif %}
 </section>
 {% if n.discards %}
 <p class="hint">{{ _('Perché hai scartato le proposte negli ultimi 30 giorni:') }}

@@ -100,7 +100,10 @@ class FakeGitHub:
         if method == "POST" and path == "/git/trees":
             files = dict(self.trees[body["base_tree"]])
             for e in body["tree"]:
-                files[e["path"]] = self.blobs[e["sha"]]
+                if e["sha"] is None:
+                    files.pop(e["path"], None)
+                else:
+                    files[e["path"]] = self.blobs[e["sha"]]
             return httpx.Response(201, json={"sha": self._tree(files)})
         if method == "POST" and path == "/git/commits":
             return httpx.Response(201, json={"sha": self._commit(body["tree"], body["parents"], body["message"])})
@@ -124,8 +127,11 @@ class FakeGitHub:
             pr = self.pulls[int(m.group(1)) - 1]
             head = self.branches[pr["head"]]
             base_sha = self.branches[pr["base"]]
-            files = dict(self.files(pr["base"]))
-            files.update(self.trees[self.commits[head]["tree"]])
+            if base_sha in self._ancestors(head):  # the branch starts from the base: its tree is the result
+                files = dict(self.trees[self.commits[head]["tree"]])
+            else:
+                files = dict(self.files(pr["base"]))
+                files.update(self.trees[self.commits[head]["tree"]])
             self.branches[pr["base"]] = self._commit(self._tree(files), [base_sha, head], body.get("commit_title", ""))
             pr["state"] = "merged"
             return httpx.Response(200, json={"sha": self.branches[pr["base"]], "merged": True})
