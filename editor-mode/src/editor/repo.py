@@ -132,13 +132,15 @@ def archive_source(s: Session, *, kind: str, name: str, url: str, config: dict |
 
 def followed_by(site_id: int | None = None):
     """SQL condition on an item: one of the newsroom's active sources (for
-    one site, or any) is its source or follows it in the archive."""
+    one site, or any) is its source or follows it in the archive. The
+    sources come first, as a short list the database reads once; asking it
+    per item scanned the sources for every item of the archive."""
     f = m.sources.alias("f")
-    cond = [f.c.status == "active", f.c.shared.is_not(True),
-            or_(f.c.id == m.source_items.c.source_id, f.c.archive_id == m.source_items.c.source_id)]
+    cond = [f.c.status == "active", f.c.shared.is_not(True)]
     if site_id is not None:
         cond.append(or_(f.c.site_id == site_id, f.c.site_id.is_(None)))
-    return select(f.c.id).where(*cond).exists()
+    return or_(m.source_items.c.source_id.in_(select(f.c.id).where(*cond)),
+               m.source_items.c.source_id.in_(select(f.c.archive_id).where(*cond, f.c.archive_id.is_not(None))))
 
 
 # Failed reads in a row that suspend an archive source: about a day of

@@ -738,7 +738,8 @@ def register(app, ctx) -> None:
             latest = s.execute(
                 select(si.c.title, si.c.url, si.c.published_at, si.c.fetched_at, m.sources.c.name.label("source"))
                 .join(m.sources, m.sources.c.id == si.c.source_id)
-                .where(repo.followed_by(sid), si.c.duplicate_of.is_(None))
+                .where(repo.followed_by(sid), si.c.duplicate_of.is_(None),
+                       si.c.fetched_at >= datetime.now(UTC) - timedelta(days=3))
                 .order_by(si.c.fetched_at.desc(), si.c.id.desc()).limit(6)).all()
             return render(request, "today.html.j2", c, s, "today", _sites=(sites, site), desk=desk, one=one,
                           busiest=busiest, costly=costly, cost_month=month[0], calls_month=month[1],
@@ -827,7 +828,7 @@ def register(app, ctx) -> None:
             {"title": t("Attiva le fonti"), "past": t("Fonti attivate"), "done": count(m.sources, m.sources.c.status == "active", of_site) > 0, "href": "/sources",
              "busy": "discovery" in working, "wait": t("Ricerca delle fonti in corso dopo l'approvazione del profilo."),
              "todo": t("Guarda origine, ultime notizie e punteggio delle candidate e attiva quelle che vuoi.")},
-            {"title": t("Raccogli le notizie"), "past": t("Notizie raccolte"), "done": count(m.source_items, site_items) > 0, "href": "/trends", "busy": True,
+            {"title": t("Raccogli le notizie"), "past": t("Notizie raccolte"), "done": bool(s.execute(select(m.source_items.c.id).where(site_items).limit(1)).first()), "href": "/trends", "busy": True,
              "wait": t("Parte da sola ogni ora dalle fonti attive, oppure subito con \"Raccogli le notizie\"."),
              "todo": ""},
             {"title": t("Accetta una proposta"), "past": t("Proposta accettata"), "done": count(m.proposals, of(m.proposals.c.site_id), m.proposals.c.status.in_(("accepted", "drafted"))) > 0,
