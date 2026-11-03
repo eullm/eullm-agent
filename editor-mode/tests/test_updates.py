@@ -159,3 +159,21 @@ def test_the_console_counts_the_installations(db, monkeypatch):
     c.post("/login", data={"email": op, "password": "password operatore"})
     page = c.get("/admin/updates").text
     assert "Installazioni di Redazia" in page and "Attive negli ultimi 7 giorni" in page and "versione 0.24.1" in page
+
+
+def test_an_update_in_progress_or_gone_wrong_is_not_offered_again(tmp_path):
+    now = datetime(2026, 11, 3, 7, tzinfo=UTC)
+    (tmp_path / "available.json").write_text(json.dumps({"version": "0.28.13"}))
+    assert updates.state(tmp_path, "0.28.12", now)["newer"]
+    updates.request(tmp_path, "0.28.13", "francesco", now)
+    st = updates.state(tmp_path, "0.28.12", now)
+    assert st["busy"]
+    (tmp_path / "request.json").unlink()
+    (tmp_path / "status.json").write_text(json.dumps({"state": "running", "step": "pull", "version": "0.28.13"}))
+    assert updates.state(tmp_path, "0.28.12", now)["busy"]
+    # Done, but the images of 0.28.13 held 0.28.12: no button to do the same again.
+    (tmp_path / "status.json").write_text(json.dumps({"state": "done", "version": "0.28.13", "from": "0.28.13"}))
+    st = updates.state(tmp_path, "0.28.12", now)
+    assert st["mismatch"] == "0.28.13" and not st["newer"] and not st["busy"]
+    (tmp_path / "available.json").write_text(json.dumps({"version": "0.28.14"}))
+    assert updates.state(tmp_path, "0.28.12", now)["newer"]  # a new version is offered again

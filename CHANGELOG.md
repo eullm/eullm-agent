@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.14
+
+The v0.28.13 tag went on the 0.28.12 commit, so its images held 0.28.12:
+this version brings what 0.28.13 lists.
+
+### Changed
+
+- Console › Aggiornamenti: while an update is asked or running, every page
+  of the console says so instead of offering it again. An update that
+  finished while the server still answers with the older version (images
+  holding another version) is said plainly, and the same version is not
+  offered again.
+
 ## 0.28.13
 
 ### Changed
