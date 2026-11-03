@@ -2121,5 +2121,15 @@
  "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "If an important story arrives, one more can still go out (up to {a} brought forward from tomorrow, {c} with credits).",
  "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Quality stories left out by today's limit: {n}. They would be published with more articles a day.",
  "Sblocca più articoli": "Unlock more articles",
- "Scrivila ora": "Write it now"
+ "Scrivila ora": "Write it now",
+ "Sezioni della pagina": "Page sections",
+ "accesa": "on",
+ "Vedi gli articoli": "See the articles",
+ "Regole": "Rules",
+ "Come scrive il sito": "How the site writes",
+ "Temi che segue": "Topics it follows",
+ "Manca la chiave di Google sul server (EDITOR_GSC_KEY).": "Google's key is missing on the server (EDITOR_GSC_KEY).",
+ "Feed per altri strumenti": "Feed for other tools",
+ "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "For Zapier, Make, n8n or a site that imports a feed: it holds the last 50 approved articles, with text, image and fields for Google. The real site is connected from <a href=\"/publications\">Publications</a>.",
+ "Versioni del profilo": "Profile versions"
 }

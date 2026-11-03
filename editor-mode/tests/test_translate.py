@@ -104,7 +104,7 @@ def test_approving_queues_the_translations(db, tenant):
     token = auth.create_token(db, tenant, "owner-user", "owner")
     c = TestClient(create_app(db, core=CoreClient("http://core.test", "tok")))
     assert c.post("/login", data={"token": token}, follow_redirects=False).status_code == 303
-    page = c.get("/site").text
+    page = c.get("/site?tab=publish").text
     assert "Lingue degli articoli" in page and 'value="en"' in page
     c.post(f"/ui/sites/{site_id}/languages", data={"languages": ["en", "de"]})
     assert "Tedesco" not in c.get(f"/drafts/{did}").text  # languages by their own name

@@ -28,7 +28,7 @@ def test_owner_deletes_a_site_only_by_writing_its_domain(db, tenant, monkeypatch
     owner.post("/ui/targets", data={"site_id": site_id, "kind": "webhook", "name": "Hook",
                                     "address": "https://hooks.example/in", "secret_env": "HOOK", "secret": "s3cret"})
     assert count(db, tenant, "publish_targets") == 1
-    assert "Elimina il sito" in owner.get("/site").text
+    assert "Elimina il sito" in owner.get("/site?tab=site").text
 
     editor = logged_in(db, tenant, "editor")
     assert editor.post(f"/ui/sites/{site_id}/delete", data={"confirm": domain}).status_code == 403
@@ -60,7 +60,7 @@ def test_a_mistyped_domain_is_corrected_until_the_profile_is_approved(db, tenant
         wrong = repo.add_site(s, tenant, "exmaple.it")
     owner = logged_in(db, tenant, "owner")
     owner.get(f"/switch?site={wrong}")
-    assert 'name="domain" value="exmaple.it"' in owner.get("/site").text
+    assert 'name="domain" value="exmaple.it"' in owner.get("/site?tab=site").text
     page = owner.post(f"/ui/sites/{wrong}/edit", data={"name": "Esempio", "domain": "https://www.example.it/"})
     assert "Dominio corretto da exmaple.it a example.it" in page.text
     with db.tenant(tenant) as s:
