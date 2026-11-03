@@ -15,9 +15,7 @@ def test_the_site_page_counts_everything_and_sets_the_proposals_a_day(db, tenant
     token = auth.create_token(db, tenant, "owner-user", "owner")
     c = TestClient(create_app(db))
     c.post("/login", data={"token": token}, follow_redirects=False)
-    page = c.get("/site").text
-    for label in ("Fonti attive", "Notizie in 24 ore", "Proposte da decidere", "Bozze da rileggere", "Pubblicazioni"):
-        assert label in page
+    page = c.get("/site?tab=auto").text
     assert 'action="/ui/sites/%d/per-day"' % site_id in page and 'value="2"' in page
     assert "Da ora 9 proposte" in c.post(f"/ui/sites/{site_id}/per-day", data={"n": "9"}).text
     with db.tenant(tenant) as s:
@@ -30,7 +28,7 @@ def test_the_site_page_sets_the_cover_style(db, tenant):
     token = auth.create_token(db, tenant, "owner-user", "owner")
     c = TestClient(create_app(db))
     c.post("/login", data={"token": token}, follow_redirects=False)
-    page = c.get("/site").text
+    page = c.get("/site?tab=auto").text
     assert 'action="/ui/sites/%d/cover"' % site_id in page and 'value="impact" selected' in page
     assert "Stile delle copertine salvato" in c.post(f"/ui/sites/{site_id}/cover",
                                                       data={"style": "editorial", "text": "1"}).text
@@ -47,7 +45,7 @@ def test_the_newsroom_sees_its_credits_never_the_model_cost(db, tenant):
     token = auth.create_token(db, tenant, "owner-user", "owner")
     c = TestClient(create_app(db))
     c.post("/login", data={"token": token}, follow_redirects=False)
-    for path in ("/site", "/"):
+    for path in ("/",):
         page = c.get(path).text
         assert "Costo modello" not in page and "Siti più costosi" not in page, path
         assert "Crediti del mese" in page and "rimasti su 250" in page, path

@@ -80,11 +80,11 @@ def test_approving_emails_the_article_with_the_package(db, tenant):
 def test_the_feed_gives_the_approved_articles_without_login(db, tenant):
     did, site_id = with_image(db, tenant)
     c = owner_client(db, tenant)
-    assert "Crea il feed" in c.get("/site").text
+    assert "Crea il feed" in c.get("/site?tab=publish").text
     c.post(f"/ui/sites/{site_id}/feed")
     with db.tenant(tenant) as s:
         token = delivery.current_token(s, site_id)
-    assert f"/feeds/{token}.json" in c.get("/site").text
+    assert f"/feeds/{token}.json" in c.get("/site?tab=publish").text
     anon = TestClient(create_app(db, public_url="https://redazione.example"))
     feed = anon.get(f"/feeds/{token}.json").json()
     item = feed["items"][0]
