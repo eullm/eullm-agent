@@ -12,6 +12,7 @@
   <a href="/admin/operators" {% if view == 'operatori' %}class="on"{% endif %}>{{ _('Amministratori') }}</a>
   <a href="/admin/keys" {% if view == 'api' %}class="on"{% endif %}>{{ _('Chiavi API') }}</a>
   <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on"{% endif %}>{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal">{{ updates.available.version }}</span>{% endif %}</a>
+  <a href="/admin/backups" {% if view == 'backup' %}class="on"{% endif %}>{{ _('Backup') }}</a>
   <a href="/admin/usage" {% if view == 'consumi' %}class="on"{% endif %}>{{ _('Consumi') }}</a>
   {% if view == 'consumi' %}
   <a class="sub" href="#modelli">{{ _('Modello per passo') }}</a>

@@ -331,3 +331,32 @@ def test_a_late_start_catches_up_and_a_good_single_news_counts(db, tenant):
         assert ap.choose(s, site_id, cfg, nine, 5) == []
     out = ap.run(db, tenant, site_id, None, nine, "Europe/Rome", lambda pid: None)
     assert out["wanted"] >= 4  # the morning's share is still owed, not 8 / 14 hours
+
+
+def test_other_outlets_telling_the_same_story_count_as_sources(db, tenant):
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    si = m.source_items
+    with db.tenant(tenant) as s:
+        pid, item = s.execute(select(m.proposal_citations.c.proposal_id, m.proposal_citations.c.item_id)
+                              .limit(1)).one()
+        topic = s.execute(select(m.proposals.c.topic_id).where(m.proposals.c.id == pid)).scalar()
+        # The story as one feed told it: one source.
+        s.execute(m.proposal_citations.delete().where(m.proposal_citations.c.proposal_id == pid,
+                                                      m.proposal_citations.c.item_id != item))
+        if topic:
+            s.execute(m.topic_items.delete().where(m.topic_items.c.topic_id == topic))
+        row = s.execute(select(si).where(si.c.id == item)).one()._asdict()
+        before = ap.source_count(s, pid)
+        src = s.execute(select(m.sources).where(m.sources.c.id == row["source_id"])).one()._asdict()
+        other = s.execute(insert(m.sources).values(**{**{k: v for k, v in src.items() if k != "id"},
+                                                      "tenant_id": tenant, "name": "Altra testata",
+                                                      "url": "https://altra.example/feed"})
+                          .returning(m.sources.c.id)).scalar_one()
+        # Another outlet with the same story, outside the topic: the article reads it too.
+        s.execute(insert(si).values(**{**{k: v for k, v in row.items() if k != "id"}, "source_id": other,
+                                       "tenant_id": tenant, "url": "https://altra.example/stessa-notizia",
+                                       "canonical_url": "https://altra.example/stessa-notizia",
+                                       "url_hash": "a" * 64, "content_hash": "b" * 64, "duplicate_of": None,
+                                       "fetched_at": datetime.now(UTC)}))
+        assert ap.source_count(s, pid) == before + 1 and ap.source_count(s, pid, 1) <= before

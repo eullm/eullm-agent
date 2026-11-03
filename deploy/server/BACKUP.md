@@ -43,6 +43,14 @@ mailbox.
 
 ## Automatic backup
 
+From the console: /admin › Backup sets daily or weekly backups, the
+folder, the days to keep and an optional copy to another server (rsync
+over SSH, with a key the server makes and the console shows). It needs
+`update.sh` installed (README.md, "Updating from the console"). When it
+is on, remove the cron line below so backups do not run twice.
+
+By hand, without the console:
+
 Every night at 3:30, from `crontab -e` as root:
 
     30 3 * * * BACKUP_DIR=/home/app/backup BACKUP_OWNER=app:app /opt/eullm-server/backup.sh >/dev/null

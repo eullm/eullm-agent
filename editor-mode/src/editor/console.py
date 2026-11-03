@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
-from . import accounts, billing, commerce, credits, installs, newsrooms, repo, trials, updates, usage
+from . import accounts, backups, billing, commerce, credits, installs, newsrooms, repo, trials, updates, usage
 from . import models as m
 from .auth import ROLES
 from .i18n import t
@@ -284,6 +284,7 @@ def register(app, ctx) -> None:
             "statuses": billing.STATUS_LABELS, "money": billing.money, "online": ctx.gateway is not None,
             "refusals": refusals(), "trial_kinds": trials.LABELS,
             "updates": updates.state(updates.folder(ctx.updates_dir), INSTALLED), "installs": installs.summary(admin),
+            "backups": backups.state(updates.folder(ctx.updates_dir)) if view == "backup" else None,
             "new": None, **data},
             status_code=status_code)
         if notice:
@@ -311,7 +312,7 @@ def register(app, ctx) -> None:
                 return f"/admin/{path}"
         return {"clienti": "/admin/customers", "rivenditori": "/admin/resellers", "piani": "/admin/plans",
                 "crediti": "/admin/plans",
-                "aggiornamenti": "/admin/updates", "operatori": "/admin/operators", "api": "/admin/keys",
+                "aggiornamenti": "/admin/updates", "backup": "/admin/backups", "operatori": "/admin/operators", "api": "/admin/keys",
                 "nuova": "/admin/new"}.get(at, "/admin")
 
     def need_console(request: Request):
@@ -409,7 +410,7 @@ def register(app, ctx) -> None:
     # stays short however many there are, the rest opens when needed.
     for path, view in (("new", "nuova"), ("customers", "clienti"), ("resellers", "rivenditori"),
                        ("plans", "piani"), ("operators", "operatori"), ("keys", "api"),
-                       ("updates", "aggiornamenti")):
+                       ("updates", "aggiornamenti"), ("backups", "backup")):
         app.get(f"/admin/{path}", response_class=HTMLResponse)(section(view))
 
     @app.get("/admin/newsrooms/{tenant_id}", response_class=HTMLResponse)
@@ -454,6 +455,50 @@ def register(app, ctx) -> None:
                              "step": status.get("step"), "percent": updates.percent(st),
                              "version": status.get("version"), "installed": INSTALLED},
                             headers={"Cache-Control": "no-store"})
+
+    @app.post("/admin/backups/settings")
+    def ui_backups_settings(enabled: str = Form(""), frequency: str = Form("daily"), time: str = Form("03:30"),
+                            weekday: str = Form("7"), dir: str = Form(""), keep: str = Form("14"),
+                            owner: str = Form(""), name: str = Form("redazia"), remote: str = Form(""),
+                            target: str = Form(""), port: str = Form("22"), s=Depends(need_console)):
+        where = updates.folder(ctx.updates_dir)
+        if where is None:
+            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+        hour, _, minute = (time or "03:30").partition(":")
+        try:
+            backups.save(where, {"enabled": enabled, "frequency": frequency, "hour": hour, "minute": minute or "0",
+                                 "weekday": weekday, "dir": dir, "keep": keep, "owner": owner, "name": name,
+                                 "remote": remote, "target": target, "port": port}, s.email)
+        except backups.Invalid as e:
+            return back(t(str(e)), "backup")
+        return back(t("Impostazioni dei backup salvate: il server le legge in pochi secondi."), "backup")
+
+    @app.post("/admin/backups/now")
+    def ui_backups_now(s=Depends(need_console)):
+        where = updates.folder(ctx.updates_dir)
+        if where is None:
+            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+        if backups.state(where)["pending"]:
+            return back(t("Un backup è già in corso."), "backup")
+        backups.ask_now(where, s.email)
+        return back(t("Backup chiesto: il server lo fa subito, l'elenco qui sotto si aggiorna da solo."), "backup")
+
+    @app.post("/admin/backups/delete")
+    def ui_backups_delete(file: str = Form(...), s=Depends(need_console)):
+        where = updates.folder(ctx.updates_dir)
+        if where is None:
+            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+        try:
+            backups.ask_delete(where, file, s.email)
+        except backups.Invalid as e:
+            return back(t(str(e)), "backup")
+        return back(t("Archivio {name} eliminato dal server.", name=file), "backup")
+
+    @app.get("/admin/backups/state")
+    def ui_backups_state(s=Depends(need_console)):
+        st = backups.state(updates.folder(ctx.updates_dir))
+        return JSONResponse({"pending": st["pending"], "at": (st["status"].get("result") or {}).get("at"),
+                             "count": len(st["archives"])}, headers={"Cache-Control": "no-store"})
 
     @app.post("/admin/updates/apply")
     def ui_updates_apply(version: str = Form(...), s=Depends(need_console)):
