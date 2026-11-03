@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from . import models as m
 from .i18n import N_, t
@@ -201,7 +201,11 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
     proposal_site = dict(s.execute(select(m.proposals.c.id, m.proposals.c.site_id)
                                    .where(m.proposals.c.id.in_([x for x in proposal_ids if x]))).all()) \
         if proposal_ids else {}
-    running = any(r.status == "running" for r in rows)
+    # Something running or just ended, among all the jobs and not only those
+    # shown: a long queue pushes the running ones out of the list, and the
+    # worker is not stalled because of that.
+    running = any(r.status == "running" for r in rows) or s.execute(select(func.count()).select_from(m.jobs).where(
+        or_(j.status == "running", j.finished_at >= now - STALLED))).scalar() > 0
     items, stalled = [], False
     for r in rows:
         args, res = r.args or {}, r.result or {}

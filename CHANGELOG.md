@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.28.18
+
+### Changed
+
+- The news base read for every newsroom goes from 64 to 146 sources, each
+  checked to answer before being listed: more of the United States, the
+  United Kingdom, Asia, the Middle East, Africa, Latin America and Russia,
+  more economy and technology (AI labs included), and two new sections in
+  Indice notizie, "Scienza e ambiente" and "Cultura e spettacolo". More
+  outlets tell the same story, so more stories pass the "different
+  sources" rule.
+- The worker runs 4 jobs at a time by default (was 2): with the automatic
+  newsroom, the news collection and the translations, 2 left articles
+  waiting. `EDITOR_WORKER_CONCURRENCY` in `.env` still sets it.
+
+### Fixed
+
+- Attività no longer says the worker seems stopped while it is working:
+  with a long queue the running job fell out of the list the warning
+  looked at.
+
 ## 0.28.17
 
 ### Added

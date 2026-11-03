@@ -59,6 +59,15 @@ def test_work_waiting_with_nothing_running_is_reported(db, tenant):
         s.execute(update(m.jobs).where(m.jobs.c.id == jid).values(run_after=datetime.now(UTC) - timedelta(minutes=5)))
         out = activity.recent(s, ROME, problem)
     assert out["stalled"] and out["items"][0]["state"] == "In coda da 5 min"
+    # A long queue pushes the running job out of the list: the worker is working, not stalled.
+    busy = queue.claim(db, "w/0", tenant)
+    assert busy is not None
+    for _ in range(9):
+        later = queue.enqueue(db, tenant, "collect", "now")
+        with db.tenant(tenant) as s:
+            s.execute(update(m.jobs).where(m.jobs.c.id == later).values(run_after=datetime.now(UTC) - timedelta(minutes=5)))
+    with db.tenant(tenant) as s:
+        assert not activity.recent(s, ROME, problem)["stalled"]
 
 
 def test_desk_shows_every_site_and_the_activity(db, tenant):

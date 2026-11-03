@@ -1927,5 +1927,7 @@
  "Backup chiesto: il server lo fa subito, l'elenco qui sotto si aggiorna da solo.": "Backup asked: the server makes it now, the list below refreshes by itself.",
  "Archivio {name} eliminato dal server.": "Archive {name} deleted from the server.",
  "Backup dal pannello non attivi su questo server.": "Backups from the panel are not active on this server.",
- "Un backup è già in corso.": "A backup is already running."
+ "Un backup è già in corso.": "A backup is already running.",
+ "Scienza e ambiente": "Science and environment",
+ "Cultura e spettacolo": "Culture and entertainment"
 }
