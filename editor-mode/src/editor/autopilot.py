@@ -338,7 +338,10 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             elif can_pay:
                 extra = "paid"
             else:
-                return {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                # The day is done and no extra is allowed: how many good news stay out, counted
+                # here once an hour (the Desk only shows it; counting takes a while).
+                return {"done": target, "left_out": left_out(s, site_id, cfg, now)} \
+                    | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
         if extra is None and tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
             return {"tried": tried, "kept": kept}
         if extra is not None:

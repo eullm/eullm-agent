@@ -128,7 +128,8 @@ def test_an_important_story_goes_out_beyond_the_day_brought_forward_from_tomorro
     with db.tenant(tenant) as s:
         body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id)).scalars().first()
     assert body["settings"]["auto_over"]["borrowed"] == 1
-    assert run(now) == {"done": 1, "borrowed": 1}  # the limit of anticipations is reached
+    out = run(now)
+    assert out["done"] == 1 and out["borrowed"] == 1 and out["left_out"] >= 0  # the limit of anticipations is reached
     # Tomorrow it owes the day it took: with two a day it makes one.
     settings(db, tenant, site_id, per_day=2, borrow=1, extra_min_opportunity=0)
     over = ap.over_today({"auto_over": {"day": "2026-10-28", "borrowed": 1, "paid": 0, "debt": 0}},

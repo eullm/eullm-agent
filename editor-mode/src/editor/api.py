@@ -555,6 +555,14 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
     def topics(site_id: int | None = None, c: auth.Caller = Depends(caller)):
         with db.tenant(c.tenant_id) as s:
             q = text("""
+                WITH followed AS (
+                    SELECT f.id AS source_id FROM editor.sources f
+                     WHERE f.status = 'active' AND f.shared IS NOT TRUE
+                       AND (CAST(:site AS bigint) IS NULL OR f.site_id = :site OR f.site_id IS NULL)
+                    UNION
+                    SELECT f.archive_id FROM editor.sources f
+                     WHERE f.status = 'active' AND f.shared IS NOT TRUE AND f.archive_id IS NOT NULL
+                       AND (CAST(:site AS bigint) IS NULL OR f.site_id = :site OR f.site_id IS NULL))
                 SELECT t.id, t.label, t.keywords, t.labelled_by,
                        (SELECT score FROM editor.trend_scores ts WHERE ts.topic_id = t.id ORDER BY computed_at DESC LIMIT 1) AS hype,
                        (SELECT score FROM editor.opportunity_scores o WHERE o.topic_id = t.id
@@ -563,9 +571,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
                 FROM editor.topics t WHERE t.updated_at > :since
                   -- Topics of the archive with news from a source the newsroom (or the site) follows.
                   AND EXISTS (SELECT 1 FROM editor.topic_items ti JOIN editor.source_items si ON si.id = ti.item_id
-                              JOIN editor.sources f ON f.id = si.source_id OR f.archive_id = si.source_id
-                              WHERE ti.topic_id = t.id AND f.status = 'active' AND f.shared IS NOT TRUE
-                                AND (CAST(:site AS bigint) IS NULL OR f.site_id = :site OR f.site_id IS NULL))
+                              WHERE ti.topic_id = t.id AND si.source_id IN (SELECT source_id FROM followed))
                 ORDER BY hype DESC NULLS LAST LIMIT 100""").bindparams(
                 bindparam("since", type_=m.topics.c.updated_at.type)).columns(keywords=m.topics.c.keywords.type)
             rows = s.execute(q, {"site": site_id, "since": datetime.now(UTC) - timedelta(days=7)}).all()
