@@ -1934,5 +1934,6 @@
  "Esporta la redazione (ZIP)": "Redaktion exportieren (ZIP)",
  "Solo i dati (JSON)": "Nur die Daten (JSON)",
  "Lettura degli articoli di {n} notizie sullo stesso fatto": "Artikel von {n} Meldungen zum selben Ereignis werden gelesen",
- "Lettura di {n} documenti originali citati dalla notizia": "{n} Originaldokumente werden gelesen, auf die die Meldung verweist"
+ "Lettura di {n} documenti originali citati dalla notizia": "{n} Originaldokumente werden gelesen, auf die die Meldung verweist",
+ "rimasti su {n}": "übrig von {n}"
 }

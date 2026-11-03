@@ -1934,5 +1934,6 @@
  "Esporta la redazione (ZIP)": "Exporter la rédaction (ZIP)",
  "Solo i dati (JSON)": "Données seules (JSON)",
  "Lettura degli articoli di {n} notizie sullo stesso fatto": "Lecture des articles de {n} actualités sur le même fait",
- "Lettura di {n} documenti originali citati dalla notizia": "Lecture de {n} documents originaux cités par l'actualité"
+ "Lettura di {n} documenti originali citati dalla notizia": "Lecture de {n} documents originaux cités par l'actualité",
+ "rimasti su {n}": "restants sur {n}"
 }

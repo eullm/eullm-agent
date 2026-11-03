@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.23
+
+### Changed
+
+- The newsroom sees its plan's units, never the model's euros: "Costo
+  modello, 30 giorni" (Sito e profilo, Desk) and "Siti più costosi" are
+  shown to the operators only. The newsroom sees "Crediti del mese"
+  instead: the credits left of the month's, the extra ones, and a link to
+  the plan.
+
 ## 0.28.22
 
 ### Fixed

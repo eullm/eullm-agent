@@ -1934,5 +1934,6 @@
  "Esporta la redazione (ZIP)": "Export the newsroom (ZIP)",
  "Solo i dati (JSON)": "Data only (JSON)",
  "Lettura degli articoli di {n} notizie sullo stesso fatto": "Reading the articles of {n} reports of the same event",
- "Lettura di {n} documenti originali citati dalla notizia": "Reading {n} original documents the news links"
+ "Lettura di {n} documenti originali citati dalla notizia": "Reading {n} original documents the news links",
+ "rimasti su {n}": "left of {n}"
 }

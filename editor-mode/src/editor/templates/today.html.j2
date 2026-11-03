@@ -71,11 +71,19 @@
     <span class="value">{{ collected.sources }}</span>
     <span class="note">{{ _('in tutti i siti') if sites|length > 1 and not one else _('del sito') }}</span>
   </a>
+  {% if caller.operator %}
   <div class="card kpi">
     <span class="label">{{ _('Costo modello, 30 giorni') }}</span>
     <span class="value">{{ cost_month|num(2) }}</span>
     <span class="note" title="{{ _('ai prezzi di core.yaml') }}">{{ _('{n} chiamate', n=calls_month|tok) }}</span>
   </div>
+  {% elif credit_state and credit_state.enabled %}
+  <a class="card kpi{% if credit_state.pct >= 100 %} bad{% elif credit_state.pct >= 80 %} warn{% endif %}" href="/plan#crediti">
+    <span class="label">{{ _('Crediti del mese') }}</span>
+    <span class="value">{{ credit_state.month_left }}</span>
+    <span class="note">{{ _('rimasti su {n}', n=credit_state.month) }}{% if credit_state.extra %} · {{ _('{n} extra', n=credit_state.extra) }}{% endif %}</span>
+  </a>
+  {% endif %}
 </section>
 
 <div class="board">
@@ -196,6 +204,7 @@
       {% else %}<p class="hint">{{ _('Ancora nessuna attività: lancia la raccolta.') }}</p>{% endfor %}
     </div>
   </section>
+{% if caller.operator %}
   <section class="card" aria-labelledby="h-cost">
     <div class="card-head"><h2 id="h-cost">{{ _('Siti più costosi') }}</h2><span class="hint">{{ _('30 giorni, ai prezzi di core.yaml') }}{% if caller.operator %} · <a href="/admin/usage">{{ _('Consumi') }}</a>{% endif %}</span></div>
     <div class="pad rank">
@@ -209,6 +218,7 @@
       {% else %}<p class="hint">{{ _('Nessuna chiamata al modello negli ultimi 30 giorni.') }}</p>{% endfor %}
     </div>
   </section>
+  {% endif %}
   {% endif %}
   <section class="card" aria-labelledby="h-latest">
     <div class="card-head"><h2 id="h-latest">{{ _('Ultime notizie') }}</h2><a class="hint" href="/trends">{{ _('Tutti i trend') }}</a></div>

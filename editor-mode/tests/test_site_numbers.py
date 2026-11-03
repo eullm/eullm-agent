@@ -38,3 +38,16 @@ def test_the_site_page_sets_the_cover_style(db, tenant):
         body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id)).scalar()
     assert body["settings"]["cover_style"] == "editorial" and body["settings"]["cover_text"] is False
     assert c.post(f"/ui/sites/{site_id}/cover", data={"style": "boh"}).status_code == 400
+
+
+def test_the_newsroom_sees_its_credits_never_the_model_cost(db, tenant):
+    setup_site(db, tenant)
+    from conftest import set_plan
+    set_plan(db, tenant, credits_month=250)
+    token = auth.create_token(db, tenant, "owner-user", "owner")
+    c = TestClient(create_app(db))
+    c.post("/login", data={"token": token}, follow_redirects=False)
+    for path in ("/site", "/"):
+        page = c.get(path).text
+        assert "Costo modello" not in page and "Siti più costosi" not in page, path
+        assert "Crediti del mese" in page and "rimasti su 250" in page, path

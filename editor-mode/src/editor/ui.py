@@ -279,6 +279,8 @@ def register(app, ctx) -> None:
             "all_sites": whole(request), "starting": starting,
             "plan_state": billing.subscription(admin, c.tenant_id) if c.can("owner") else None,
             "plan_name": plan_name(s),
+            # The newsroom sees its plan's units; the model's euros only the operators.
+            "credit_state": None if c.operator else credits.state(s),
             "activity": data.pop("activity", None) or act.recent(s, tz, problem, site=scoped(request, sites, site)),
             "notice": unquote(notice) if notice else None, "now": datetime.now(tz), "when": when, "days": i18n.DAYS[i18n.current()], "months": i18n.MONTHS[i18n.current()], **data,
         }, status_code=status_code)
