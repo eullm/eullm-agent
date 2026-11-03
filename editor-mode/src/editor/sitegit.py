@@ -342,6 +342,9 @@ def add_to_sitemap(text: str, url: str, when: datetime) -> str | None:
 
 # --- GitHub ----------------------------------------------------------------------
 
+READ_RETRIES = (2, 5, 15)  # seconds before each new try of a read that failed on GitHub's side
+
+
 class GitHubError(RuntimeError):
     pass
 
@@ -351,9 +354,22 @@ class Repo:
     sends one request to the API."""
 
     def __init__(self, call, repo: str, sleep=None, clock=None):
-        self.call, self.repo = call, repo
+        self.raw_call, self.repo = call, repo
         self.sleep = sleep or time.sleep
         self.clock = clock or (lambda: time.monotonic())
+
+    def call(self, method: str, path: str, **kw):
+        """One request; a read GitHub answers with a server error (500,
+        502, 503, 504) or a rate limit is tried again after a pause: these
+        are GitHub's hiccups, and a publication failed for one of them
+        (2026-11-03, "reading llms.txt: 500"). Writes are never repeated."""
+        r = self.raw_call(method, path, **kw)
+        for pause in READ_RETRIES:
+            if method != "GET" or r.status_code not in (429, 500, 502, 503, 504):
+                break
+            self.sleep(pause)
+            r = self.raw_call(method, path, **kw)
+        return r
 
     def _ok(self, r, what: str):
         if r.status_code >= 400:

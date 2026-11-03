@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.21
+
+### Fixed
+
+- A publication to GitHub no longer fails at the first server error of
+  GitHub's: a read answered with 500, 502, 503, 504 or 429 is tried again
+  after 2, 5 and 15 seconds (on 2026-11-03 two articles of aitoday.it
+  failed on "reading llms.txt: 500"). Writes are never repeated, since
+  they may have gone through.
+
 ## 0.28.20
 
 ### Changed
