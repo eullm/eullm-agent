@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.32
+
+### Added
+
+- **I limiti sul Desk** (Francesco): un riquadro compatto con i tetti del
+  piano e a che punto si è: articoli di oggi della redazione automatica,
+  articoli del mese, fonti attive, siti, notizie lette oggi, crediti. Verde
+  se il tetto è lontano, giallo da 80%, rosso quando è raggiunto (con
+  "riprende domani" per il tetto giornaliero). I limiti assenti non compaiono.
+
 ## 0.28.31
 
 ### Fixed
