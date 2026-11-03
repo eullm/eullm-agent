@@ -464,6 +464,13 @@ def register(app, ctx) -> None:
 
     def topic_scores(s, site_id: int | None, limit: int = 100):
         return s.execute(text("""
+            WITH followed AS (  -- the sources the site follows, read once (an OR in the join read them per item)
+                SELECT f.id AS source_id FROM editor.sources f
+                 WHERE f.status = 'active' AND f.shared IS NOT TRUE AND (f.site_id = :site OR f.site_id IS NULL)
+                UNION
+                SELECT f.archive_id FROM editor.sources f
+                 WHERE f.status = 'active' AND f.shared IS NOT TRUE AND (f.site_id = :site OR f.site_id IS NULL)
+                   AND f.archive_id IS NOT NULL)
             SELECT t.id, t.label,
                    (SELECT score FROM editor.trend_scores ts WHERE ts.topic_id = t.id ORDER BY computed_at DESC LIMIT 1) AS hype,
                    (SELECT score FROM editor.opportunity_scores o WHERE o.topic_id = t.id AND o.site_id = :site
@@ -481,9 +488,7 @@ def register(app, ctx) -> None:
             FROM editor.topics t WHERE t.updated_at > :since
               -- Topics of the archive with news from a source the site follows.
               AND EXISTS (SELECT 1 FROM editor.topic_items ti JOIN editor.source_items si ON si.id = ti.item_id
-                          JOIN editor.sources f ON f.id = si.source_id OR f.archive_id = si.source_id
-                          WHERE ti.topic_id = t.id AND f.status = 'active' AND f.shared IS NOT TRUE
-                            AND (f.site_id = :site OR f.site_id IS NULL))
+                          WHERE ti.topic_id = t.id AND si.source_id IN (SELECT source_id FROM followed))
             ORDER BY opportunity DESC NULLS LAST, hype DESC NULLS LAST LIMIT :lim""").bindparams(
             bindparam("since", type_=m.topics.c.updated_at.type)),
             {"site": site_id, "lim": limit, "since": datetime.now(UTC) - timedelta(days=7)}).all()
@@ -721,7 +726,8 @@ def register(app, ctx) -> None:
                 cfg = autopilot.settings_of(body)
                 auto_cards.append({"site": x, "cfg": cfg, "day": day, "urls": urls,
                                    "last": auto_last((body.get("settings") or {})),
-                                   "left_out": autopilot.left_out(s, x.id, cfg, datetime.now(UTC))})
+                                   "left_out": (auto_last((body.get("settings") or {})) or {}).get("left_out", 0)
+                                   if (auto_last((body.get("settings") or {})) or {}).get("done") else 0})
             # A source the maintenance suspended is news, not a decision.
             decisions = len(profile_drafts) + proposed_total + len(pending_pubs)
             desk = desk_rows(s, [one] if one else sites, lines, pending)

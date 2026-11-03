@@ -2,6 +2,17 @@
 
 ## 0.28.30
 
+### Fixed
+
+- **Desk di 14 secondi, Trend e piano di 6** (log del server di Francesco: sul
+  Desk solo 1,3 s nel database): il Desk ricalcolava a ogni apertura le
+  notizie "rimaste fuori dal tetto", leggendo e confrontando fino a 3000
+  notizie per ognuna delle 80 proposte. Ora lo conta la redazione automatica
+  una volta all'ora e il Desk legge il numero. In Trend e piano una sola
+  query impiegava 4,9 s: mancava l'indice dei punteggi di opportunità per
+  tema (migrazione 0040, sqlite 0029) e le fonti seguite si cercavano con un
+  OR nel join; ora sono lette una volta, con lo stesso schema del Desk.
+
 ### Changed
 
 - **La ricerca fonti dice perché** (Francesco: le fonti restano 44): il
