@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.28.30
+## 0.28.31
 
 ### Fixed
 
@@ -12,6 +12,8 @@
   query impiegava 4,9 s: mancava l'indice dei punteggi di opportunità per
   tema (migrazione 0040, sqlite 0029) e le fonti seguite si cercavano con un
   OR nel join; ora sono lette una volta, con lo stesso schema del Desk.
+
+## 0.28.30
 
 ### Changed
 
