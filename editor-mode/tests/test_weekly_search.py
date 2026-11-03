@@ -220,11 +220,10 @@ def test_pages_for_report_search_console_and_first_steps(db, tenant, monkeypatch
     assert preview.status_code == 200 and "Bari in fibra" not in preview.text and "blog.example" in preview.text
     monkeypatch.delenv("EDITOR_GSC_KEY", raising=False)
     monkeypatch.delenv("EDITOR_GSC_KEY_FILE", raising=False)
-    site = c.get("/site").text
-    assert "Google Search Console" in site and "EDITOR_GSC_KEY" in site
+    assert "Google Search Console" not in c.get("/site?tab=publish").text  # nothing to connect without the server's key
     r = c.post(f"/ui/sites/{site_id}/search-console", data={"prop": "blog.example"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/site#h-gsc"
-    assert "sc-domain:blog.example" in c.get("/site").text
+    assert r.status_code == 303 and r.headers["location"] == "/site?tab=publish"
+    assert "sc-domain:blog.example" in c.get("/site?tab=publish").text
     r = c.post("/ui/preferences", data={"timezone": "Europe/Rome", "briefing_hour": "8", "language": "it"},
                follow_redirects=False)
     assert r.status_code == 303

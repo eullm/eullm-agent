@@ -849,7 +849,7 @@ def register(app, ctx) -> None:
                     x["busy"], x["wait"] = True, t("La redazione automatica è accesa: sceglie le proposte, scrive e "
                                                   "pubblica da sola ogni ora. Non serve il tuo sì; lo stato è in "
                                                   "Sito e profilo › Redazione automatica.")
-                    x["href"] = "/site#h-auto"
+                    x["href"] = "/site?tab=auto"
         if all(x["done"] for x in steps):
             return None
         # A site read without a destination can wait for it: the next step is the one in view
@@ -957,7 +957,8 @@ def register(app, ctx) -> None:
             "discards": props.discards(s, site.id, month_ago),
         }
 
-    def site_page(request, c, s, sites, site, editing: bool = False, status_code: int = 200, error: str | None = None):
+    def site_page(request, c, s, sites, site, editing: bool = False, status_code: int = 200, error: str | None = None,
+                  tab: str = "profile", confirm_delete: bool = False):
         p = m.editorial_profiles
         profiles = s.execute(select(p).where(p.c.site_id == site.id).order_by(p.c.version.desc())).all() if site else []
         approved = next((x for x in profiles if x.status == "approved"), None)
@@ -997,7 +998,7 @@ def register(app, ctx) -> None:
                 ev.append({"url": url, "label": label})
         return render(request, "site.html.j2", c, s, "site", status_code=status_code, thin_posts=THIN_POSTS, _sites=(sites, site),
                       profiles=profiles, approved=approved, draft=draft, shown=shown, analysis=analysis,
-                      rows=rows, evidence=ev, editing=editing, error=error,
+                      tab=tab, confirm_delete=confirm_delete, rows=rows, evidence=ev, editing=editing, error=error,
                       numbers=site_numbers(s, site) if site else None,
                       comparison=prof.compare(approved.body, draft.body) if approved and draft else [],
                       jobs=[j for j in jobs.recent(s, 10) if j["status"] != "done"][:5],
@@ -1027,10 +1028,12 @@ def register(app, ctx) -> None:
         return out
 
     @app.get("/site", response_class=HTMLResponse)
-    def site_view(request: Request, edit: int = 0, c: auth.Caller = Depends(viewer)):
+    def site_view(request: Request, edit: int = 0, tab: str = "profile", delete: int = 0,
+                  c: auth.Caller = Depends(viewer)):
         with db.tenant(c.tenant_id) as s:
             sites, site = current_site(s, request)
-            return site_page(request, c, s, sites, site, editing=bool(edit) and c.can("owner"))
+            return site_page(request, c, s, sites, site, editing=bool(edit) and c.can("owner"), tab=tab,
+                             confirm_delete=bool(delete) and c.can("owner"))
 
     @app.post("/ui/sites")
     def ui_add_site(request: Request, domain: str = Form(...), back: str = Form("/"),
@@ -1217,7 +1220,7 @@ def register(app, ctx) -> None:
         with db.tenant(c.tenant_id) as s:
             if not prof.set_proposals_per_day(s, site_id, n):
                 return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
-        return done("/site", t("Da ora {n} proposte al giorno per questo sito.", n=max(0, min(50, n))))
+        return done("/site?tab=auto", t("Da ora {n} proposte al giorno per questo sito.", n=max(0, min(50, n))))
 
     @app.post("/ui/sites/{site_id}/cover")
     def ui_cover(site_id: int, style: str = Form(...), text: str = Form(""),
@@ -1227,7 +1230,7 @@ def register(app, ctx) -> None:
         with db.tenant(c.tenant_id) as s:
             if not prof.set_cover(s, site_id, style, bool(text)):
                 return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
-        return done("/site", t("Stile delle copertine salvato: vale dalla prossima immagine."))
+        return done("/site?tab=auto", t("Stile delle copertine salvato: vale dalla prossima immagine."))
 
     @app.post("/ui/sites/{site_id}/auto")
     def ui_auto(site_id: int, brief: str = Form(""), sections: str = Form(""), directives: str = Form(""),
@@ -1249,26 +1252,26 @@ def register(app, ctx) -> None:
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
-            return done("/site#h-auto", t("Impostazioni non salvate: {e}.", e=e))
+            return done("/site?tab=auto", t("Impostazioni non salvate: {e}.", e=e))
         with db.tenant(c.tenant_id) as s:
             if s.execute(select(m.sites.c.id).where(m.sites.c.id == site_id)).scalar() is None:
                 raise HTTPException(404, "site not found")
             saved = autopilot.save(s, site_id, values)
         if action == "profile":
             if not values["brief"]:
-                return done("/site#h-auto", t("Scrivi prima il contesto: il profilo si ricava da lì."))
+                return done("/site?tab=auto", t("Scrivi prima il contesto: il profilo si ricava da lì."))
             queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
                           {"site_id": site_id, "language": language if language in autopilot.LANGS else "it",
                            "auto": values})
             return done("/site", t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, "
                                    "poi lo approvi qui sotto."))
         if not saved:
-            return done("/site#h-auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
+            return done("/site?tab=auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
         if values["enabled"]:
-            return done("/site#h-auto", t("Redazione automatica accesa: dal prossimo giro orario sceglie, scrive e "
+            return done("/site?tab=auto", t("Redazione automatica accesa: dal prossimo giro orario sceglie, scrive e "
                                           "pubblica fino a {n} articoli al giorno, dalle {start} alle {end}.",
                                           n=values["per_day"], start=values["hours"][0], end=values["hours"][1]))
-        return done("/site#h-auto", t("Impostazioni salvate. La redazione automatica è spenta."))
+        return done("/site?tab=auto", t("Impostazioni salvate. La redazione automatica è spenta."))
 
     @app.post("/ui/sites/{site_id}/auto/stop")
     def ui_auto_stop(site_id: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -1277,7 +1280,7 @@ def register(app, ctx) -> None:
                 m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
             if body is not None:
                 autopilot.save(s, site_id, {**autopilot.settings_of(body), "enabled": False})
-        return done("/site#h-auto", t("Redazione automatica fermata: non parte nessun articolo nuovo. Quelli già in "
+        return done("/site?tab=auto", t("Redazione automatica fermata: non parte nessun articolo nuovo. Quelli già in "
                                       "scrittura restano bozze da rileggere."))
 
     @app.post("/ui/sites/{site_id}/sources-style")
@@ -1287,7 +1290,7 @@ def register(app, ctx) -> None:
         with db.tenant(c.tenant_id) as s:
             if not prof.set_sources_style(s, site_id, style):
                 return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
-        return done("/site", t("Fonti negli articoli salvate: valgono dalla prossima pubblicazione."))
+        return done("/site?tab=auto", t("Fonti negli articoli salvate: valgono dalla prossima pubblicazione."))
 
     @app.post("/ui/sites/{site_id}/search-console")
     def ui_search_console(site_id: int, prop: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
@@ -1297,23 +1300,23 @@ def register(app, ctx) -> None:
         except LookupError:
             raise HTTPException(404, "site not found") from None
         if status is None:
-            return done("/site#h-gsc", t("Search Console scollegata: i suoi dati sono stati cancellati."))
+            return done("/site?tab=publish", t("Search Console scollegata: i suoi dati sono stati cancellati."))
         if client is None:
-            return done("/site#h-gsc", t("Proprietà salvata. Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY): i dati arrivano quando c'è."))
+            return done("/site?tab=publish", t("Proprietà salvata. Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY): i dati arrivano quando c'è."))
         if status != "ok":
-            return done("/site#h-gsc", t(searchconsole.problem(status) or status))
+            return done("/site?tab=publish", t(searchconsole.problem(status) or status))
         searchconsole.sync(db, c.tenant_id, client, site_id=site_id)
-        return done("/site#h-gsc", t("Search Console collegata: clic e ricerche degli ultimi giorni sono arrivati, poi si aggiornano ogni notte."))
+        return done("/site?tab=publish", t("Search Console collegata: clic e ricerche degli ultimi giorni sono arrivati, poi si aggiornano ogni notte."))
 
     @app.post("/ui/sites/{site_id}/search-console/sync")
     def ui_search_console_sync(site_id: int, c: auth.Caller = Depends(ctx.need("owner"))):
         client = searchconsole.client_from_env()
         if client is None:
-            return done("/site#h-gsc", t("Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY)."))
+            return done("/site?tab=publish", t("Il server non ha ancora la chiave di Google (EDITOR_GSC_KEY)."))
         got = searchconsole.sync(db, c.tenant_id, client, site_id=site_id).get(site_id)
         if isinstance(got, str):
-            return done("/site#h-gsc", t(searchconsole.problem(got) or got))
-        return done("/site#h-gsc", t("Dati di Search Console aggiornati: {n} righe.", n=got or 0))
+            return done("/site?tab=publish", t(searchconsole.problem(got) or got))
+        return done("/site?tab=publish", t("Dati di Search Console aggiornati: {n} righe.", n=got or 0))
 
     @app.post("/ui/sites/{site_id}/discard/{version}")
     def ui_discard(site_id: int, version: int, c: auth.Caller = Depends(ctx.need("owner"))):
@@ -1348,10 +1351,10 @@ def register(app, ctx) -> None:
         if why == "not found":
             raise HTTPException(404, "version not found")
         if why == "approved":
-            return done("/site", t("La v{version} è la linea in uso: approvane un'altra prima di eliminarla.", version=version))
+            return done("/site?tab=site", t("La v{version} è la linea in uso: approvane un'altra prima di eliminarla.", version=version))
         if why == "used":
-            return done("/site", t("La v{version} ha già prodotto proposte e punteggi: resta nello storico.", version=version))
-        return done("/site", t("Versione v{version} eliminata.", version=version))
+            return done("/site?tab=site", t("La v{version} ha già prodotto proposte e punteggi: resta nello storico.", version=version))
+        return done("/site?tab=site", t("Versione v{version} eliminata.", version=version))
 
     @app.post("/ui/sites/{site_id}/profile")
     def ui_edit_profile(request: Request, site_id: int, body: str = Form(...),
@@ -1729,7 +1732,7 @@ def register(app, ctx) -> None:
             raise HTTPException(404, "site not found") from None
         msg = (t("Indirizzi del feed cambiati: quelli vecchi non funzionano più, aggiornali in Zapier, Make o n8n.")
                if renew == "1" else t("Feed creato: copia l'indirizzo nello strumento che pubblica per te."))
-        return done("/site#h-delivery", msg)
+        return done("/site?tab=publish", msg)
 
     @app.get("/feeds/{name}")
     def feed(request: Request, name: str, lang: str | None = None):
@@ -1815,11 +1818,11 @@ def register(app, ctx) -> None:
         except tr.LanguageError:
             with db.tenant(c.tenant_id) as s:
                 limit = tr.allowed(s)
-            return done("/site#h-languages", t("Il piano permette {n} lingue per sito, compresa la sua: togline qualcuna "
+            return done("/site?tab=publish", t("Il piano permette {n} lingue per sito, compresa la sua: togline qualcuna "
                                                "o passa a un piano più grande.", n=limit))
         if not chosen:
-            return done("/site#h-languages", t("Gli articoli restano solo nella lingua del sito."))
-        return done("/site#h-languages", t("Ogni articolo approvato sarà tradotto in: {languages}.",
+            return done("/site?tab=publish", t("Gli articoli restano solo nella lingua del sito."))
+        return done("/site?tab=publish", t("Ogni articolo approvato sarà tradotto in: {languages}.",
                                            languages=", ".join(tr.LANGUAGES[x] for x in chosen)))
 
     @app.post("/ui/drafts/{draft_id}/publish")
@@ -2191,28 +2194,28 @@ def register(app, ctx) -> None:
         try:
             new = normalise_domain(domain) if domain.strip() else old
         except HTTPException:
-            return done("/site", t("{domain} non è un dominio valido.", domain=domain.strip()[:100]))
+            return done("/site?tab=site", t("{domain} non è un dominio valido.", domain=domain.strip()[:100]))
         if new != old:
             if not free:
-                return done("/site", t("Il profilo di {domain} è già approvato: per cambiare dominio elimina il sito "
+                return done("/site?tab=site", t("Il profilo di {domain} è già approvato: per cambiare dominio elimina il sito "
                                        "e aggiungi quello giusto.", domain=old))
             with db.tenant(c.tenant_id) as s:
                 if s.execute(select(m.sites.c.id).where(m.sites.c.domain == new)).scalar() is not None:
-                    return done("/site", t("{domain} c'è già tra i siti della redazione.", domain=new))
+                    return done("/site?tab=site", t("{domain} c'è già tra i siti della redazione.", domain=new))
             if ctx.admin is not None:
                 try:
                     trials.check_domain(ctx.admin, c.tenant_id, new)
                 except trials.TrialUsed:
                     d = new
-                    return done("/site", t("{domain} ha già avuto la prova gratuita in un'altra redazione: per lavorarci scegli un piano in Abbonamento.", domain=d))
+                    return done("/site?tab=site", t("{domain} ha già avuto la prova gratuita in un'altra redazione: per lavorarci scegli un piano in Abbonamento.", domain=d))
             try:
                 manage.delete_site(db, c.tenant_id, site_id)
             except manage.ManageError as e:
-                return done("/site", str(e))
+                return done("/site?tab=site", str(e))
             ctx.run_analysis(c.tenant_id, new)
             with db.tenant(c.tenant_id) as s:
                 sid = s.execute(select(m.sites.c.id).where(m.sites.c.domain == new)).scalar()
-            resp = done("/site", t("Dominio corretto da {old} a {new}: l'analisi riparte da capo, la segui in "
+            resp = done("/site?tab=site", t("Dominio corretto da {old} a {new}: l'analisi riparte da capo, la segui in "
                                    "Attività.", old=old, new=new))
             if sid is not None:
                 resp.set_cookie(SITE_COOKIE, str(sid), httponly=True, samesite="strict", max_age=365 * 86400)
@@ -2220,8 +2223,8 @@ def register(app, ctx) -> None:
         try:
             manage.rename_site(db, c.tenant_id, site_id, name or old)
         except manage.ManageError as e:
-            return done("/site", str(e))
-        return done("/site", t("Sito aggiornato."))
+            return done("/site?tab=site", str(e))
+        return done("/site?tab=site", t("Sito aggiornato."))
 
     @app.post("/ui/sites/{site_id}/delete")
     def ui_delete_site(site_id: int, confirm: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
@@ -2230,12 +2233,12 @@ def register(app, ctx) -> None:
         if domain is None:
             raise HTTPException(404, "site not found")
         if confirm.strip().lower() != domain:
-            return done("/site#h-danger", t("Per eliminare scrivi il dominio esatto ({domain}): niente è stato "
+            return done("/site?tab=site&delete=1", t("Per eliminare scrivi il dominio esatto ({domain}): niente è stato "
                                             "eliminato.", domain=domain))
         try:
             manage.delete_site(db, c.tenant_id, site_id)
         except manage.ManageError as e:
-            return done("/site#h-danger", str(e))
+            return done("/site?tab=site&delete=1", str(e))
         resp = done("/", t("{domain} eliminato con profilo, fonti seguite, proposte, bozze e destinazioni.",
                            domain=domain))
         forget_site(resp)

@@ -2121,5 +2121,15 @@
  "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "Si llega una noticia importante, aún puede salir un artículo más (hasta {a} adelantados de mañana, {c} con créditos).",
  "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Noticias de calidad que dejó fuera el tope de hoy: {n}. Se publicarían con más artículos al día.",
  "Sblocca più articoli": "Desbloquear más artículos",
- "Scrivila ora": "Escribirla ahora"
+ "Scrivila ora": "Escribirla ahora",
+ "Sezioni della pagina": "Secciones de la página",
+ "accesa": "activada",
+ "Vedi gli articoli": "Ver los artículos",
+ "Regole": "Reglas",
+ "Come scrive il sito": "Cómo escribe el sitio",
+ "Temi che segue": "Temas que sigue",
+ "Manca la chiave di Google sul server (EDITOR_GSC_KEY).": "Falta la clave de Google en el servidor (EDITOR_GSC_KEY).",
+ "Feed per altri strumenti": "Feed para otras herramientas",
+ "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "Para Zapier, Make, n8n o un sitio que importa un feed: contiene los últimos 50 artículos aprobados, con texto, imagen y campos para Google. El sitio en sí se conecta desde <a href=\"/publications\">Publicaciones</a>.",
+ "Versioni del profilo": "Versiones del perfil"
 }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.27
+
+### Changed
+
+- **Sito e profilo in quattro schede** (Francesco): *Profilo*, *Redazione
+  automatica*, *Pubblicazione*, *Il sito*. Ogni scheda mostra solo il suo
+  contenuto, niente più triangoli da aprire. Tolti i riquadri "Il sito in
+  numeri" (sono nel Desk), l'elenco degli articoli del giorno (rimanda a
+  Pubblicazioni) e le percentuali dei temi quando non c'è nulla da
+  confrontare: restano i temi con le parole chiave e "Togli il tema".
+  Le impostazioni sparse (proposte al giorno, copertine, fonti negli articoli)
+  stanno in un unico riquadro "Come scrive il sito"; le regole della redazione
+  automatica sono sempre visibili nella loro scheda.
+- Lingue, feed e Search Console stanno in *Pubblicazione*; Search Console non
+  compare se il server non ha la chiave (prima chiedeva "all'amministratore").
+- "Elimina il sito" è l'ultima riga di *Il sito* e chiede due passaggi: link,
+  poi il dominio da scrivere. Versioni del profilo spostate lì.
+- Corretto: il riassunto di un profilo nato dal contesto mostrava il dizionario
+  grezzo invece del testo.
+
 ## 0.28.26
 
 ### Added
