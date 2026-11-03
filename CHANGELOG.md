@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.28.22
+
+### Fixed
+
+- "Leggi anche" was empty on sites written by the newsroom: the links come
+  from the site's own articles, and those were only the ones found by the
+  site analysis. Every article the newsroom publishes on the site
+  (WordPress, GitHub, webhook; not as a draft, not the translations) is
+  now one of them as soon as it is out, and the ones published before
+  are added the next time an article is written. The proposals also know
+  the site already told that story.
+- A link to a related article needs two shared words of the title, or one
+  word the site rarely uses (a company, a person, a product): on a site
+  about AI, "Apple" links the Apple articles, "intelligenza" alone does
+  not. The closest come first.
+
 ## 0.28.21
 
 ### Fixed

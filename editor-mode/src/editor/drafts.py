@@ -556,6 +556,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         from .opportunity import related_posts
 
         news = list(s.execute(select(m.source_items.c.title).where(m.source_items.c.id.in_(cited))).scalars())
+        seo.remember_published(s, tenant_id, prop.site_id)
         posts = related_posts(s, prop.site_id, [prop.title, *news])
     step(N_("Lettura degli articoli di {n} notizie sullo stesso fatto"), n=len(ids))
     links = fetch_contents(db, tenant_id, ids, client)
