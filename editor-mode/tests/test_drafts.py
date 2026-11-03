@@ -1,4 +1,5 @@
 import json
+import re
 
 import httpx
 import respx
@@ -181,3 +182,50 @@ def test_machine_marks_are_taken_out_of_the_text():
     assert humanize("Dal 2020–2024 i dati -- e non solo... crescono…") == "Dal 2020-2024 i dati, e non solo, crescono."
     assert humanize("Un modello open-source, ben fatto") == "Un modello open-source, ben fatto"
     assert humanize("Fine — .") == "Fine."
+
+
+def test_the_original_document_is_read_and_can_be_cited(db, tenant):
+    """A news story linking an official document: the document is read and
+    given to the model as ORIGINAL, citable, so its figure wins over the
+    outlet's (the US GDP article of 2026-11-03)."""
+    pid, cited = accepted_proposal(db, tenant)
+    page = ARTICLE_PAGE.replace("</article>", '<p>Il dato del <a href="https://www.bea.gov/news/2026/gdp-q3">'
+                                "Bureau of Economic Analysis</a>.</p></article>")
+    official = "<html><head><title>GDP, Third Quarter 2026</title></head><body><article><p>" + \
+        "Real gross domestic product increased at an annual rate of 3.4 percent in the third quarter of 2026. " * 12 + \
+        "</p></article></body></html>"
+    with respx.mock(assert_all_called=False) as router:
+        router.get(url__regex=r"https://(news|rete)\.example/.*").mock(
+            return_value=httpx.Response(200, text=page, headers={"content-type": "text/html"}))
+        router.get(url__regex=r"https://www\.bea\.gov/robots\.txt").mock(return_value=httpx.Response(404))
+        router.get("https://www.bea.gov/news/2026/gdp-q3").mock(
+            return_value=httpx.Response(200, text=official, headers={"content-type": "text/html"}))
+        holder = {}
+
+        def answer(request):
+            prompt = json.loads(request.content)["messages"][1]["content"]
+            doc = int(re.search(r"\[(\d+)\] ORIGINAL GDP, Third Quarter 2026", prompt).group(1))
+            holder["doc"] = doc
+            return chat(json.dumps({"title": "Pil Usa, crescita del 3,4% annualizzato", "sections": [{"heading": None, "claims": [
+                {"text": "Il Pil reale degli Stati Uniti è cresciuto del 3.4 per cento annualizzato nel terzo trimestre.",
+                 "sources": [doc]},
+                {"text": "Open Fiber ha completato la rete a Bari.", "sources": [cited[0]]},
+                {"text": "I lavori sono durati 18 mesi.", "sources": [cited[0]]}]}]}))
+
+        router.post("http://core.test/v1/llm/chat").mock(side_effect=answer)
+        with httpx.Client() as client:
+            did = drafts.write_draft(db, tenant, pid, CoreClient("http://core.test", "tok"), client)
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+        dup = s.execute(text("SELECT duplicate_of FROM editor.source_items WHERE id = :i"), {"i": holder["doc"]}).scalar()
+    assert d.flags == [] and "bea.gov" in d.body_md and dup in cited
+
+
+def test_document_links_are_official_and_in_the_text():
+    from editor.html_extract import parse_html
+
+    page = parse_html('<nav><a href="https://www.istat.it/menu">Istat</a></nav><article><p>Secondo '
+                      '<a href="https://www.istat.it/comunicato/pil">Istat</a> e <a href="https://blog.example/x">un blog</a>, '
+                      '<a href="https://eur-lex.europa.eu/eli/reg/2024/1689">l\'AI Act</a>.</p></article>', "https://news.example/1")
+    assert drafts.document_links(page, "https://news.example/1") == [
+        "https://www.istat.it/comunicato/pil", "https://eur-lex.europa.eu/eli/reg/2024/1689"]

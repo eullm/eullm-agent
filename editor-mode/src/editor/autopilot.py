@@ -56,6 +56,10 @@ RULES = [
     "do not state, or a number without what it is compared to when the sources give it",
     "has a title, subtitle or opening more certain, larger or newer than the body and the sources (a forecast, "
     "an allegation or a study's result told as a fact, an old event told as new)",
+    "does not give the essential information its title promises (the figure, the decision, what the study "
+    "found), or tells context (a precedent, a comparison) as a second story",
+    "gives a central number or a record that differs from an original document among the sources (an "
+    "official statistic, a decision, a paper): the document wins over the outlets reporting it",
 ]
 
 CHECK_SYSTEM = (
@@ -358,14 +362,16 @@ def _excerpts(db, tenant_id: str, draft_id: int) -> list[str]:
     editor-in-chief checks the article against them and not against itself."""
     cs, c, si = m.draft_claim_sources.c, m.draft_claims.c, m.source_items.c
     with db.tenant(tenant_id) as s:
-        rows = s.execute(select(si.id, si.title, si.summary, si.content, si.published_at)
+        rows = s.execute(select(si.id, si.title, si.summary, si.content, si.published_at, m.sources.c.url.label("feed"))
+                         .join(m.sources, m.sources.c.id == si.source_id)
                          .where(si.id.in_(select(cs.item_id).join(m.draft_claims, c.id == cs.claim_id)
                                           .where(c.draft_id == draft_id)))).all()
     out = ["Cited sources (title, date and what was read of each):"]
     for r in rows:
         text = " ".join(f"{r.summary or ''} {r.content or ''}".split())[:EXCERPT]
         date = r.published_at.date().isoformat() if r.published_at else "undated"
-        out.append(f"- {r.title} ({date}): {text or 'only the title was read'}")
+        kind = "ORIGINAL DOCUMENT, " if r.feed == drafts.DOCUMENTS_SOURCE else ""
+        out.append(f"- {r.title} ({kind}{date}): {text or 'only the title was read'}")
     return out if rows else []
 
 

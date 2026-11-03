@@ -12,11 +12,20 @@
     of the same sector that is about something else is no longer given to
     the model nor counted as a second source: it made articles join
     separate stories (Trump with Amazon and Oracle, the US GDP with
-    Aramco).
+    Aramco). Up to 4 earlier news on the subject come apart, marked as
+    context: the model uses one only as a precedent, a comparison or the
+    rule that applies, says which, and never as a second story; they do
+    not count as sources.
+  - **the original document.** When the main news links an official
+    document (statistics offices, central banks, governments, the EU,
+    authorities, laws, papers), it is read and given to the model as
+    citable, and the central numbers, records and decisions follow it,
+    not the outlet: the GDP article repeated the outlet's mistake.
   - **as long as the sources allow.** No minimum of 900 words and no
     second call asking to "expand to the target": with one outlet, or only
     a title or an abstract, the model writes a short news piece and says
-    what is not known yet. Questions and answers only when they add
+    what is not known yet; even short, it must give what its title
+    promises (the figure, the decision, what the study found). Questions and answers only when they add
     something, no longer two to four in every article. One model call per
     draft instead of two in most cases.
   - **exact.** A number with what it is compared to, superlatives,
@@ -26,7 +35,9 @@
   - **the AI editor-in-chief reads the sources.** It gets what was read
     of each cited source and refuses an article that joins separate
     events, states a number, superlative or cause the sources do not
-    state, or has a title or opening more certain than the body.
+    state, has a title or opening more certain than the body, misses the
+    essential information its title promises, or gives a central figure
+    different from the original document.
   - **arXiv in full.** An arXiv abstract page is read as the paper's HTML
     version.
 - The checklist of a draft no longer asks for two questions and answers
