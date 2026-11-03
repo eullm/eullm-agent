@@ -1855,5 +1855,10 @@
  "Al mattino (%)": "In the morning (%)",
  "Aggiornamento alla {version} in corso: non serve rilanciarlo.": "Update to {version} in progress: no need to start it again.",
  "Segui": "Follow",
- "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un'altra versione. Rilanciarlo non serve: aspetta la prossima versione.": "The update to {version} finished, but the server still answers as {installed}: the images published as {version} hold another version. Starting it again will not help: wait for the next version."
+ "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un'altra versione. Rilanciarlo non serve: aspetta la prossima versione.": "The update to {version} finished, but the server still answers as {installed}: the images published as {version} hold another version. Starting it again will not help: wait for the next version.",
+ "Aggiornamento alla {version} chiesto: il server lo prende in pochi secondi (al più un minuto, su un server senza systemd).": "Update to {version} requested: the server picks it up in a few seconds (at most a minute on a server without systemd).",
+ "in attesa del server": "waiting for the server",
+ "fatto": "done",
+ "Avanzamento dell'aggiornamento": "Update progress",
+ "Aggiornamento alla {version} chiesto: il server fa il backup, scarica la versione e riavvia; la barra mostra a che punto è. Il pannello resta irraggiungibile per qualche secondo.": "Update to {version} requested: the server backs up, downloads the version and restarts; the bar shows how far it is. The panel is unreachable for a few seconds."
 }

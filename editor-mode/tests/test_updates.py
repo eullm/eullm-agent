@@ -63,7 +63,10 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     assert r.status_code == 303 and r.headers["location"] == "/admin/updates#aggiornamenti"
     asked = json.loads((tmp_path / "request.json").read_text())
     assert asked["version"] == "99.0.0" and asked["by"] == op
-    assert "chiesto: il server lo prende entro un minuto" in c.get("/admin/updates").text
+    page = c.get("/admin/updates").text
+    assert "chiesto: il server lo prende in pochi secondi" in page and 'id="update-progress"' in page
+    p = c.get("/admin/updates/progress").json()
+    assert p["busy"] and p["pending"] and p["percent"] == 0
     # A second click while it waits asks nothing more.
     c.post("/admin/updates/apply", data={"version": "99.0.0"})
     assert json.loads((tmp_path / "request.json").read_text())["at"] == asked["at"]
@@ -74,10 +77,12 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     (tmp_path / "update.log").write_text("manifest unknown\nfailed during: pull\n")
     page = c.get("/admin/updates").text
     assert "non riuscito durante: download della versione" in page and "manifest unknown" in page
+    assert c.get("/admin/updates/progress").json()["state"] == "failed"
 
     # Not reachable without the console.
     other = TestClient(create_app(db, updates_dir=str(tmp_path)))
     assert other.post("/admin/updates/apply", data={"version": "99.0.0"}).status_code in (401, 403)
+    assert other.get("/admin/updates/progress", follow_redirects=False).status_code in (303, 401, 403)
 
 
 def test_without_the_folder_the_console_says_how(db):
@@ -170,7 +175,11 @@ def test_an_update_in_progress_or_gone_wrong_is_not_offered_again(tmp_path):
     assert st["busy"]
     (tmp_path / "request.json").unlink()
     (tmp_path / "status.json").write_text(json.dumps({"state": "running", "step": "pull", "version": "0.28.13"}))
-    assert updates.state(tmp_path, "0.28.12", now)["busy"]
+    st = updates.state(tmp_path, "0.28.12", now)
+    assert st["busy"] and st["percent"] == 10  # an older script writes no percentage: the step gives one
+    (tmp_path / "status.json").write_text(json.dumps({"state": "running", "step": "pull", "percent": 47,
+                                                      "version": "0.28.13"}))
+    assert updates.state(tmp_path, "0.28.12", now)["percent"] == 47
     # Done, but the images of 0.28.13 held 0.28.12: no button to do the same again.
     (tmp_path / "status.json").write_text(json.dumps({"state": "done", "version": "0.28.13", "from": "0.28.13"}))
     st = updates.state(tmp_path, "0.28.12", now)
