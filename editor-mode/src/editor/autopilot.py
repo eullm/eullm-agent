@@ -34,7 +34,7 @@ LANGS = ("it", "en", "de", "fr", "es")
 
 DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "avoid": [], "per_day": 6,
             "min_opportunity": 40.0, "min_sources": 2, "hours": [7, 23], "target_id": None, "credit": True,
-            "on_problem": "fix"}
+            "on_problem": "fix", "morning_share": 50}
 # "fix": an article with problems is written again once, by the stronger model when the console sets one,
 # and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
 ON_PROBLEM = ("fix", "hold")
@@ -95,6 +95,7 @@ class _Auto(BaseModel):
     target_id: int | None = None
     credit: bool = True
     on_problem: str = Field("fix", pattern="^(fix|hold)$")
+    morning_share: int = Field(DEFAULTS["morning_share"], ge=0, le=100)
 
 
 def check_settings(values: dict) -> dict:
@@ -186,10 +187,16 @@ TRIES_PER_ARTICLE = 2
 
 
 def source_count(s, proposal_id: int) -> int:
-    """Distinct sources behind a proposal's cited news."""
-    pc, si = m.proposal_citations.c, m.source_items.c
+    """Distinct sources behind a proposal: its cited news and the other news
+    of its topic, which the article is written from too (drafts.write_draft).
+    A story picked from one feed but told by others counts all of them."""
+    pc, si, ti = m.proposal_citations.c, m.source_items.c, m.topic_items.c
+    topic = s.execute(select(m.proposals.c.topic_id).where(m.proposals.c.id == proposal_id)).scalar()
+    cited = select(pc.item_id.label("item_id")).where(pc.proposal_id == proposal_id)
+    same = select(ti.item_id.label("item_id")).where(ti.topic_id == topic)
+    items = cited.union(same).subquery()
     return s.execute(select(func.count(func.distinct(si.source_id))).select_from(
-        m.proposal_citations.join(m.source_items, si.id == pc.item_id)).where(pc.proposal_id == proposal_id)).scalar() or 0
+        items.join(m.source_items, si.id == items.c.item_id))).scalar() or 0
 
 
 def choose(s, site_id: int, cfg: dict, now: datetime, n: int) -> list:
@@ -244,6 +251,10 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         left = min(cfg["per_day"] - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
         # Spread over the hours left, so the day does not go in the first hour.
         want = math.ceil(left / hours_left(cfg, local))
+        # The morning goes first: the first hour of the day takes its share
+        # of the day's articles (half, by default), the rest is spread.
+        if local.hour == cfg["hours"][0]:
+            want = max(want, min(left, math.ceil(cfg["per_day"] * cfg["morning_share"] / 100) - kept))
         if month_left is not None:
             want = min(want, int(month_left))
         picked = choose(s, site_id, cfg, now, want)

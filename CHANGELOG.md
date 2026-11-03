@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.13
+
+### Changed
+
+- The automatic newsroom publishes the morning first: in the first hour of
+  its window it takes on its share of the day's articles (half by
+  default, "Al mattino (%)"), the rest is spread over the day.
+- A story counts all the sources that tell it: the "different sources"
+  rule reads the cited news and the other news of its topic, the same the
+  article is written from. Stories picked from one feed and told by
+  others no longer wait for nothing.
+
 ## 0.28.12
 
 ### Added

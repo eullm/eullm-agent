@@ -1850,5 +1850,7 @@
  "Indirizzi dei siti o dei feed, uno per riga (fino a 20)": "Adresses des sites ou des flux, une par ligne (jusqu'à 20)",
  "Per ogni sito l'agente cerca il feed e lo legge. Quelle che scegli tu entrano attive, entro il limite del piano.": "Pour chaque site, l'agent cherche le flux et le lit. Celles que vous choisissez entrent actives, dans la limite de l'offre.",
  "Lettura delle fonti partita: le segui nel riquadro Attività. Quelle che hanno un feed entrano attive.": "La lecture des sources a démarré : suivez-la dans l'encadré Activité. Celles qui ont un flux entrent actives.",
- "Scrivi almeno un indirizzo.": "Écrivez au moins une adresse."
+ "Scrivi almeno un indirizzo.": "Écrivez au moins une adresse.",
+ "Quota degli articoli del giorno pubblicati alla prima ora: prima si esce, prima ci si posiziona. Il resto si distribuisce nella giornata.": "Part des articles du jour publiés dès la première heure : premier sorti, premier classé. Le reste est réparti dans la journée.",
+ "Al mattino (%)": "Le matin (%)"
 }
