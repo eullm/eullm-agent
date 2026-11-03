@@ -229,3 +229,32 @@ def test_document_links_are_official_and_in_the_text():
                       '<a href="https://eur-lex.europa.eu/eli/reg/2024/1689">l\'AI Act</a>.</p></article>', "https://news.example/1")
     assert drafts.document_links(page, "https://news.example/1") == [
         "https://www.istat.it/comunicato/pil", "https://eur-lex.europa.eu/eli/reg/2024/1689"]
+
+
+def test_published_articles_can_be_written_again_to_compare(db, tenant, monkeypatch, capsys):
+    import pytest
+
+    from editor import cli, runtime
+
+    if not db.admin_url.startswith("postgres"):
+        pytest.skip("the command line opens its own connection: PostgreSQL only")
+    pid, cited = accepted_proposal(db, tenant)
+    good = json.dumps({"title": "Bari cablata in fibra", "sections": [{"heading": None, "claims": [
+        {"text": "A Bari la rete in fibra di Open Fiber è completa.", "sources": [cited[0]]},
+        {"text": "La copertura riguarda 120.000 unità immobiliari.", "sources": [cited[0]]},
+        {"text": "I lavori sono durati 18 mesi.", "sources": [cited[0]]}]}]})
+    with respx.mock(assert_all_called=False) as router:
+        router.post("http://core.test/v1/llm/chat").mock(return_value=chat(good))
+        did = drafts.write_draft(db, tenant, pid, CoreClient("http://core.test", "tok"), None)
+    drafts.decide(db, tenant, did, True, "redazione automatica")
+    monkeypatch.setenv("EDITOR_DATABASE_URL", db.admin_url)
+    runtime.settings.cache_clear()
+    try:
+        cli.main(["redraft", "blog.example", "--tenant", tenant, "--since", "2026-01-01"])
+    finally:
+        runtime.settings.cache_clear()
+    assert f"proposal {pid}: Bari cablata in fibra" in capsys.readouterr().out
+    with db.tenant(tenant) as s:
+        job = s.execute(text("SELECT kind, args FROM editor.jobs WHERE subject = :s"), {"s": f"proposal {pid}"}).one()
+    args = job.args if isinstance(job.args, dict) else json.loads(job.args)
+    assert job.kind == "draft" and args["compare"] is True

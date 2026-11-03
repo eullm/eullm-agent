@@ -43,6 +43,13 @@
 - The checklist of a draft no longer asks for two questions and answers
   and for a length close to the site's articles.
 
+### Added
+
+- `editor redraft <domain> --tenant <t> --since <date>`: writes again,
+  with the current writing and without publishing, the articles a site
+  published since a date (14 at most by default, no new cover), so the
+  new version can be compared with the one that went out in Bozze.
+
 ## 0.28.19
 
 ### Added
