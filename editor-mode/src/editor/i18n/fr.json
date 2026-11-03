@@ -2133,5 +2133,10 @@
  "Per Zapier, Make, n8n o un sito che importa un feed: contiene gli ultimi 50 articoli approvati, con testo, immagine e campi per Google. Il sito vero si collega da <a href=\"/publications\">Pubblicazioni</a>.": "Pour Zapier, Make, n8n ou un site qui importe un flux : il contient les 50 derniers articles approuvés, avec texte, image et champs pour Google. Le site lui-même se connecte depuis <a href=\"/publications\">Publications</a>.",
  "Versioni del profilo": "Versions du profil",
  "Vedi tutti ({n})": "Voir tout ({n})",
- "Note: {notes}": "Notes : {notes}"
+ "Note: {notes}": "Notes : {notes}",
+ "Articoli oggi · {domain}": "Articles aujourd'hui · {domain}",
+ "riprende domani": "reprend demain",
+ "Articoli del mese": "Articles du mois",
+ "Notizie lette oggi": "Actualités lues aujourd'hui",
+ "Limiti": "Limites"
 }

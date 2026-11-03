@@ -49,3 +49,15 @@ def test_the_newsroom_sees_its_credits_never_the_model_cost(db, tenant):
         page = c.get(path).text
         assert "Costo modello" not in page and "Siti più costosi" not in page, path
         assert "Crediti del mese" in page and "rimasti su 250" in page, path
+
+
+def test_the_desk_shows_how_far_each_limit_is(db, tenant):
+    setup_site(db, tenant)
+    from conftest import set_plan
+    set_plan(db, tenant, max_sites=1, max_active_sources=100)
+    token = auth.create_token(db, tenant, "owner-user", "owner")
+    c = TestClient(create_app(db))
+    c.post("/login", data={"token": token}, follow_redirects=False)
+    page = c.get("/").text
+    assert 'class="limit red"' in page and "1 / 1" in page   # the one site the plan allows
+    assert 'class="limit green"' in page                      # sources far from the limit

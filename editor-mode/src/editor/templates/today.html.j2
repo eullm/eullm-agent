@@ -77,6 +77,18 @@
 </section>
 {% endfor %}
 
+{% if limits %}
+<section class="limits" aria-label="{{ _('Limiti') }}">
+  {% for x in limits %}
+  <div class="limit {{ x.level }}" title="{{ x.note }}">
+    <span class="top"><span>{{ x.label }}</span><strong>{{ x.used }} / {{ x.limit }}</strong></span>
+    <span class="meter"><i style="width: {{ x.pct }}%"></i></span>
+    {% if x.note %}<small>{{ x.note }}</small>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
 <section class="kpis" aria-label="{{ _('Riepilogo') }}">
   {% if decisions %}
   <a class="card kpi warn" href="#h-decide">

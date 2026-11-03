@@ -621,6 +621,30 @@ def register(app, ctx) -> None:
                           activity=act.recent(s, zone(s), problem, full=True, compact=False,
                                               site=scoped(request, sites, site)))
 
+    def limit_boxes(s, usage, auto_cards, credit) -> list[dict]:
+        """The limits of the plan and how far each is: green far from it,
+        amber close to it, red when reached. Unlimited ones are not shown."""
+        def box(label, used, limit, note=""):
+            if not limit:
+                return None
+            pct = round(100 * used / limit)
+            return {"label": label, "used": used, "limit": limit, "pct": min(100, pct), "note": note,
+                    "level": "red" if used >= limit else "amber" if pct >= 80 else "green"}
+        out = []
+        for a in auto_cards:
+            cfg, kept = a["cfg"], a["kept"]
+            out.append(box(t("Articoli oggi · {domain}", domain=a["site"].domain), kept, cfg["per_day"],
+                           t("riprende domani") if kept >= cfg["per_day"] else ""))
+        if usage:
+            u, pl = usage.used, usage.plan
+            out += [box(t("Articoli del mese"), u.get("drafts_month", 0), pl.get("max_drafts_month")),
+                    box(t("Fonti attive"), u.get("active_sources", 0), pl.get("max_active_sources")),
+                    box(t("Siti"), u.get("sites", 0), pl.get("max_sites")),
+                    box(t("Notizie lette oggi"), u.get("items_today", 0), pl.get("max_items_per_day"))]
+        if credit and credit.get("enabled"):
+            out.append(box(t("Crediti del mese"), credit["month_used"], credit["month"]))
+        return [x for x in out if x]
+
     @app.get("/", response_class=HTMLResponse)
     def today(request: Request, c: auth.Caller = Depends(viewer)):
         with db.tenant(c.tenant_id) as s:
@@ -725,6 +749,7 @@ def register(app, ctx) -> None:
                     m.publications.c.status == "published", m.publications.c.withdrawn_at.is_(None))).all())
                 cfg = autopilot.settings_of(body)
                 auto_cards.append({"site": x, "cfg": cfg, "day": day, "urls": urls,
+                                   "kept": autopilot.made_since(s, x.id, start_of_day(s))[0],
                                    "last": auto_last((body.get("settings") or {})),
                                    "left_out": (auto_last((body.get("settings") or {})) or {}).get("left_out", 0)
                                    if (auto_last((body.get("settings") or {})) or {}).get("done") else 0})
@@ -756,7 +781,8 @@ def register(app, ctx) -> None:
                           stopped=stopped, drafts_ready=sum(draft_counts.values()),
                           needs_review=draft_counts.get("needs_review", 0), new_today=new_today,
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,
-                          proposed_total=proposed_total, collected=collected)
+                          proposed_total=proposed_total, collected=collected,
+                          limits=limit_boxes(s, usage, auto_cards, credits.state(s)))
 
     def draft_jobs(s, proposal_ids: list[int]) -> dict[int, dict]:
         """The latest draft job of each accepted proposal still without a
