@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.28.24
+
+### Added
+
+- **Collega il sito**, il percorso guidato (Francesco: caricato un sito si
+  guida la persona a validarlo, fino ad avere un sito aggiornabile). Dopo il
+  dominio, e prima dell'analisi, la pagina `/connect` chiede con cosa è fatto
+  il sito, spiega dove creare la credenziale e **prova il collegamento prima
+  di salvare qualsiasi cosa**:
+  - **WordPress**: passi per la password applicativa; prova l'accesso, il
+    ruolo (pubblica o solo bozze), il caricamento della copertina e scarica
+    le **categorie**. Gli articoli escono nella categoria della loro
+    rubrica, e l'analisi parte già dalle categorie del sito: diventano le
+    rubriche della redazione automatica;
+  - **GitHub**: passi per il token fine-grained con i permessi esatti, e
+    per collegare il repository a Vercel, Cloudflare Pages, Netlify o
+    GitHub Pages (con il modello pubblico per chi non ha ancora un sito).
+    Prova il token sul repository, legge com'è fatto (Astro, Next.js, Hugo…,
+    quale servizio lo pubblica), trova la cartella degli articoli e ne copia
+    il formato; l'anteprima da aspettare si attiva solo dove esiste;
+  - **altro sistema**: indirizzo e chiave del webhook, con il rimando alle
+    linee guida pubbliche;
+  - **più tardi**: legge il sito e scrive le bozze senza destinazione.
+  Ogni errore dice cosa fare (password sbagliata, ruolo senza permessi,
+  token scaduto, repository non abilitato…); la credenziale è salvata cifrata
+  e collegare di nuovo lo stesso sito aggiorna la destinazione senza
+  duplicarla. In Primi passi il collegamento è il secondo passo (quello di
+  pubblicazione non è più l'ultimo); un sito già letto senza destinazione
+  non blocca gli altri passi e il collegamento resta da fare.
+
+### Changed
+
+- Aggiungere un sito non avvia più l'analisi da solo: porta a Collega il
+  sito, che la avvia a fine percorso (o con «Analizza senza collegare»).
+  L'iscrizione dal sito e dall'API non cambia.
+
 ## 0.28.23
 
 ### Added

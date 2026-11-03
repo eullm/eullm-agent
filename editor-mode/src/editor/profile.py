@@ -635,8 +635,18 @@ def analyse_site(db, tenant_id: str, domain: str, crawler, core: CoreClient | No
              n=len(snap.posts))
     with db.tenant(tenant_id) as s:
         known = s.execute(select(m.sites.c.id).where(m.sites.c.domain == snap.domain)).scalar()
+        # What the site's CMS already files its articles under (WordPress categories, read when it was connected).
+        from . import connect
+
+        cms = connect.known_categories(s, known) if known else {}
+    for name, count in cms.items():
+        snap.categories.setdefault(name, count)
     with usage.tagged(db, tenant_id, "site_profile", site_id=known, ref=f"site:{snap.domain}"):
         body, calls = build_profile(snap, core)
+    if cms:  # the sections of the automatic newsroom, until the owner sets their own
+        auto = body.setdefault("settings", {}).setdefault("auto", {})
+        if not auto.get("sections"):
+            auto["sections"] = list(cms)[:30]
     with db.tenant(tenant_id) as s:
         repo.ensure_tenant(s, tenant_id, tenant_id)
         site_id = repo.ensure_site(s, tenant_id, snap.domain, body["name"], snap.language or "und")

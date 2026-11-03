@@ -13,7 +13,7 @@
 {% if not steps %}
 <section class="card pad">
   <h2>{{ _('Tutto avviato') }}</h2>
-  <p class="lead">{{ _('{domain} ha profilo, fonti, proposte, bozze e un collegamento per pubblicare. Da qui in poi si lavora dal Desk.', domain=site.domain if site else '') }}</p>
+  <p class="lead">{{ _('{domain} ha profilo, fonti, proposte e bozze. Da qui in poi si lavora dal Desk.', domain=site.domain if site else '') }}</p>
   {% if autopilot %}<p>{{ _('Il tuo piano comprende la redazione automatica: la accendi in <a href="/site#h-auto">Sito e profilo</a> e scrive e pubblica da sola nei limiti che scegli.') }}</p>{% endif %}
   <p><a class="btn pri" href="/">{{ _('Vai al Desk') }}</a></p>
 </section>
@@ -34,8 +34,12 @@
       <form method="post" action="/ui/sites" class="form-grid">
         <input type="hidden" name="back" value="/start">
         <label class="field">{{ _('Dominio') }}<input name="domain" placeholder="{{ _('esempio.it') }}" required></label>
-        <div><button class="btn pri" type="submit">{{ _('Analizza il sito') }}</button></div>
+        <div><button class="btn pri" type="submit">{{ _('Aggiungi il sito') }}</button></div>
       </form>
+
+      {% elif key == 'connect' and caller.can('owner') %}
+        <p><a class="btn pri" href="/connect">{{ _('Collega il sito') }}</a></p>
+        {% if autopilot %}<p class="hint">{{ _('Con il sito collegato puoi accendere la redazione automatica in <a href="/site#h-auto">Sito e profilo</a>.') }}</p>{% endif %}
 
       {% elif key == 'profile' %}
         {% if profile %}
@@ -108,9 +112,6 @@
         {% endfor %}
         <p><a class="btn" href="/drafts">{{ _('Apri le bozze') }}</a></p>
 
-      {% elif key == 'target' %}
-        <p><a class="btn pri" href="/publications">{{ _('Collega il sito') }}</a></p>
-        {% if autopilot %}<p class="hint">{{ _('Con il sito collegato puoi accendere la redazione automatica in <a href="/site#h-auto">Sito e profilo</a>.') }}</p>{% endif %}
       {% endif %}
 
       {% elif not x.done %}

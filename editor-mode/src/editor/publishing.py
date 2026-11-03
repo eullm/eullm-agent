@@ -607,6 +607,12 @@ class Publisher:
                 "status": "publish" if mode == "publish" else "draft"}
         if payload.get("slug"):
             post["slug"] = payload["slug"]
+        # The article's section as the category the site already has (read when the site was connected).
+        from .connect import category_id
+
+        cat = category_id(target.config, payload.get("section"))
+        if cat is not None:
+            post["categories"] = [cat]
         return post
 
     def _webhook(self, target, pub, cms_url, secret, image=None):

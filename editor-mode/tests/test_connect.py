@@ -1,0 +1,249 @@
+"""Connecting a site: the guided path from a domain to a site the newsroom
+can update. The credential is tried for real before anything is saved."""
+
+import json
+import socket
+
+import httpx
+import pytest
+import respx
+from fastapi.testclient import TestClient
+from sqlalchemy import select, text
+
+from editor import connect, models as m, publishing as pub, vault
+from editor.api import create_app
+from github_fake import FakeGitHub
+from test_publishing import ASTRO_POST, approved_draft, public_resolver
+from test_ui import logged_in
+
+WP = "https://blog.example"
+
+
+def wp_site(router, *, auth=True, role_caps=None, categories=None):
+    router.get(f"{WP}/wp-json/").mock(return_value=httpx.Response(200, json={
+        "name": "Il Blog &amp; Co", "description": "Notizie", "namespaces": ["wp/v2"]}))
+    me = router.get(f"{WP}/wp-json/wp/v2/users/me")
+    if auth:
+        me.mock(return_value=httpx.Response(200, json={
+            "name": "Redazione", "roles": ["editor"],
+            "capabilities": role_caps or {"edit_posts": True, "publish_posts": True, "upload_files": True}}))
+    else:
+        me.mock(return_value=httpx.Response(401, json={"code": "incorrect_password"}))
+    router.get(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(200, json=categories or [
+        {"id": 5, "name": "Tecnologia &amp; AI", "slug": "tecnologia-ai", "count": 12},
+        {"id": 1, "name": "Senza categoria", "slug": "senza-categoria", "count": 3},
+        {"id": 9, "name": "Economia", "slug": "economia", "count": 4}]))
+
+
+def test_wordpress_is_tried_and_its_categories_read():
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router)
+        found = connect.wordpress("blog.example/wp-admin/", "redazione", "abcd efgh", resolver=public_resolver)
+    assert found["base"] == WP and found["name"] == "Il Blog & Co"
+    assert found["can_publish"] and found["can_upload"]
+    assert [c["name"] for c in found["categories"]] == ["Tecnologia & AI", "Senza categoria", "Economia"]
+    assert found["sections"] == ["Tecnologia & AI", "Economia"]  # the default category says nothing about the site
+
+
+def test_wordpress_says_what_is_wrong():
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router, auth=False)
+        with pytest.raises(connect.ConnectError) as e:
+            connect.wordpress(WP, "redazione", "sbagliata", resolver=public_resolver)
+    assert e.value.code == "auth"
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{WP}/wp-json/").mock(return_value=httpx.Response(404))
+        router.get(f"{WP}/").mock(return_value=httpx.Response(404))
+        with pytest.raises(connect.ConnectError) as e:
+            connect.wordpress(WP, "u", "p", resolver=public_resolver)
+    assert e.value.code == "not_wordpress"
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router, role_caps={"read": True})
+        with pytest.raises(connect.ConnectError) as e:
+            connect.wordpress(WP, "u", "p", resolver=public_resolver)
+    assert e.value.code == "role"
+    with pytest.raises(connect.ConnectError) as e:
+        connect.wordpress("http://blog.example", "u", "p", resolver=public_resolver)
+    assert e.value.code == "https"
+    with pytest.raises(connect.ConnectError) as e:
+        connect.wordpress(WP, "", "", resolver=public_resolver)
+    assert e.value.code == "credentials_missing"
+
+
+def astro_repo(**extra):
+    files = {"package.json": json.dumps({"dependencies": {"astro": "^5"}}), "vercel.json": "{}",
+             "public/llms.txt": "# Sito\n", "content/blog/vecchio.md": ASTRO_POST}
+    files.update(extra)
+    return FakeGitHub(files)
+
+
+def test_github_reads_the_site_and_where_the_articles_go():
+    gh = astro_repo()
+    with respx.mock(assert_all_called=False) as router:
+        gh.route(router)
+        found = connect.github("https://github.com/me/site", "tok", resolver=public_resolver)
+    assert found["repo"] == "me/site" and found["branch"] == "main"
+    assert found["generator"] == "Astro" and found["host"] == "vercel"
+    assert found["articles_path"] == "content/blog" and found["articles_found"] == 1
+    assert found["format"]["ext"] == ".md" and found["has_llms"] and not found["has_sitemap"]
+    assert gh.token == "Bearer tok"
+
+
+def test_github_without_posts_or_known_host():
+    gh = FakeGitHub({"README.md": "sito", "wrangler.toml": "name = 'x'"})
+    with respx.mock(assert_all_called=False) as router:
+        gh.route(router)
+        found = connect.github("me/site", "tok", resolver=public_resolver)
+    assert found["host"] == "cloudflare" and found["articles_path"] is None and found["format"] is None
+
+
+def test_github_failures_have_a_reason():
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://api.github.com/repos/me/site").mock(return_value=httpx.Response(404, json={}))
+        with pytest.raises(connect.ConnectError) as e:
+            connect.github("me/site", "tok", resolver=public_resolver)
+    assert e.value.code == "repo_missing"
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://api.github.com/repos/me/site").mock(return_value=httpx.Response(401, json={}))
+        with pytest.raises(connect.ConnectError) as e:
+            connect.github("me/site", "bad", resolver=public_resolver)
+    assert e.value.code == "token_bad"
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://api.github.com/repos/me/site").mock(return_value=httpx.Response(
+            200, json={"default_branch": "main", "permissions": {"pull": True, "push": False}}))
+        with pytest.raises(connect.ConnectError) as e:
+            connect.github("me/site", "ro", resolver=public_resolver)
+    assert e.value.code == "no_write"
+    with pytest.raises(connect.ConnectError) as e:
+        connect.github("non un repo", "tok", resolver=public_resolver)
+    assert e.value.code == "repo_name"
+
+
+def test_the_article_goes_in_the_category_of_its_section(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    config = {"url": WP, "user": "e", "categories": [{"id": 5, "name": "Tecnologia & AI", "slug": "tecnologia-ai"}]}
+    target = type("T", (), {"config": config})()
+    post = pub.Publisher._wordpress_post(target, {"title": "T", "html": "<p>x</p>", "subtitle": "s",
+                                                  "section": "tecnologia & ai"}, "publish")
+    assert post["categories"] == [5]
+    post = pub.Publisher._wordpress_post(target, {"title": "T", "html": "<p>x</p>", "subtitle": "s",
+                                                  "section": "Sport"}, "publish")
+    assert "categories" not in post  # no such category: the site's default stays
+    assert connect.category_id(config, "tecnologia-ai") == 5 and connect.category_id(None, "x") is None
+
+
+def test_adding_a_site_leads_to_the_connection_and_the_connection_to_the_analysis(db, tenant, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setattr(connect, "resolver", public_resolver)
+    monkeypatch.setenv(vault.KEY_ENV, vault.new_key())
+    c = logged_in(db, tenant, "owner")
+    r = c.post("/ui/sites", data={"domain": "nuovo.example", "back": "/start"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/connect"
+    with db.tenant(tenant) as s:
+        site_id = s.execute(select(m.sites.c.id).where(m.sites.c.domain == "nuovo.example")).scalar()
+        assert site_id is not None
+        assert not s.execute(select(m.jobs.c.id).where(m.jobs.c.kind == "analysis")).first()  # not yet read
+    page = c.get("/connect")
+    assert page.status_code == 200 and "nuovo.example" in page.text and "WordPress" in page.text
+    assert "Password applicazioni" in c.get("/connect?kind=wordpress").text
+    assert "github.com/settings/personal-access-tokens/new" in c.get("/connect?kind=github").text
+    assert "vercel.com/new" in c.get("/connect?kind=github&host=vercel").text
+
+    # A wrong password: nothing saved, the reason on the page, the analysis not started.
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router, auth=False)
+        bad = c.post(f"/ui/connect/{site_id}/check", data={
+            "kind": "wordpress", "address": WP, "user": "redazione", "secret": "sbagliata"})
+    assert bad.status_code == 200 and "ha rifiutato utente o password" in bad.text
+    with db.tenant(tenant) as s:
+        assert not s.execute(select(m.publish_targets.c.id).where(m.publish_targets.c.site_id == site_id)).first()
+        assert not s.execute(select(m.jobs.c.id).where(m.jobs.c.kind == "analysis")).first()
+
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router)
+        ok = c.post(f"/ui/connect/{site_id}/check", data={
+            "kind": "wordpress", "address": WP, "user": "redazione", "secret": "abcd efgh ijkl"})
+    assert ok.status_code == 200 and "Collegamento verificato" in ok.text
+    assert "Tecnologia &amp; AI" in ok.text and "Economia" in ok.text
+    with db.tenant(tenant) as s:
+        t = s.execute(select(m.publish_targets).where(m.publish_targets.c.site_id == site_id)).one()
+        assert t.kind == "wordpress" and t.config["url"] == WP and t.config["user"] == "redazione"
+        assert [x["id"] for x in t.config["categories"]] == [5, 1, 9]
+        assert t.secret_env == "WP_NUOVO_EXAMPLE"
+        assert s.execute(select(m.jobs.c.kind).where(m.jobs.c.kind == "analysis")).scalar() == "analysis"
+        assert connect.known_categories(s, site_id) == {"Tecnologia & AI": 12, "Economia": 4}
+    assert vault.get(db, tenant, "WP_NUOVO_EXAMPLE") == "abcd efgh ijkl"
+    # The same site connected again updates the destination instead of adding a second one.
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router)
+        c.post(f"/ui/connect/{site_id}/check", data={"kind": "wordpress", "address": WP, "user": "redazione",
+                                                      "secret": "nuova password"})
+    with db.tenant(tenant) as s:
+        assert len(s.execute(select(m.publish_targets.c.id).where(m.publish_targets.c.site_id == site_id)).all()) == 1
+    assert vault.get(db, tenant, "WP_NUOVO_EXAMPLE") == "nuova password"
+    steps = c.get("/start").text
+    assert "Sito collegato" in steps
+
+
+def test_the_analysis_starts_from_the_categories_the_site_already_has(db, tenant, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    from editor import profile as prof
+    from editor.site import SiteSnapshot
+
+    from editor import repo
+
+    with db.tenant(tenant) as s:
+        site_id = repo.add_site(s, tenant, "nuovo.example")
+    pub.add_target(db, tenant, site_id, "wordpress", "Sito", {
+        "url": WP, "user": "e", "categories": [{"id": 5, "name": "Tecnologia", "slug": "tecnologia", "count": 7},
+                                               {"id": 1, "name": "Senza categoria", "slug": "senza-categoria", "count": 9}]}, None)
+
+    class Crawler:
+        def analyse(self, domain):
+            return SiteSnapshot(domain=domain, title="Blog", description="", status="partial", language="it")
+
+    prof.analyse_site(db, tenant, "nuovo.example", Crawler(), None)
+    with db.tenant(tenant) as s:
+        body = s.execute(text("SELECT body FROM editor.editorial_profiles WHERE site_id = :s ORDER BY id DESC LIMIT 1"),
+                         {"s": site_id}).scalar()
+    body = body if isinstance(body, dict) else json.loads(body)
+    assert body["settings"]["auto"]["sections"] == ["Tecnologia"]
+    assert any(x["name"] == "Tecnologia" for x in body["subtopics"]) or "Tecnologia" in json.dumps(body)
+
+
+def test_github_connection_is_saved_with_what_was_found(db, tenant, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setattr(connect, "resolver", public_resolver)
+    monkeypatch.setenv(vault.KEY_ENV, vault.new_key())
+    c = logged_in(db, tenant, "owner")
+    did, site_id = approved_draft(db, tenant)
+    gh = astro_repo()
+    with respx.mock(assert_all_called=False) as router:
+        gh.route(router)
+        ok = c.post(f"/ui/connect/{site_id}/check", data={
+            "kind": "github", "address": "me/site", "secret": "github_pat_x", "host": ""})
+    assert ok.status_code == 200 and "Collegamento verificato" in ok.text and "Astro" in ok.text and "Vercel" in ok.text
+    with db.tenant(tenant) as s:
+        t = s.execute(select(m.publish_targets).where(m.publish_targets.c.site_id == site_id,
+                                                      m.publish_targets.c.kind == "github")).one()
+    assert t.config["repo"] == "me/site" and t.config["path"] == "content/blog" and t.config["host"] == "vercel"
+    assert t.config.get("verify") is not False and vault.get(db, tenant, t.secret_env) == "github_pat_x"
+
+
+def test_connecting_later_reads_the_site_without_a_destination(db, tenant):
+    c = logged_in(db, tenant, "owner")
+    c.post("/ui/sites", data={"domain": "senza.example"}, follow_redirects=False)
+    with db.tenant(tenant) as s:
+        site_id = s.execute(select(m.sites.c.id).where(m.sites.c.domain == "senza.example")).scalar()
+    r = c.post(f"/ui/connect/{site_id}/later", follow_redirects=False)
+    assert r.status_code == 303
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.jobs.c.kind).where(m.jobs.c.kind == "analysis")).scalar() == "analysis"
+        assert not s.execute(select(m.publish_targets.c.id).where(m.publish_targets.c.site_id == site_id)).first()
+
+
+def test_only_owners_connect(db, tenant):
+    for role in ("viewer", "editor"):
+        c = logged_in(db, tenant, role)
+        assert c.get("/connect").status_code == 403
+        assert c.post("/ui/connect/1/later").status_code == 403
