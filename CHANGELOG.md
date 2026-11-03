@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.28.26
+
+### Added
+
+- **Oltre gli articoli del giorno** (Francesco): con la redazione automatica,
+  quando i `per_day` articoli sono fatti e arriva una notizia importante
+  (opportunità almeno `extra_min_opportunity`, fonti diverse come sempre) può
+  uscirne una in più: fino a `borrow` articoli **anticipati dal giorno dopo**
+  (gratis: domani ne scrive altrettanti in meno) e fino a `extra_credits`
+  **con i crediti** (0 = mai; il tetto è per giorno, uno a ogni giro). Le
+  impostazioni sono in Sito e profilo › Regole e impostazioni; lo stato del
+  giorno sul Desk ne tiene conto.
+- Trend e piano di un sito automatico: le proposte dicono che le sceglie la
+  redazione; «Accetta» e «Scarta» lasciano il posto a «Scrivila ora».
+
 ## 0.28.25
 
 ### Changed

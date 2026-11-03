@@ -718,8 +718,10 @@ def register(app, ctx) -> None:
                 urls = dict(s.execute(select(m.publications.c.draft_id, m.publications.c.external_url).where(
                     m.publications.c.draft_id.in_([i["id"] for i in day["items"]] or [0]),
                     m.publications.c.status == "published", m.publications.c.withdrawn_at.is_(None))).all())
-                auto_cards.append({"site": x, "cfg": autopilot.settings_of(body), "day": day, "urls": urls,
-                                   "last": auto_last((body.get("settings") or {}))})
+                cfg = autopilot.settings_of(body)
+                auto_cards.append({"site": x, "cfg": cfg, "day": day, "urls": urls,
+                                   "last": auto_last((body.get("settings") or {})),
+                                   "left_out": autopilot.left_out(s, x.id, cfg, datetime.now(UTC))})
             # A source the maintenance suspended is news, not a decision.
             decisions = len(profile_drafts) + proposed_total + len(pending_pubs)
             desk = desk_rows(s, [one] if one else sites, lines, pending)
@@ -1232,7 +1234,8 @@ def register(app, ctx) -> None:
                 avoid: str = Form(""), per_day: int = Form(6), min_opportunity: float = Form(40),
                 min_sources: int = Form(2), start: int = Form(7), end: int = Form(23), target_id: str = Form(""),
                 enabled: str = Form(""), credit: str = Form(""), language: str = Form("it"),
-                on_problem: str = Form("fix"), morning_share: int = Form(50),
+                on_problem: str = Form("fix"), morning_share: int = Form(50), borrow: int = Form(2),
+                extra_credits: int = Form(0), extra_min_opportunity: float = Form(65),
                 action: str = Form("save"), c: auth.Caller = Depends(ctx.need("owner"))):
         def lines(x: str) -> list[str]:
             return [y.strip() for y in re.split(r"[\n,;]", x) if y.strip()]
@@ -1241,7 +1244,8 @@ def register(app, ctx) -> None:
                   "min_opportunity": min_opportunity, "min_sources": min_sources, "hours": [start, end],
                   "target_id": int(target_id) if target_id.isdigit() else None, "credit": bool(credit),
                   "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix",
-                  "morning_share": morning_share}
+                  "morning_share": morning_share, "borrow": borrow, "extra_credits": extra_credits,
+                  "extra_min_opportunity": extra_min_opportunity}
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1501,7 +1505,9 @@ def register(app, ctx) -> None:
             plan = sorted(plan, key=lambda p: order.get(p.status, 3))
             explained = proposal_details(s, plan)
             hour = s.execute(select(m.tenants.c.briefing_hour)).scalar()
+            body = prof.approved_profile(s, site.id)
             return render(request, "trends.html.j2", c, s, "trends", _sites=(sites, site), topics=topics,
+                          auto_site=bool(body is not None and autopilot.settings_of(body.body)["enabled"]),
                           dots=dots, plan=plan, explained=explained, briefing_hour=hour, can_draft=ctx.core is not None,
                           writing=draft_jobs(s, [p.id for p in plan if p.status == "accepted" and not p.draft_id]),
                           snap=snap, day=day, moment=moment, local=lambda at: at.astimezone(zone(s)))

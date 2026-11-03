@@ -296,8 +296,8 @@ class Runner:
         for site_id in sites:
             def go(site_id=site_id):
                 res = autopilot.run(self.db, tenant, site_id, self.core_for(tenant), now, tz,
-                                    lambda pid: enqueue(self.db, tenant, "auto", f"proposal {pid}",
-                                                        {"proposal_id": pid, "site_id": site_id}))
+                                    lambda pid, paid=False: enqueue(self.db, tenant, "auto", f"proposal {pid}",
+                                                                    {"proposal_id": pid, "site_id": site_id, "paid": paid}))
                 autopilot.remember(self.db, tenant, site_id, res, now)
             self.step(tenant, "autopilot", done, failed, go)
 

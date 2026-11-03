@@ -89,14 +89,15 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         to the publication: draft, checks and editor-in-chief (written again
         or discarded when it fails), then the cover and the site."""
         need(core, "model (Core)")
-        # The automatic newsroom stays within the plan's articles: credits
-        # are spent only on what a person asks for.
+        # The automatic newsroom stays within the plan's articles: credits are spent only on what
+        # a person asks for, and on the extras the newsroom was allowed to pay (args["paid"]).
+        pay = bool(args.get("paid"))
         def write(purpose="draft", notes=None):
             if http_factory is None:
-                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=False,
+                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=pay,
                                           purpose=purpose, notes=notes)
             with http_factory() as client:
-                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=False,
+                return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=pay,
                                           purpose=purpose, notes=notes)
 
         def cover(did):  # drawn only for an article that passed every check

@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import and_, case, func, select, update
 
-from . import drafts, models as m, proposals, publishing, quotas, translate as tr, usage
+from . import credits, drafts, models as m, proposals, publishing, quotas, translate as tr, usage
 from .core_client import CoreClient, CoreError
 from .i18n import N_
 from .progress import step
@@ -34,7 +34,10 @@ LANGS = ("it", "en", "de", "fr", "es")
 
 DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "avoid": [], "per_day": 6,
             "min_opportunity": 40.0, "min_sources": 2, "hours": [7, 23], "target_id": None, "credit": True,
-            "on_problem": "fix", "morning_share": 50}
+            "on_problem": "fix", "morning_share": 50,
+            # Beyond the day's articles: how many it may bring forward from tomorrow (free), and how many
+            # more a day it may pay with credits, for news over `extra_min_opportunity`.
+            "borrow": 2, "extra_credits": 0, "extra_min_opportunity": 65.0}
 # "fix": an article with problems is written again once, by the stronger model when the console sets one,
 # and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
 ON_PROBLEM = ("fix", "hold")
@@ -108,6 +111,9 @@ class _Auto(BaseModel):
     credit: bool = True
     on_problem: str = Field("fix", pattern="^(fix|hold)$")
     morning_share: int = Field(DEFAULTS["morning_share"], ge=0, le=100)
+    borrow: int = Field(DEFAULTS["borrow"], ge=0, le=20)
+    extra_credits: int = Field(DEFAULTS["extra_credits"], ge=0, le=20)
+    extra_min_opportunity: float = Field(DEFAULTS["extra_min_opportunity"], ge=0, le=100)
 
 
 def check_settings(values: dict) -> dict:
@@ -236,20 +242,22 @@ def source_count(s, proposal_id: int, need: int = 0) -> int:
 OPPORTUNITY_FLOOR = 0.5
 
 
-def choose(s, site_id: int, cfg: dict, now: datetime, n: int) -> list:
+def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False) -> list:
     """The best proposals of the last day and a half that pass the
     guardrails, those over the minimum opportunity first; those on a topic
     to avoid are turned down for good."""
     pr = m.proposals.c
     rows = s.execute(select(m.proposals).where(
         pr.site_id == site_id, pr.status == "proposed", pr.created_at >= now - timedelta(hours=36),
-        pr.opportunity >= cfg["min_opportunity"] * OPPORTUNITY_FLOOR)
+        pr.opportunity >= (cfg["min_opportunity"] * OPPORTUNITY_FLOOR if minimum is None else minimum))
         .order_by(pr.opportunity.desc(), pr.id.desc()).limit(80)).all()
     out = []
     for r in rows:
         if len(out) >= n:
             break
         word = avoided(f"{r.title} {r.angle or ''}", cfg["avoid"])
+        if word and dry:
+            continue
         if word:
             s.execute(update(m.proposals).where(pr.id == r.id, pr.status == "proposed")
                       .values(status="rejected", decided_by=AUTO))
@@ -272,6 +280,20 @@ def lapse(db, tenant_id: str, site_id: int, now: datetime) -> int:
     return res.rowcount or 0
 
 
+def over_today(settings: dict, local) -> dict:
+    """What the newsroom brought forward from tomorrow and paid with credits
+    today, and what it owes from yesterday: {day, borrowed, paid, debt}.
+    The record rolls over with the day, carrying yesterday's borrowed
+    articles as today's debt (tomorrow it makes fewer)."""
+    rec = dict(settings.get("auto_over") or {})
+    today = local.date().isoformat()
+    if rec.get("day") == today:
+        return {"day": today, "borrowed": int(rec.get("borrowed", 0)), "paid": int(rec.get("paid", 0)),
+                "debt": int(rec.get("debt", 0))}
+    yesterday = (local.date() - timedelta(days=1)).isoformat()
+    return {"day": today, "borrowed": 0, "paid": 0, "debt": int(rec.get("borrowed", 0)) if rec.get("day") == yesterday else 0}
+
+
 def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime, tz: str, enqueue) -> dict:
     """One hour of the automatic newsroom for a site: accept the articles
     of this hour and queue them. `enqueue(proposal_id)` queues one."""
@@ -286,41 +308,81 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
     lapse(db, tenant_id, site_id, now)
     if not allowed:
         return {"waiting": "plan"}
-    # The plan's articles of the month, set by the console: the automatic
-    # newsroom never pays with credits, so it waits for the next month.
-    if month_left is not None and month_left <= 0:
-        return {"waiting": "month"}
     local = now.astimezone(ZoneInfo(tz))
+    over = over_today((body.get("settings") or {}), local)
+    with db.tenant(tenant_id) as s:
+        have = credits.state(s)
+        price = credits.price(s, "article")
+    can_pay = bool(have.get("enabled")) and cfg["extra_credits"] > over["paid"] \
+        and have.get("left", 0) >= price
+    # The plan's articles of the month, set by the console: the automatic
+    # newsroom spends credits only on the extras it was allowed (`extra_credits`),
+    # so without them it waits for the next month.
+    month_over = month_left is not None and month_left <= 0
+    if month_over and not can_pay:
+        return {"waiting": "month"}
     if not in_hours(cfg, local):
         return {"waiting": "hours"}
     since = datetime.combine(local.date(), time(), local.tzinfo).astimezone(UTC)
+    paid = False
     with db.tenant(tenant_id) as s:
         kept, tried = made_since(s, site_id, since)
-        if kept >= cfg["per_day"]:
-            return {"done": cfg["per_day"]}
-        if tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
+        # What it brought forward yesterday it does not make today.
+        target = max(1, cfg["per_day"] - over["debt"])
+        extra = None
+        if month_over:
+            extra = "paid"
+        elif kept >= target:
+            if over["borrowed"] < cfg["borrow"]:
+                extra = "borrowed"
+            elif can_pay:
+                extra = "paid"
+            else:
+                return {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+        if extra is None and tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
             return {"tried": tried, "kept": kept}
-        left = min(cfg["per_day"] - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
-        # Spread over the hours left, so the day does not go in the first hour.
-        want = math.ceil(left / hours_left(cfg, local))
-        # The morning goes first: by the end of the first hour the day has
-        # its share of articles (half, by default), the rest follows hour by
-        # hour. A newsroom behind that line (a slow night, a restart) catches up.
-        want = max(want, min(left, due_by(cfg, local) - kept))
-        if month_left is not None:
-            want = min(want, int(month_left))
-        picked = choose(s, site_id, cfg, now, want)
-        planned_today = proposals.made_today(s, site_id, since)
-    if len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
+        if extra is not None:
+            # One at a time, only for news that is worth it, a round after the other.
+            picked = choose(s, site_id, cfg, now, 1, minimum=cfg["extra_min_opportunity"])
+            if not picked:  # nothing worth more than the day's articles: the day is done
+                return {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+            want = 1
+            paid = extra == "paid"
+            planned_today = proposals.made_today(s, site_id, since)
+        else:
+            left = min(target - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
+            # Spread over the hours left, so the day does not go in the first hour.
+            want = math.ceil(left / hours_left(cfg, local))
+            # The morning goes first: by the end of the first hour the day has
+            # its share of articles (half, by default), the rest follows hour by
+            # hour. A newsroom behind that line (a slow night, a restart) catches up.
+            want = max(want, min(left, due_by(cfg, local) - kept))
+            if month_left is not None:
+                want = min(want, int(month_left))
+            picked = choose(s, site_id, cfg, now, want)
+            planned_today = proposals.made_today(s, site_id, since)
+    if extra is None and len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
         proposals.plan(db, tenant_id, site_id, core, limit=max(3, 2 * want), now=now)
         with db.tenant(tenant_id) as s:
             picked = choose(s, site_id, cfg, now, want)
     accepted = []
     for r in picked:
-        if proposals.decide(db, tenant_id, r.id, True, AUTO, "automatic newsroom"):
-            enqueue(r.id)
+        if proposals.decide(db, tenant_id, r.id, True, AUTO, "automatic newsroom" if not extra else f"automatic newsroom, {extra}"):
+            enqueue(r.id, True) if paid else enqueue(r.id)
             accepted.append(r.id)
-    return {"accepted": accepted, "wanted": want}
+    if extra and accepted:
+        from .profile import _set_settings
+
+        key = "paid" if paid else "borrowed"
+        with db.tenant(tenant_id) as s:
+            _set_settings(s, site_id, auto_over={**over, key: over[key] + len(accepted)})
+    elif over != dict(((body.get("settings") or {}).get("auto_over")) or {}):
+        from .profile import _set_settings
+
+        with db.tenant(tenant_id) as s:
+            _set_settings(s, site_id, auto_over=over)
+    out = {"accepted": accepted, "wanted": want}
+    return out | ({"extra": extra} if extra else {})
 
 
 def sources_due(last: str | None, now: datetime) -> bool:
@@ -543,6 +605,13 @@ def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
         return _stop(db, tenant_id, d, ["some sentences failed the source checks"], out,
                      discard=cfg["on_problem"] == "fix")
     return {**out, **_send(db, tenant_id, d, cfg, False, publish)}
+
+
+def left_out(s, site_id: int, cfg: dict, now: datetime) -> int:
+    """Proposals of the last day and a half that would pass the bar of the
+    extras (opportunity, distinct sources, topics) and that the day's limit
+    left unused."""
+    return len(choose(s, site_id, cfg, now, 50, minimum=cfg["extra_min_opportunity"], dry=True))
 
 
 def today(s, site_id: int, since: datetime) -> dict:

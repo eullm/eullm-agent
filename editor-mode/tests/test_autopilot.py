@@ -102,6 +102,43 @@ def test_each_hour_takes_its_share_of_the_day(db, tenant):
     assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append) == {}
 
 
+def test_an_important_story_goes_out_beyond_the_day_brought_forward_from_tomorrow(db, tenant):
+    from datetime import timedelta
+
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=1, borrow=1, extra_min_opportunity=0)
+    queued = []
+    now = datetime(2026, 10, 28, 11, tzinfo=UTC)
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": now})
+    run = lambda at: ap.run(db, tenant, site_id, None, at, "Europe/Rome", lambda pid, paid=False: queued.append((pid, paid)))
+    assert len(run(now)["accepted"]) == 1  # the day's article
+    with db.tenant(tenant) as s:  # a second story, told by the same outlets
+        first = s.execute(select(m.proposals).where(m.proposals.c.id == queued[0][0])).one()
+        s.execute(insert(m.proposals).values(tenant_id=tenant, site_id=site_id, topic_id=first.topic_id,
+                                             profile_id=first.profile_id, opportunity=80, title="Seconda notizia",
+                                             generated_by="model", status="proposed", created_at=now))
+        second = s.execute(select(func.max(m.proposals.c.id))).scalar()
+        for item in s.execute(select(m.proposal_citations.c.item_id).where(
+                m.proposal_citations.c.proposal_id == first.id)).scalars().all():
+            s.execute(insert(m.proposal_citations).values(tenant_id=tenant, proposal_id=second, item_id=item))
+    out = run(now)  # the day is full: one brought forward from tomorrow, free
+    assert out["extra"] == "borrowed" and len(out["accepted"]) == 1 and queued[-1][1] is False
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id)).scalars().first()
+    assert body["settings"]["auto_over"]["borrowed"] == 1
+    assert run(now) == {"done": 1, "borrowed": 1}  # the limit of anticipations is reached
+    # Tomorrow it owes the day it took: with two a day it makes one.
+    settings(db, tenant, site_id, per_day=2, borrow=1, extra_min_opportunity=0)
+    over = ap.over_today({"auto_over": {"day": "2026-10-28", "borrowed": 1, "paid": 0, "debt": 0}},
+                         (now + timedelta(days=1)).astimezone(__import__("zoneinfo").ZoneInfo("Europe/Rome")))
+    assert over == {"day": "2026-10-29", "borrowed": 0, "paid": 0, "debt": 1}
+    # What passes the bar and the limit left out is counted.
+    with db.tenant(tenant) as s:
+        assert ap.left_out(s, site_id, ap.settings_of(body), now) >= 0
+
+
 def _written(db, tenant, again=None):
     pid, cited = again or accepted_proposal(db, tenant)
     answer = json.dumps({"title": "Bari in fibra", "subtitle": "La rete è completa", "sections": [
