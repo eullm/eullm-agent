@@ -2111,5 +2111,15 @@
  "modifica o ritira": "modifier ou retirer",
  "Nessun articolo oggi per ora.": "Aucun article aujourd'hui pour l'instant.",
  "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "Elle choisit seule parmi les propositions : celles qu'elle n'utilise pas expirent au bout d'un jour et demi, vous n'avez pas à les trancher. Tous les articles sont dans",
- "Cambia articoli al giorno e regole": "Modifier les articles par jour et les règles"
+ "Cambia articoli al giorno e regole": "Modifier les articles par jour et les règles",
+ "Se una notizia importante arriva a articoli del giorno finiti, ne pubblica fino a questo numero portandoli avanti dal giorno dopo: domani ne scrive altrettanti in meno. Gratis.": "Si une actualité importante arrive quand les articles du jour sont faits, elle en publie jusqu'à ce nombre, avancés du lendemain : demain elle en écrit autant en moins. Gratuit.",
+ "Anticipi dal giorno dopo": "Avancés du lendemain",
+ "Articoli in più al giorno, oltre agli anticipi, pagati con i crediti. 0 = mai.": "Articles en plus par jour, au-delà de ceux avancés, payés avec des crédits. 0 = jamais.",
+ "Extra con i crediti": "Extras avec crédits",
+ "Solo le notizie con almeno questa opportunità escono oltre gli articoli del giorno.": "Seules les actualités ayant au moins cette opportunité sortent au-delà des articles du jour.",
+ "Opportunità minima per gli extra": "Opportunité minimale pour les extras",
+ "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "Si une actualité importante arrive, un article de plus peut encore sortir (jusqu'à {a} avancés du lendemain, {c} avec des crédits).",
+ "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Actualités de qualité laissées de côté par la limite d'aujourd'hui : {n}. Elles seraient publiées avec plus d'articles par jour.",
+ "Sblocca più articoli": "Débloquer plus d'articles",
+ "Scrivila ora": "L'écrire maintenant"
 }

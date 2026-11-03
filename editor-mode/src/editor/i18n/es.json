@@ -2111,5 +2111,15 @@
  "modifica o ritira": "modificar o retirar",
  "Nessun articolo oggi per ora.": "Todavía ningún artículo hoy.",
  "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "Elige sola entre las propuestas: las que no usa caducan al día y medio, no tienes que decidirlas. Todos los artículos están en",
- "Cambia articoli al giorno e regole": "Cambiar artículos al día y reglas"
+ "Cambia articoli al giorno e regole": "Cambiar artículos al día y reglas",
+ "Se una notizia importante arriva a articoli del giorno finiti, ne pubblica fino a questo numero portandoli avanti dal giorno dopo: domani ne scrive altrettanti in meno. Gratis.": "Si llega una noticia importante cuando los artículos del día están hechos, publica hasta este número adelantándolos del día siguiente: mañana escribe otros tantos de menos. Gratis.",
+ "Anticipi dal giorno dopo": "Adelantados de mañana",
+ "Articoli in più al giorno, oltre agli anticipi, pagati con i crediti. 0 = mai.": "Artículos más al día, además de los adelantados, pagados con créditos. 0 = nunca.",
+ "Extra con i crediti": "Extras con créditos",
+ "Solo le notizie con almeno questa opportunità escono oltre gli articoli del giorno.": "Solo salen más allá de los artículos del día las noticias con al menos esta oportunidad.",
+ "Opportunità minima per gli extra": "Oportunidad mínima para los extras",
+ "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "Si llega una noticia importante, aún puede salir un artículo más (hasta {a} adelantados de mañana, {c} con créditos).",
+ "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Noticias de calidad que dejó fuera el tope de hoy: {n}. Se publicarían con más artículos al día.",
+ "Sblocca più articoli": "Desbloquear más artículos",
+ "Scrivila ora": "Escribirla ahora"
 }

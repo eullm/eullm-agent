@@ -2111,5 +2111,15 @@
  "modifica o ritira": "ändern oder zurückziehen",
  "Nessun articolo oggi per ora.": "Heute noch kein Artikel.",
  "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "Sie wählt selbst unter den Vorschlägen: Nicht genutzte verfallen nach anderthalb Tagen, Sie müssen sie nicht entscheiden. Alle Artikel finden Sie unter",
- "Cambia articoli al giorno e regole": "Artikel pro Tag und Regeln ändern"
+ "Cambia articoli al giorno e regole": "Artikel pro Tag und Regeln ändern",
+ "Se una notizia importante arriva a articoli del giorno finiti, ne pubblica fino a questo numero portandoli avanti dal giorno dopo: domani ne scrive altrettanti in meno. Gratis.": "Kommt eine wichtige Meldung, wenn die Tagesartikel fertig sind, veröffentlicht sie bis zu dieser Zahl, vom Folgetag vorgezogen: Morgen schreibt sie entsprechend weniger. Kostenlos.",
+ "Anticipi dal giorno dopo": "Vom Folgetag vorgezogen",
+ "Articoli in più al giorno, oltre agli anticipi, pagati con i crediti. 0 = mai.": "Zusätzliche Artikel pro Tag, über die vorgezogenen hinaus, mit Credits bezahlt. 0 = nie.",
+ "Extra con i crediti": "Extras mit Credits",
+ "Solo le notizie con almeno questa opportunità escono oltre gli articoli del giorno.": "Nur Meldungen mit mindestens dieser Chance erscheinen über die Tagesartikel hinaus.",
+ "Opportunità minima per gli extra": "Mindestchance für Extras",
+ "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "Kommt eine wichtige Meldung, kann noch ein weiterer Artikel erscheinen (bis zu {a} vom Folgetag vorgezogen, {c} mit Credits).",
+ "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Qualitätsmeldungen, die das heutige Limit übrig ließ: {n}. Sie würden mit mehr Artikeln pro Tag veröffentlicht.",
+ "Sblocca più articoli": "Mehr Artikel freischalten",
+ "Scrivila ora": "Jetzt schreiben"
 }

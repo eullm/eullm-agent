@@ -2111,5 +2111,15 @@
  "modifica o ritira": "edit or withdraw",
  "Nessun articolo oggi per ora.": "No article today yet.",
  "Sceglie da sola fra le proposte: quelle che non usa scadono dopo un giorno e mezzo, non devi deciderle. Tutti gli articoli sono in": "It chooses by itself among the proposals: those it does not use lapse after a day and a half, you don't have to decide them. All the articles are in",
- "Cambia articoli al giorno e regole": "Change articles per day and rules"
+ "Cambia articoli al giorno e regole": "Change articles per day and rules",
+ "Se una notizia importante arriva a articoli del giorno finiti, ne pubblica fino a questo numero portandoli avanti dal giorno dopo: domani ne scrive altrettanti in meno. Gratis.": "If an important story arrives once the day's articles are done, it publishes up to this many, brought forward from the next day: tomorrow it writes as many fewer. Free.",
+ "Anticipi dal giorno dopo": "Brought forward from tomorrow",
+ "Articoli in più al giorno, oltre agli anticipi, pagati con i crediti. 0 = mai.": "More articles a day, beyond those brought forward, paid with credits. 0 = never.",
+ "Extra con i crediti": "Extras with credits",
+ "Solo le notizie con almeno questa opportunità escono oltre gli articoli del giorno.": "Only stories with at least this opportunity go out beyond the day's articles.",
+ "Opportunità minima per gli extra": "Minimum opportunity for extras",
+ "Se arriva una notizia importante può ancora uscirne una in più (fino a {a} anticipate dal giorno dopo, {c} con i crediti).": "If an important story arrives, one more can still go out (up to {a} brought forward from tomorrow, {c} with credits).",
+ "Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.": "Quality stories left out by today's limit: {n}. They would be published with more articles a day.",
+ "Sblocca più articoli": "Unlock more articles",
+ "Scrivila ora": "Write it now"
 }

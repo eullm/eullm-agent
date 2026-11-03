@@ -121,7 +121,10 @@
       {% if writing.get(p.id, {}).get('status') == 'failed' %}<span class="note warn">{{ _('La bozza non è stata scritta: {error}', error=writing[p.id].error) }}</span>{% endif %}
     </details>
     <div class="row" style="flex: none;">
-      {% if p.status == 'proposed' and caller.can('editor') %}
+      {% if p.status == 'proposed' and auto_site %}
+      <span class="chip teal" title="{{ _('La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.') }}">{{ _('la sceglie la redazione automatica') }}</span>
+      {% if caller.can('editor') %}<form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="1"><input type="hidden" name="back" value="/trends#p-{{ p.id }}"><button class="btn sm" type="submit">{{ _('Scrivila ora') }}</button></form>{% endif %}
+      {% elif p.status == 'proposed' and caller.can('editor') %}
       {% with back='/trends#' ~ (('p-%d' % loop.nextitem.id) if loop.nextitem else 'h-plan') %}{% include "_discard.html.j2" %}{% endwith %}
       <form class="inline" method="post" action="/ui/proposals/{{ p.id }}"><input type="hidden" name="accept" value="1"><input type="hidden" name="back" value="/trends#p-{{ p.id }}"><button class="btn sm pri" type="submit">{{ _('Accetta e scrivi la bozza') }}</button></form>
       {% elif p.draft_id %}
