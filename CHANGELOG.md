@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.28
+
+### Changed
+
+- **Il Desk si compatta da solo** (Francesco): "Da decidere" compare solo se
+  c'è qualcosa da decidere, e allora Attività e Raccolta si affiancano invece
+  di lasciare un buco; i riquadri "Proposte nel piano" e "Bozze pronte" solo
+  se non sono a zero; "Siti più attivi" e "Siti più costosi" solo con più di un
+  sito; il riquadro "Come funziona" solo all'inizio. L'elenco degli articoli
+  del giorno è più corto, con il link a Pubblicazioni.
+
+### Fixed
+
+- **Entrare in una redazione impiegava 4-5 secondi**: le notizie del giorno si
+  contavano leggendo tutto l'archivio, perché mancava un indice sul momento
+  di lettura (migrazione 0039, sqlite 0028). Ora leggono solo il giorno.
+- Una pagina che impiega più di un secondo e mezzo scrive nel log perché:
+  tempo totale, tempo nel database e le tre istruzioni più lente
+  (`docker compose logs editor | grep "slow page"`).
+
 ## 0.28.27
 
 ### Changed
