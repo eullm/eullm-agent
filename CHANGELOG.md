@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.29
+
+### Fixed
+
+- **Desk e pagine lente, con tante notizie in archivio** (Francesco: quasi 10
+  secondi): il conteggio delle notizie di un sito chiedeva al database, per
+  ogni notizia dell'archivio, di scorrere tutte le fonti. Ora legge prima
+  l'elenco delle fonti seguite, una volta sola. Il Desk con 300.000 notizie
+  in archivio passa da circa 3 secondi a 0,3. "Ultime notizie" guarda solo
+  gli ultimi tre giorni e il passo "Raccogli le notizie" dei Primi passi
+  cerca una notizia sola invece di contarle tutte.
+
 ## 0.28.28
 
 ### Changed
