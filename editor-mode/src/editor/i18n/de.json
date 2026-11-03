@@ -1929,5 +1929,8 @@
  "Backup dal pannello non attivi su questo server.": "Backups über das Panel sind auf diesem Server nicht aktiv.",
  "Un backup è già in corso.": "Ein Backup läuft bereits.",
  "Scienza e ambiente": "Wissenschaft und Umwelt",
- "Cultura e spettacolo": "Kultur und Unterhaltung"
+ "Cultura e spettacolo": "Kultur und Unterhaltung",
+ "Tutta la redazione in un file ZIP che si apre ovunque: gli articoli in Markdown e HTML con le copertine, i profili editoriali con le impostazioni della redazione automatica, le fonti, le destinazioni e lo storico delle pubblicazioni in CSV, più tutti i dati in JSON per un tecnico. Password, token e accessi restano sul server. Tienine una copia dove vuoi: è tua.": "Die ganze Redaktion in einer ZIP-Datei, die sich überall öffnen lässt: die Artikel in Markdown und HTML mit ihren Titelbildern, die redaktionellen Profile mit den Einstellungen der automatischen Redaktion, die Quellen, die Ziele und der Veröffentlichungsverlauf als CSV, dazu alle Daten als JSON für Techniker. Passwörter, Tokens und Zugänge bleiben auf dem Server. Bewahren Sie eine Kopie auf, wo Sie möchten: Sie gehört Ihnen.",
+ "Esporta la redazione (ZIP)": "Redaktion exportieren (ZIP)",
+ "Solo i dati (JSON)": "Nur die Daten (JSON)"
 }

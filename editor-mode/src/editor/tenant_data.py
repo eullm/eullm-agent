@@ -16,7 +16,11 @@ collected from growing for ever.
 from __future__ import annotations
 
 import base64
+import csv
+import io
 import json
+import re
+import zipfile
 from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, select, text, union
@@ -55,13 +59,15 @@ def _plain(value):
     return value
 
 
-def export(db, tenant_id: str) -> dict:
-    """Every row of the tenant, read in the tenant's own scope."""
+def export(db, tenant_id: str, images: bool = True) -> dict:
+    """Every row of the tenant, read in the tenant's own scope; without the
+    image bytes when `images` is False (the ZIP has them as files)."""
     out = {"tenant": tenant_id, "exported_at": datetime.now(UTC).isoformat(), "tables": {}}
     with db.tenant(tenant_id) as s:
         for name in reversed(DELETE_ORDER):
             table = m.metadata.tables[f"editor.{name}"]
-            cols = [c for c in table.c if c.name not in WITHHELD.get(name, ())]
+            cols = [c for c in table.c if c.name not in WITHHELD.get(name, ())
+                    and (images or (name, c.name) != ("draft_images", "content"))]
             order = list(table.primary_key.columns)
             rows = s.execute(select(*cols).where(table.c.tenant_id == tenant_id).order_by(*order)).all()
             out["tables"][name] = [{k: _plain(v) for k, v in r._mapping.items()} for r in rows]
@@ -70,6 +76,101 @@ def export(db, tenant_id: str) -> dict:
 
 def export_json(db, tenant_id: str) -> str:
     return json.dumps(export(db, tenant_id), ensure_ascii=False, indent=1, default=str)
+
+
+README = """Redazia: export of the newsroom {name}, {day}
+
+articles/<site>/<language>/   the approved and published articles: .md
+                              (front matter, as static site generators
+                              read it), .html (a page of its own) and the
+                              cover image
+drafts/<site>/<language>/     the other drafts, in the same formats
+sites/<site>/profile.json     the editorial profile approved, with the
+                              settings of the automatic newsroom
+sources.csv                   the sources followed, site by site
+destinations.csv              where the articles are published (no
+                              passwords or tokens: they stay on the server)
+publications.csv              every publication, with its address
+data.json                     every row of the newsroom, table by table,
+                              for a technician or another system
+"""
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")[:80] or "article"
+
+
+def _csv(rows: list[list]) -> str:
+    buf = io.StringIO()
+    csv.writer(buf).writerows(rows)
+    return buf.getvalue()
+
+
+def export_zip(db, tenant_id: str) -> bytes:
+    """The newsroom in a ZIP anyone can open: articles as Markdown and HTML
+    with their covers, profiles, sources, destinations, publications, and
+    the whole data for a technician. Credentials are left out, as in
+    export()."""
+    from . import delivery
+
+    day = datetime.now(UTC).date().isoformat()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z, db.tenant(tenant_id) as s:
+        name = s.execute(select(m.tenants.c.name).where(m.tenants.c.tenant_id == tenant_id)).scalar() or tenant_id
+        z.writestr("README.txt", README.format(name=name, day=day))
+        domains = dict(s.execute(select(m.sites.c.id, m.sites.c.domain)).all())
+        used = set()
+        for d in s.execute(select(m.drafts.c.id, m.drafts.c.status, m.drafts.c.site_id).order_by(m.drafts.c.id)).all():
+            a = delivery.article(s, d.id)
+            if a is None:
+                continue
+            folder = "articles" if d.status in ("approved", "published") else "drafts"
+            date = a["approved_at"].date().isoformat() if a["approved_at"] else ""
+            base = f"{folder}/{domains.get(d.site_id, 'site')}/{a['language'] or 'xx'}/" \
+                   f"{(date + '-') if date else ''}{_slug(a['slug'] or a['title'])}"
+            if base in used:
+                base = f"{base}-{d.id}"
+            used.add(base)
+            image = None
+            if a["image"]:
+                image = base.rsplit("/", 1)[1] + "." + a["image"]["file"].rsplit(".", 1)[1]
+                z.writestr(f"{base}.{image.rsplit('.', 1)[1]}", a["image"]["content"], compress_type=zipfile.ZIP_STORED)
+                a["image"] = {**a["image"], "file": image}
+            z.writestr(f"{base}.md", delivery.markdown_file(a))
+            z.writestr(f"{base}.html", delivery.page(a))
+        for site_id, domain in domains.items():
+            body = s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")
+                .order_by(m.editorial_profiles.c.version.desc()).limit(1)).scalar()
+            if body is not None:
+                z.writestr(f"sites/{domain}/profile.json", json.dumps(body, ensure_ascii=False, indent=1, default=str))
+        src = m.sources.c
+        rows = [["site", "name", "url", "kind", "status", "origin"]]
+        for r in s.execute(select(src.site_id, src.name, src.url, src.kind, src.status, src.origin)
+                           .where(src.tenant_id == tenant_id).order_by(src.site_id, src.name)).all():
+            rows.append([domains.get(r.site_id, ""), r.name, r.url, r.kind, r.status, r.origin or ""])
+        z.writestr("sources.csv", _csv(rows))
+        pt = m.publish_targets.c
+        targets = {}
+        rows = [["site", "name", "kind", "enabled", "settings"]]
+        for r in s.execute(select(pt.id, pt.site_id, pt.name, pt.kind, pt.enabled, pt.config).order_by(pt.id)).all():
+            targets[r.id] = r.name
+            rows.append([domains.get(r.site_id, ""), r.name, r.kind, r.enabled is not False,
+                         json.dumps(r.config or {}, ensure_ascii=False)])
+        z.writestr("destinations.csv", _csv(rows))
+        pb, dr = m.publications.c, m.drafts.c
+        rows = [["article", "site", "language", "destination", "status", "requested_at", "published_at", "address"]]
+        for r in s.execute(select(dr.title, dr.site_id, dr.language, pb.target_id, pb.status, pb.requested_at,
+                                  pb.published_at, pb.external_url)
+                           .join(m.drafts, dr.id == pb.draft_id).order_by(pb.id)).all():
+            rows.append([r.title, domains.get(r.site_id, ""), r.language or "", targets.get(r.target_id, ""),
+                         r.status or "", _plain(r.requested_at) or "", _plain(r.published_at) or "",
+                         r.external_url or ""])
+        z.writestr("publications.csv", _csv(rows))
+    with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("data.json", json.dumps(export(db, tenant_id, images=False), ensure_ascii=False, indent=1,
+                                           default=str))
+    return buf.getvalue()
 
 
 def delete_tenant(admin_db, tenant_id: str) -> dict[str, int]:
