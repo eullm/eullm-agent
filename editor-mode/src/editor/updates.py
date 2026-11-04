@@ -60,13 +60,13 @@ def telemetry() -> bool:
     return os.environ.get("EDITOR_TELEMETRY", "on").strip().lower() not in ("0", "off", "false", "no")
 
 
-def _release(client, installed: str, iid: str) -> dict:
+def _release(client, installed: str, iid: str, fresh: bool = False) -> dict:
     """The latest release: from our address (which counts the installation)
     when allowed, otherwise or if it fails from GitHub."""
     if iid and telemetry():
         try:
             r = client.get(os.environ.get("EDITOR_UPDATES_URL", "").strip() or LATEST,
-                           params={"v": installed, "id": iid})
+                           params={"v": installed, "id": iid, **({"fresh": 1} if fresh else {})})
             r.raise_for_status()
             rel = r.json()
             if VERSION.match(str(rel.get("version") or "")):
@@ -126,7 +126,7 @@ def check(where: Path | None, http=None, now: datetime | None = None, force: boo
         return known
     try:
         client = http or httpx.Client(timeout=15, follow_redirects=True)
-        rel = _release(client, installed, iid)
+        rel = _release(client, installed, iid, fresh=force)
         known = {"version": rel["version"], "url": rel.get("url") or "", "published_at": rel.get("published_at"),
                  "checked_at": now.isoformat(), "error": None}
     except (httpx.HTTPError, ValueError) as e:

@@ -423,10 +423,10 @@ def register(app, ctx) -> None:
         return page(request, s, view="redazione", room=tenant_id)
 
     @app.get("/api/public/latest")
-    def public_latest(v: str = "", id: str = ""):
+    def public_latest(v: str = "", id: str = "", fresh: int = 0):
         """The latest release for an installation that checks for updates;
         the check is counted (installs.py)."""
-        rel = installs.latest()
+        rel = installs.latest(fresh=bool(fresh))
         if rel is None:
             raise HTTPException(503, "latest release not known")
         if v or id:

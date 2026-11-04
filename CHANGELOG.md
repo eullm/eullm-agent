@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.37
+
+### Fixed
+
+- **Una versione appena uscita non si vedeva subito** (Francesco): il
+  server di app.redazia.com, che risponde alle installazioni e le conta,
+  teneva l'ultima release di GitHub per dieci minuti, e "Controlla adesso"
+  riceveva quella vecchia. Ora la tiene due minuti, e "Controlla adesso" la
+  rilegge da GitHub (al più ogni 15 secondi).
+
 ## 0.28.36
 
 ### Fixed

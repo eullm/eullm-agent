@@ -2,7 +2,7 @@
 
 Every installation asks GET /api/public/latest for the latest release every
 six hours (updates.py) with a random identifier and its version. The answer
-is GitHub's latest release, read here at most every ten minutes; the
+is GitHub's latest release, read here at most every two minutes; the
 question is recorded, so the console can say how many installations run and
 on which version. Nothing else is sent or kept: no address, no newsroom.
 """
@@ -22,15 +22,18 @@ from . import updates
 
 log = logging.getLogger(__name__)
 
-RELEASE_TTL = 600.0
+RELEASE_TTL = 120.0
+FRESH_AFTER = 15.0  # "Controlla adesso" reads GitHub again, at most every 15 seconds
 ACTIVE = timedelta(days=7)  # checked within a week: still running
 _release: dict = {"at": 0.0, "release": None}
 
 
-def latest(http=None) -> dict | None:
-    """GitHub's latest release, kept for ten minutes."""
+def latest(http=None, fresh: bool = False) -> dict | None:
+    """GitHub's latest release, kept for two minutes; `fresh` (an operator
+    pressed "Controlla adesso") reads it again unless read seconds ago: a
+    release tagged a minute before was not seen for ten minutes."""
     now = time.monotonic()
-    if _release["release"] and now - _release["at"] < RELEASE_TTL:
+    if _release["release"] and now - _release["at"] < (FRESH_AFTER if fresh else RELEASE_TTL):
         return _release["release"]
     try:
         client = http or httpx.Client(timeout=15, follow_redirects=True)
