@@ -269,7 +269,7 @@ SYSTEM = (
     "separate stories into one article. "
     "Write only what the items say. Length follows the material: when the items give only a title, a summary or "
     "an abstract, or come from one outlet, write a short news piece of 200 to 400 words, attributed to its "
-    "source, and say what is not known yet; write longer only when the items carry the details (who, what, "
+    "source; write longer only when the items carry the details (who, what, "
     "numbers, dates, how it works, what changes for the reader). A short piece must still give what its title "
     "promises (the figure, the decision, what the study found): if the items do not give it, the title does not "
     "promise it. Never pad: no background the items do not give, no repeating a point in other words. "
