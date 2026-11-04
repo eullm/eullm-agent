@@ -1650,7 +1650,12 @@ def register(app, ctx) -> None:
                                         d.c.language, d.c.translation_of,
                                         claims.label("claims")).where(d.c.site_id == site.id)
                                  .order_by(d.c.created_at.desc()).limit(100)).all()
-            return render(request, "drafts.html.j2", c, s, "drafts", _sites=(sites, site), rows=rows, langs=tr.LANGUAGES)
+            # Why the automatic newsroom discarded or held an article: its own note on it.
+            why = dict(s.execute(select(m.feedback.c.target_id, m.feedback.c.note).where(
+                m.feedback.c.target == "draft", m.feedback.c.given_by == autopilot.AUTO,
+                m.feedback.c.target_id.in_([r.id for r in rows] or [0]), m.feedback.c.note.is_not(None))).all())
+            return render(request, "drafts.html.j2", c, s, "drafts", _sites=(sites, site), rows=rows, langs=tr.LANGUAGES,
+                          why=why)
 
     @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
     def draft_view(request: Request, draft_id: int, edit: int = 0, c: auth.Caller = Depends(viewer)):
