@@ -126,6 +126,28 @@ def copied_run(claim: str, source: str, run: int = COPY_RUN) -> bool:
 NO_SOURCE = "no valid source"
 NUMBERS_MISSING = "numbers not found in the cited sources: "
 COPIED = "copies a passage of a source word for word"
+ABOUT_SOURCES = "talks about its sources instead of the event"
+
+# Sentences and headings about the article's own sources or checking
+# ("what is confirmed", "the sources consulted do not say"): the AI
+# editor-in-chief refused articles for them, after they were paid for
+# (2026-11-04). Caught here, they are fixed or cut before that.
+_ABOUT = (
+    r"cosa (?:è|e') (?:confermato|chiaro|noto)|cosa non (?:è|e') (?:chiaro|confermato|noto)|"
+    r"\b(?:le|dalle|nelle) fonti (?:consultate|disponibili|citate|a disposizione)|"
+    r"\b(?:i|dai|nei) testi (?:disponibili|consultati)|(?:non )?(?:è|e') possibile (?:dire|stabilire|verificare) qui|"
+    r"what is (?:confirmed|known|not (?:yet )?(?:clear|known|confirmed))|(?:the )?(?:available|consulted|cited) sources|"
+    r"the sources (?:do not|don't) (?:say|indicate|specify)|"
+    r"was (?:ist|bekannt ist) bestätigt|die (?:verfügbaren|vorliegenden) quellen|"
+    r"ce qui est (?:confirmé|établi)|les sources (?:disponibles|consultées)|"
+    r"lo que (?:está|se ha) confirmado|las fuentes (?:disponibles|consultadas)"
+)
+ABOUT = re.compile(_ABOUT, re.IGNORECASE)
+
+
+def about_sources(text: str | None) -> bool:
+    """Does this sentence or heading talk about the sources, not the event?"""
+    return bool(text and ABOUT.search(text))
 
 
 def check(article: Article, sources: dict[int, Source]) -> Article:
@@ -141,6 +163,8 @@ def check(article: Article, sources: dict[int, Source]) -> Article:
             c.flags.append(NUMBERS_MISSING + ", ".join(missing))
         if any(copied_run(c.text, s.text) for s in cited):
             c.flags.append(COPIED)
+        if about_sources(c.text):
+            c.flags.append(ABOUT_SOURCES)
     return article
 
 
@@ -153,6 +177,8 @@ def flag_text(flag, lang: str | None = None) -> str:
         return t("numeri che non si trovano nelle fonti citate: {numbers}", lang, numbers=flag[len(NUMBERS_MISSING):])
     if flag == COPIED:
         return t("copia parola per parola un passaggio di una fonte", lang)
+    if flag == ABOUT_SOURCES:
+        return t("parla delle fonti invece che della notizia", lang)
     return flag
 
 
@@ -285,6 +311,9 @@ SYSTEM = (
     "understand the event, as a precedent, a comparison or the rule that applies, say plainly which of these it "
     "is, keep it to a sentence or two, and never tell it as a second story; leave out the others. Never join "
     "separate stories into one article. "
+    "Tell the event, never your sources or your checking: no heading or sentence about what is confirmed or "
+    "not, what is clear or unclear, what the sources, the texts or the outlets say or do not say; when the items "
+    "do not give a detail, leave it out without saying so. "
     "Write only what the items say. Length follows the material: when the items give only a title, a summary or "
     "an abstract, or come from one outlet, write a short news piece of 200 to 400 words, attributed to its "
     "source; write longer only when the items carry the details (who, what, "
@@ -573,7 +602,7 @@ def event_items(s, cited: list[int], title: str = "", limit: int = RELATED) -> t
 
 
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
-                pay: bool = True, purpose: str = "draft", notes: str | None = None) -> int:
+                pay: bool = True, purpose: str = "draft", notes: str | None = None, outlets: int = 0) -> int:
     """Write and store a draft for an accepted proposal; returns its id.
     Past the plan's articles of the month it is paid with credits, unless
     `pay` is False (the automatic newsroom stays within the plan)."""
@@ -620,6 +649,13 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     allowed = set(sources)
     roles = {**{i: "CONTEXT" for i in context}, **{i: "MAIN" for i in cited}, **{i: "ORIGINAL" for i in documents}}
     prompt = _prompt(profile, prop, sources, roles, posts)
+    # The automatic newsroom publishes only articles citing this many outlets: asked
+    # from the first writing, not found missing after it was paid for.
+    told_by = {sources[i].name for i in sources if roles.get(i) not in ("CONTEXT", "ORIGINAL")}
+    need = outlets if outlets and len(told_by) >= outlets else 0
+    if need:
+        prompt += (f"\n\nCite items of at least {need} different outlets (the name in brackets after each item's "
+                   "title), each for what it adds about the event.")
     if notes:  # a version written again: what was wrong with the last one
         prompt += f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}"
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
@@ -636,9 +672,12 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         except ValueError as e:
             problem = str(e)
         else:
-            if not article.flags:
+            short = need and len({sources[i].name for c in article.claims for i in c.sources if i in sources}) < need
+            if not article.flags and not short:
                 break
             problem = "; ".join(f"claim {f['claim']}: {', '.join(f['problems'])}" for f in article.flags)
+            if short:
+                problem = "; ".join(x for x in (problem, f"cite items of at least {need} different outlets") if x)
         messages += [{"role": "assistant", "content": res.content},
                      {"role": "user", "content": f"Fix these problems and reply with the whole JSON again: {problem}"}]
     if article is None:

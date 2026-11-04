@@ -188,6 +188,14 @@ def export_response(db, tenant_id: str, as_zip: bool = True) -> Response:
                     headers={"Content-Disposition": f'attachment; filename="{tenant_id}-{day}.json"'})
 
 
+def draft_state(status: str, decided_by: str | None) -> str:
+    """A draft's state as shown: a refused draft is "discarded" when the
+    automatic newsroom refused it, "rejected" when a person did."""
+    from .autopilot import AUTO
+
+    return "discarded" if status == "rejected" and decided_by == AUTO else status
+
+
 def target_secret_name(kind: str, name: str, site_id: int) -> str:
     """A name for a destination's credential when the form leaves it empty."""
     prefix = {"wordpress": "WP", "github": "GH", "webhook": "HOOK", "telegram_channel": "TG"}.get(kind, "PUB")
@@ -220,6 +228,7 @@ def register(app, ctx) -> None:
     env.filters["plural"] = plural
     env.filters["langname"] = language_name
     env.filters["flag"] = drafts.flag_text
+    env.globals["draft_state"] = draft_state
 
     def viewer(request: Request) -> auth.Caller:
         c = auth.resolve(db, request.cookies.get(COOKIE), admin)
@@ -672,12 +681,16 @@ def register(app, ctx) -> None:
         import math
 
         since = start_of_day(s)
-        pub, pt = m.publications.c, m.publish_targets.c
-        q = select(func.count()).select_from(m.publications.join(m.publish_targets, pt.id == pub.target_id)).where(
-            pub.status == "published", pub.published_at >= since)
+        pub, pt, dr = m.publications.c, m.publish_targets.c, m.drafts.c
+        # Each article once, whatever the destinations it went to; its translations apart.
+        q = (select(dr.translation_of.is_(None).label("original"), func.count(func.distinct(pub.draft_id)))
+             .select_from(m.publications.join(m.publish_targets, pt.id == pub.target_id)
+                          .join(m.drafts, m.drafts.c.id == pub.draft_id))
+             .where(pub.status == "published", pub.published_at >= since).group_by(dr.translation_of.is_(None)))
         if sid is not None:
             q = q.where(pt.site_id == sid)
-        out = {"published": s.execute(q).scalar() or 0,
+        counted = {bool(k): n for k, n in s.execute(q).all()}
+        out = {"published": counted.get(True, 0), "translated": counted.get(False, 0),
                "discarded": sum(a["day"]["discarded"] for a in auto_cards),
                "held": sum(a["day"]["held"] for a in auto_cards), "pace": None}
         if usage and usage.plan.get("max_drafts_month"):
@@ -1732,20 +1745,22 @@ def register(app, ctx) -> None:
                 claims = (select(func.count()).select_from(m.draft_claims)
                           .where(m.draft_claims.c.draft_id == d.c.id).scalar_subquery())
                 rows = s.execute(select(d.c.id, d.c.title, d.c.status, d.c.version, d.c.created_at, d.c.flags,
-                                        d.c.language, d.c.translation_of,
+                                        d.c.language, d.c.translation_of, d.c.decided_by,
                                         claims.label("claims")).where(d.c.site_id == site.id)
                                  .order_by(d.c.created_at.desc()).limit(300)).all()
+                # Discarded by the automatic newsroom, refused by a person: two different things.
+                rows = [{**r._mapping, "state": draft_state(r.status, r.decided_by)} for r in rows]
                 # Each translation right under its original.
                 kids: dict[int, list] = {}
-                shown = {r.id for r in rows}
+                shown = {r["id"] for r in rows}
                 for r in rows:
-                    if r.translation_of in shown:
-                        kids.setdefault(r.translation_of, []).append(r)
-                rows = [x for r in rows if r.translation_of not in shown for x in [r, *kids.get(r.id, [])]]
+                    if r["translation_of"] in shown:
+                        kids.setdefault(r["translation_of"], []).append(r)
+                rows = [x for r in rows if r["translation_of"] not in shown for x in [r, *kids.get(r["id"], [])]]
             # Why the automatic newsroom discarded or held an article: its own note on it.
             why = dict(s.execute(select(m.feedback.c.target_id, m.feedback.c.note).where(
                 m.feedback.c.target == "draft", m.feedback.c.given_by == autopilot.AUTO,
-                m.feedback.c.target_id.in_([r.id for r in rows] or [0]), m.feedback.c.note.is_not(None))).all())
+                m.feedback.c.target_id.in_([r["id"] for r in rows] or [0]), m.feedback.c.note.is_not(None))).all())
             return render(request, "drafts.html.j2", c, s, "drafts", _sites=(sites, site), rows=rows, langs=tr.LANGUAGES,
                           why=why)
 
@@ -1790,7 +1805,7 @@ def register(app, ctx) -> None:
             # The original and its translations, and the site's languages still missing.
             root = d.translation_of or d.id
             family = s.execute(select(m.drafts.c.id, m.drafts.c.language, m.drafts.c.status, m.drafts.c.title,
-                                      m.drafts.c.translation_of)
+                                      m.drafts.c.translation_of, m.drafts.c.decided_by)
                                .where(or_(m.drafts.c.id == root, m.drafts.c.translation_of == root))
                                .order_by(m.drafts.c.id)).all()
             original = next((x for x in family if x.id == root), None)

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.28.40
+
+Meno articoli pagati e poi buttati dalla redazione automatica.
+
+### Changed
+
+- **Le poche frasi sbagliate si tolgono, l'articolo resta** (Francesco: su 8
+  notizie una sola approvata, 7 scritture pagate e non pubblicate). Le frasi
+  che non superano i controlli (numeri che le fonti non hanno, passaggi
+  copiati, frasi senza fonte) e i titoletti che parlano delle fonti ("Cosa è
+  confermato") si tolgono senza chiamare il modello, se sono poche (al più
+  tre, un quarto dell'articolo) e non nell'apertura. Il caporedattore AI può
+  chiedere di togliere fino a tre frasi invece di rifiutare l'articolo; rifiuta
+  solo quello che i tagli non sistemano (notizia sbagliata, titolo o apertura
+  sbagliati, due storie unite). Solo allora l'articolo si riscrive.
+- **Lo scrittore non parla delle fonti**: niente frasi o titoletti su cosa è
+  confermato, cosa non è chiaro, cosa dicono o non dicono le fonti. E cita da
+  subito il numero di testate che la redazione automatica richiede, invece di
+  scoprirlo dopo averlo pagato.
+- **Scartata o Rifiutata**: un articolo tolto dalla redazione automatica è
+  "Scartata", uno tolto da una persona "Rifiutata", in Bozze, nella bozza e
+  nei filtri.
+- **Oggi conta ogni articolo una volta**: le traduzioni pubblicate sono a
+  parte ("più 11 traduzioni"), così il numero torna con quello della
+  redazione automatica.
+
 ## 0.28.39
 
 Secondo e terzo lotto dell'audit: la console di amministrazione e il pannello

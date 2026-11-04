@@ -88,7 +88,11 @@ CHECK_SYSTEM = (
     '"headline_fixes": {"title": "<the title with its typos corrected, or null>", "subtitle": "<same, or null>", '
     '"seo_title": "<same, or null>", "seo_description": "<same, or null>"}}. headline_fixes is a last proofread '
     "of the Headlines given after the article: correct only a clear typo, a missing or doubled word or a grammar "
-    "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right"
+    "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right. "
+    'Add "cut": ["<sentence copied exactly from the article>"] when removing one to three sentences fixes every '
+    "problem (a detail the sources do not support, a sentence about the sources): then set publish to true, "
+    "because the article goes out without them. Refuse only what removing a few sentences cannot fix: the event "
+    "itself wrong, the title or the opening wrong, two stories joined"
 )
 
 LABELS = {
@@ -500,8 +504,66 @@ def _check_validator(v) -> dict:
     fixes = v.get("headline_fixes") if isinstance(v.get("headline_fixes"), dict) else {}
     fixes = {k: " ".join(str(x).split()) for k, x in fixes.items()
              if k in ("title", "subtitle", "seo_title", "seo_description") and isinstance(x, str) and x.strip()}
+    cut = [" ".join(str(x).split()) for x in v.get("cut") or [] if isinstance(x, str) and x.strip()][:3]
     return {"publish": v["publish"], "problems": problems, "section": str(v.get("section") or "").strip()[:80],
-            "fixes": fixes}
+            "fixes": fixes, "cut": cut}
+
+
+# The article's sentences the checks or the editor-in-chief find wrong are
+# cut, when they are few, instead of writing the article again or throwing
+# it away after it was paid for (2026-11-04: seven of eight articles of a
+# day discarded, most for one sentence). Never the opening, never so many
+# that the article is no longer the one written.
+CUT_MAX_SHARE = 0.25
+CUT_MAX = 3
+CUT_MIN_LEFT = 4
+
+
+def _key(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", (text or "").lower()).split())
+
+
+def cut(db, tenant_id: str, d, drop: set[int]) -> bool:
+    """The draft without the sentences at these positions, and with the
+    headings about its own sources removed (their sentences join the
+    section before). False, and nothing changed, when cutting them would
+    take the opening or too much of the article."""
+    with db.tenant(tenant_id) as s:
+        claims = drafts.stored_claims(s, d.id)
+    if not claims:
+        return False
+    first = claims[0]["section"]
+    if any(c["ordinal"] in drop and c["section"] == first for c in claims):
+        return False  # the opening answers the reader: rewritten, not cut
+    keep = [dict(c) for c in claims if c["ordinal"] not in drop]
+    if drop and (len(drop) > max(CUT_MAX, 1) or len(drop) > max(1, round(len(claims) * CUT_MAX_SHARE))
+                 or len(keep) < CUT_MIN_LEFT):
+        return False
+    heads = False
+    previous = first
+    for c in keep:
+        if c["section"] and drafts.about_sources(c["section"]):
+            c["section"], heads = previous, True
+        else:
+            previous = c["section"]
+    if not drop and not heads:
+        return False
+    drafts.edit_text(db, tenant_id, d.id, d.title, d.subtitle or "", drafts.as_text(keep))
+    return True
+
+
+def cut_sentences(db, tenant_id: str, d, sentences: list[str]) -> bool:
+    """The editor-in-chief's cuts, found among the draft's sentences."""
+    with db.tenant(tenant_id) as s:
+        claims = drafts.stored_claims(s, d.id)
+    drop = set()
+    for x in sentences:
+        k = _key(x)
+        hit = [c["ordinal"] for c in claims if k and (k in _key(c["text"]) or _key(c["text"]) in k)]
+        if not hit:
+            return False
+        drop.update(hit[:1])
+    return cut(db, tenant_id, d, drop)
 
 
 def proofread(db, tenant_id: str, d, fixes: dict) -> bool:
@@ -627,15 +689,20 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     With on_problem "fix" nothing waits for a person: what can be fixed is
     written again once, what cannot is discarded. The cover is drawn only
     for an article that passed everything, so a bad day costs no images."""
+    def load():
+        with db.tenant(tenant_id) as s:
+            row = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
+            n = s.execute(select(func.count(func.distinct(m.source_items.c.source_id))).select_from(
+                m.draft_claim_sources.join(m.draft_claims, m.draft_claims.c.id == m.draft_claim_sources.c.claim_id)
+                .join(m.source_items, m.source_items.c.id == m.draft_claim_sources.c.item_id))
+                .where(m.draft_claims.c.draft_id == draft_id)).scalar() or 0
+        return row, n
+
+    d, cited = load()
     with db.tenant(tenant_id) as s:
-        d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
         body = s.execute(select(m.editorial_profiles.c.body).where(
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
         cfg = settings_of(body)
-        cited = s.execute(select(func.count(func.distinct(m.source_items.c.source_id))).select_from(
-            m.draft_claim_sources.join(m.draft_claims, m.draft_claims.c.id == m.draft_claim_sources.c.claim_id)
-            .join(m.source_items, m.source_items.c.id == m.draft_claim_sources.c.item_id))
-            .where(m.draft_claims.c.draft_id == draft_id)).scalar() or 0
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id}
     lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
     if not cfg["enabled"]:
@@ -644,6 +711,13 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if word:  # nothing to fix: the subject itself is out
         return _stop(db, tenant_id, d, [t("argomento da evitare: {word}", lang, word=word)], out,
                      discard=cfg["on_problem"] == "fix")
+    if cfg["on_problem"] == "fix":
+        # A few sentences the checks found wrong, and headings about the sources: cut, for free.
+        flagged = {f.get("claim") for f in (d.flags or []) if isinstance(f.get("claim"), int)}
+        if cut(db, tenant_id, d, flagged):
+            step(N_("Tolte le frasi che non superano i controlli"))
+            d, cited = load()
+            out["cut"] = len(flagged)
     fixable = []
     if d.status == "needs_review":
         fixable.append(t("alcune frasi non superano i controlli sulle fonti: {detail}", lang, detail="; ".join(
@@ -660,6 +734,15 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
                          discard=False)
         if not verdict["publish"]:
             fixable += verdict["problems"]
+        elif verdict.get("cut"):  # publishable without a few sentences: cut, not written again
+            if cfg["on_problem"] != "fix" or not cut_sentences(db, tenant_id, d, verdict["cut"]):
+                fixable += verdict["problems"] or [t("il caporedattore AI vuole togliere: {sentences}", lang,
+                                                     sentences=" / ".join(verdict["cut"]))[:600]]
+            else:
+                d, cited = load()
+                out["cut"] = out.get("cut", 0) + len(verdict["cut"])
+                if d.status == "needs_review" or cited < cfg["min_sources"]:
+                    fixable += verdict["problems"] or [t("dopo i tagli l'articolo non supera i controlli", lang)]
         section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
         if section:  # the site files the article under it
             with db.tenant(tenant_id) as s:

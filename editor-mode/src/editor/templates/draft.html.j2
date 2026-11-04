@@ -5,7 +5,7 @@
   <div>
     <span class="kicker"><a href="/drafts">{{ _('Bozze') }}</a> · {% if d.translation_of and original %}{{ _('traduzione in {language} di', language=langs.get(d.language, d.language)) }} <a href="/drafts/{{ original.id }}">«{{ original.title|truncate(60) }}»</a>{% else %}{{ _('versione {n}', n=d.version) }}{% endif %} · {{ when(d.created_at) }}</span>
     <div class="row">
-      {% set st = {'draft': ('blue', _('Pronta da leggere')), 'needs_review': ('amber', _('Da rivedere a mano')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))}.get(d.status, ('', d.status)) %}
+      {% set st = {'draft': ('blue', _('Pronta da leggere')), 'needs_review': ('amber', _('Da rivedere a mano')), 'approved': ('green', _('Approvata')), 'discarded': ('', _('Scartata dalla redazione automatica')), 'rejected': ('', _('Rifiutata'))}.get(draft_state(d.status, d.decided_by), ('', d.status)) %}
       <span class="chip {{ st[0] }}">{{ st[1] }}</span>
       {% if d.decided_by %}<span class="hint">{{ _('Approvata da {who} il {date}', who=d.decided_by, date=when(d.decided_at, 'day')) if d.status == 'approved' else _('Decisa da {who} il {date}', who=d.decided_by, date=when(d.decided_at, 'day')) }}</span>{% endif %}
     </div>
@@ -209,7 +209,7 @@
       {% for x in translations %}
       <div class="list-row">
         <span>{{ langs.get(x.language, x.language) }}</span>
-        {% set ts = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))}.get(x.status, ('', x.status)) %}
+        {% set ts = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'discarded': ('', _('Scartata')), 'rejected': ('', _('Rifiutata'))}.get(draft_state(x.status, x.decided_by), ('', x.status)) %}
         {% if x.id == d.id %}<span class="chip {{ ts[0] }}">{{ ts[1] }}</span>{% else %}<a class="chip {{ ts[0] }}" href="/drafts/{{ x.id }}">{{ ts[1] }}</a>{% endif %}
       </div>
       {% endfor %}

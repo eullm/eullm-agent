@@ -49,7 +49,7 @@
 <section class="card pad" aria-labelledby="h-day">
   <h2 id="h-day">{{ _('Oggi') }}</h2>
   <div class="trio" style="margin-top: 8px;">
-    <div><span class="num">{{ day.published }}</span><small>{{ _('articoli pubblicati') }}</small></div>
+    <div><span class="num">{{ day.published }}</span><small>{{ _('articoli pubblicati') }}{% if day.translated %} · {{ _('più {n} traduzioni', n=day.translated) if day.translated > 1 else _('più 1 traduzione') }}{% endif %}</small></div>
     {% if auto_cards %}<div><span class="num">{{ day.discarded }}</span><small>{{ _('scartati dalla redazione automatica') }}</small></div>{% endif %}
     <div><span class="num">{{ decisions or 0 }}</span><small>{{ _('aspettano te') }}{% if decisions %} · <a href="#h-decide">{{ _('vedi') }}</a>{% endif %}</small></div>
   </div>
