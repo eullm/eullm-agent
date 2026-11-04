@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -75,6 +76,8 @@ class Source:
     summary: str
     content: str
     published: str | None
+    fetched: str | None = None  # when it was read, UTC, to the minute
+    live: bool = False  # the same page came with different titles: a page updated over time
 
     @property
     def text(self) -> str:
@@ -435,9 +438,12 @@ def _sources(s, ids: list[int]) -> dict[int, Source]:
         select(m.source_items, m.sources.c.name.label("source_name"))
         .join(m.sources, m.sources.c.id == m.source_items.c.source_id)
         .where(m.source_items.c.id.in_(ids))).all()
+    pages = Counter(r.canonical_url for r in rows if r.canonical_url)
     return {r.id: Source(r.id, r.title, r.url, _host(r.url) if r.source_name == "Documenti originali" else r.source_name,
                          r.summary or "", r.content or "",
-                         r.published_at.date().isoformat() if r.published_at else None) for r in rows}
+                         r.published_at.date().isoformat() if r.published_at else None,
+                         r.fetched_at.strftime("%Y-%m-%d %H:%M UTC") if r.fetched_at else None,
+                         bool(r.canonical_url and pages[r.canonical_url] > 1)) for r in rows}
 
 
 def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int, str] | None = None,
@@ -463,7 +469,9 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
     roles = roles or {}
     for src in sources.values():
         role = roles.get(src.id, "")
-        lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'})\n"
+        when = f", read {src.fetched}" if src.fetched else ""
+        live = "; the same page seen with different titles: a page updated over time, tell what it said when read" if src.live else ""
+        lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'}{when}{live})\n"
                      f"{(src.summary + ' ' + src.content)[:6000 if role in ('MAIN', 'ORIGINAL') else 2500]}")
     return "\n".join(lines)
 

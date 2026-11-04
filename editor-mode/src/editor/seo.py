@@ -17,7 +17,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
@@ -97,13 +97,18 @@ def remember_published(s, tenant_id: str, site_id: int) -> int:
                pub.c.mode == "publish", tg.c.kind.in_(SITE_TARGETS), pub.c.external_url.like("http%"))).all()
     if not rows:
         return 0
-    have = set(s.execute(select(m.site_posts.c.url_hash).where(m.site_posts.c.site_id == site_id)).scalars())
+    have = {r.url_hash: r.title for r in s.execute(
+        select(m.site_posts.c.url_hash, m.site_posts.c.title).where(m.site_posts.c.site_id == site_id))}
     added = 0
     for r in rows:
         h = url_hash(r.external_url)
         if h in have:
+            if have[h] != r.title:  # the article was edited after it went out: the link shows its new title
+                s.execute(update(m.site_posts).where(m.site_posts.c.site_id == site_id, m.site_posts.c.url_hash == h)
+                          .values(title=r.title, summary=r.subtitle, minhash=minhash(f"{r.title} {r.subtitle or ''}")))
+                have[h] = r.title
             continue
-        have.add(h)
+        have[h] = r.title
         s.execute(insert(m.site_posts).values(
             tenant_id=tenant_id, site_id=site_id, url=r.external_url, url_hash=h, title=r.title,
             summary=r.subtitle, published_at=r.published_at or datetime.now(UTC),
@@ -120,9 +125,10 @@ COMMON = 0.08
 
 def site_links(s, site_id: int, title: str, keyphrase: str, limit: int = INTERNAL_LINKS) -> list[dict]:
     """The site's own articles closest to this one, to link as further
-    reading: internal links help readers and crawlers alike. Two shared
-    words make a link, or one the site rarely uses (a company, a person,
-    a product); the closest first, then the newest."""
+    reading: internal links help readers and crawlers alike. A link needs a
+    word the site rarely uses (a company, a person, a product, a law)
+    shared with the article: common words alone ("stati uniti", "mercato")
+    linked unrelated pieces; the closest first, then the newest."""
     terms = set(tokens(f"{title} {keyphrase}"))
     if not terms:
         return []
@@ -140,7 +146,7 @@ def site_links(s, site_id: int, title: str, keyphrase: str, limit: int = INTERNA
         shared = terms & w
         if r.title.strip().lower() == title.strip().lower():
             continue
-        if len(shared) >= 2 or shared & rare:
+        if shared & rare:
             scored.append((-len(shared & rare), -len(shared), i, r.title, r.url))
     scored.sort()
     return [{"title": t, "url": u} for *_, t, u in scored[:limit]]

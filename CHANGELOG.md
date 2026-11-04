@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.28.33
+
+### Fixed
+
+- **Le barre dei limiti sul Desk** restavano vuote: la classe `meter` era
+  già usata da un'altra tabella e ne cambiava la forma. Ora si riempiono, e
+  i riquadri stanno su colonne uguali.
+- **Proposte che si sovrappongono** (revisione esterna degli articoli di
+  aitoday.it): la redazione automatica non sceglie una proposta che racconta
+  ciò che un articolo degli ultimi due giorni, o uno già scelto nello stesso
+  giro, racconta già (almeno 3 parole in comune e il 40% del titolo più
+  corto). Resta in attesa e può diventare un aggiornamento.
+- **Caporedattore**: prima di chiamare contraddizione due affermazioni
+  controlla che parlino dello stesso momento, della stessa misura e dello
+  stesso perimetro (conteggio parziale contro risultato, "prima donna nera
+  governatrice di uno Stato" contro "prima governatrice nera della Georgia").
+- **Pagine in aggiornamento** (dirette): la bozza riceve l'ora di lettura di
+  ogni fonte e sa quando la stessa pagina è arrivata con titoli diversi,
+  così racconta ciò che diceva a quell'ora.
+- **"Leggi anche"**: il titolo di un articolo modificato dopo l'uscita si
+  aggiorna; un link richiede almeno una parola rara del sito in comune
+  (due parole comuni come "stati uniti" collegavano pezzi senza legame).
+
 ## 0.28.32
 
 ### Added
