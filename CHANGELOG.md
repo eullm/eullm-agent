@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.28.41
+
+### Changed
+
+- **Copertine fotografiche** (Francesco: "un po' troppo cartoon"). Le due
+  impostazioni, d'impatto ed editoriale, ora chiedono una vera foto di
+  cronaca: una scena che un fotografo avrebbe potuto scattare (il luogo, le
+  persone al lavoro, l'oggetto a terra o in laboratorio), non una veduta
+  immaginata dell'evento come un satellite in fiamme nel cielo. Luce
+  naturale, colori veri, fotocamera full frame con 35 o 50 mm, e il divieto
+  esplicito di illustrazioni, render 3D, CGI, effetti luminosi e colori
+  saturi. "D'impatto" resta fatta per farsi cliccare: un soggetto forte e
+  vicino, contrasto naturale. Le copertine già pubblicate restano; si rifanno
+  dalla bozza con "Rifai l'immagine".
+
 ## 0.28.40
 
 Meno articoli pagati e poi buttati dalla redazione automatica.

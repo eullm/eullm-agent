@@ -11,9 +11,9 @@ webhooks as a link), served by an unguessable token.
 Two services: OpenRouter's image API (one key for many models, the default
 openai/gpt-image-2 writes readable words) and Black Forest Labs' FLUX on its
 EU endpoint. A key starting with sk-or- is OpenRouter's. Each site picks the
-cover's style: "impact" (made to be clicked: bold subject, dramatic light,
-strong colours, readable as a thumbnail, optionally a short headline drawn
-in) or "editorial" (a calm news photograph).
+cover's style: "impact" (made to be clicked: one strong subject, natural
+contrast, readable as a thumbnail, optionally a short headline drawn in) or
+"editorial" (a calm news photograph). Both are photographs, never renders.
 
 Without `EDITOR_IMAGES_API_KEY` nothing of this runs and drafts have no
 image. Every image is recorded in the usage like a model call, with its cost.
@@ -174,27 +174,42 @@ def size_of(content: bytes) -> tuple[int, int]:
     return WIDTH, HEIGHT
 
 
+# Photographs, not renders (Francesco, 2026-11-04: covers "a bit too
+# cartoon"). Image models drift to 3D, glow and fire trails when asked for
+# drama, and when asked for a view nobody could have shot (a satellite
+# burning in the sky): the scene is one a photographer could take.
+PHOTO = (
+    "The image must look like a real photograph by a professional photojournalist, never an illustration: "
+    "choose a scene a photographer could actually have shot for this story (the place, the people at work, "
+    "the object itself on the ground or in a lab, the room where it happened, a detail that tells it), not "
+    "an imagined view of the event. Say it in the prompt: documentary news photograph, shot on a full-frame "
+    "camera with a 35mm or 50mm lens, natural or available light, true-to-life colours, real textures and "
+    "small imperfections, shallow depth of field. End the prompt with: no illustration, no 3D render, no "
+    "CGI, no cartoon, no concept art, no glow effects, no oversaturated colours. "
+)
+
 RULES = (
     "Never ask for logos, brand marks, flags of real organisations or recognisable real people: show the "
-    "subject through places, objects, technology and anonymous people. Wide 16:9 composition. Write the "
+    "subject through places, objects, technology and anonymous people, seen from behind, at a distance or "
+    "with faces out of focus. Wide 16:9 composition. Write the "
     "prompt in English, 40 to 90 words. Then write the image's alternative text for blind readers, in the "
     "article's language, one sentence. Reply with JSON only: "
 )
 
 SYSTEM = (
     "You write the prompt for the cover image of a news article, for an image model. Describe one clear "
-    "scene that illustrates the article's subject as an editorial photograph or a clean illustration, "
-    "matching the site's tone. Never ask for text, letters or numbers. " + RULES + '{"prompt": "...", "alt": "..."}'
+    "scene that illustrates the article's subject as a calm editorial photograph, matching the site's tone. "
+    + PHOTO + "Never ask for text, letters or numbers. " + RULES + '{"prompt": "...", "alt": "..."}'
 )
 
 IMPACT = (
     "You write the prompt for the cover image of a news article, for an image model. The cover must make "
     "people stop scrolling and click, on the blog's list, in search and on social networks, while staying "
     "true to the article: never show something the article does not say. Pick the single most striking "
-    "subject of the story and make it the hero of the frame: bold, close and centred, with dramatic "
-    "cinematic lighting, strong contrast, a saturated palette with one accent colour, a dynamic angle and a "
-    "clean background, so that it still reads as a small thumbnail. A sense of urgency, scale or surprise "
-    "that matches the news. "
+    "subject of the story a photographer could capture and make it the hero of the frame: close, sharp and "
+    "well composed, with strong natural contrast (low sun, a window, street or stage light) and a clean, "
+    "uncluttered background, so that it still reads as a small thumbnail. A sense of urgency, scale or "
+    "surprise that matches the news, as in the best front-page photographs. " + PHOTO
 )
 
 NO_TEXT = "Never ask for text, letters or numbers in the image. " + RULES + '{"prompt": "...", "alt": "..."}'
@@ -228,12 +243,14 @@ def describe(core, d, profile: dict) -> tuple[str, str]:
     model, or when it fails, a plain prompt from the title."""
     style, words = style_of(profile)
     if style == "impact":
-        plain = (f"Striking cover image for a news story: {d.title}. {d.subtitle or ''} One bold subject, "
-                 "dramatic cinematic lighting, strong contrast, saturated colours, clean background, readable "
-                 "as a thumbnail. No text, no logos, no recognisable people, wide 16:9 composition.")
+        plain = (f"Documentary news photograph for the story: {d.title}. {d.subtitle or ''} One strong subject, "
+                 "close and sharp, natural light with strong contrast, clean background, readable as a "
+                 "thumbnail, shot on a full-frame camera, true-to-life colours. No text, no logos, no "
+                 "recognisable people, wide 16:9 composition, no illustration, no 3D render, no CGI.")
     else:
-        plain = (f"Editorial photograph illustrating: {d.title}. {d.subtitle or ''} No text, no logos, "
-                 "no recognisable people, wide 16:9 composition.")
+        plain = (f"Editorial news photograph illustrating: {d.title}. {d.subtitle or ''} Natural light, "
+                 "true-to-life colours. No text, no logos, no recognisable people, wide 16:9 composition, "
+                 "no illustration, no 3D render.")
     if core is None:
         return plain, d.title
     lead = d.body_md.split("\n## ", 1)[0][:1500]
