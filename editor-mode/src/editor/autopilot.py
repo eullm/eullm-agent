@@ -62,6 +62,9 @@ RULES = [
     "an allegation or a study's result told as a fact, an old event told as new)",
     "does not give the essential information its title promises (the figure, the decision, what the study "
     "found), or tells context (a precedent, a comparison) as a second story",
+    "talks about its own sources or its own checking instead of the event (headings or sentences such as "
+    "\"what is confirmed\", \"the sources consulted\", \"the available sources do not say\", \"it cannot be "
+    "said here\")",
     "gives a central number or a record that differs from an original document among the sources (an "
     "official statistic, a decision, a paper): the document wins over the outlets reporting it",
 ]

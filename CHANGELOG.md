@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.36
+
+### Fixed
+
+- **Articoli che parlano delle proprie fonti** (Francesco, articolo su
+  Antonelli: "Cosa è confermato sul titolo", "le fonti consultate", "le fonti
+  disponibili non indicano... quindi qui non si possono dare"): chi scrive
+  racconta il fatto e attribuisce come un giornalista ("secondo AGI"); ciò
+  che le fonti non danno si lascia fuori, a meno che la mancanza sia essa
+  stessa la notizia. Tolta dalla scrittura la richiesta di "dire cosa non si
+  sa ancora", che produceva questi paragrafi. Il caporedattore rifiuta un
+  articolo che parla delle sue fonti o delle sue verifiche invece del fatto.
+
 ## 0.28.35
 
 ### Fixed
