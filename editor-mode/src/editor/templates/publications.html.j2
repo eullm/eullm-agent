@@ -8,7 +8,117 @@
     <p class="lead">{{ _('Un redattore chiede, un direttore approva. Nulla viene inviato al CMS o al canale senza quel sì.') }}</p>
   </div>
 </header>
+{% set targets_card %}
+{% if site %}
+<section class="card pad" aria-labelledby="h-targets">
+  <h2 id="h-targets">{{ _('Destinazioni di {domain}', domain=site.domain) }}</h2>
+  {% for t in targets %}
+  <div class="list-row">
+    <span><strong>{{ t.name }}</strong> <span class="chip">{{ _(kinds.get(t.kind, t.kind)) }}</span></span>
+    <span class="hint num">{{ (t.config or {}).get('url') or (t.config or {}).get('repo') or (t.config or {}).get('chat_id') or '' }}{% if (t.config or {}).get('user') %} · {{ _('utente {user}', user=t.config.user) }}{% endif %}{% if t.secret_env %} · {% if t.secret_env in stored %}{{ _('credenziale {name} salvata cifrata', name=t.secret_env) }}{% else %}{{ _('credenziale in {var}', var=secret_var(t.secret_env)) }}{% endif %}{% endif %}{% if t.enabled is sameas false %} · {{ _('disattivata') }}{% endif %}</span>
+  </div>
+  {% if caller.can('owner') %}
+  <details class="act">
+    <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=t.name) }}</summary>
+    {% set cf = t.config or {} %}
+    <form method="post" action="/ui/targets/{{ t.id }}" class="target-form">
+      <div class="cols">
+        <label class="field">{{ _('Nome') }}<input name="name" value="{{ t.name }}" required maxlength="100"></label>
+        <label class="field">{{ _('Indirizzo') }}<input name="address" value="{{ (cf.get('repo') if t.kind == 'github' else cf.get('url') or cf.get('chat_id')) or '' }}" required></label>
+        <label class="field">{{ _('Lingua degli articoli') }}<select name="language"><option value="">{{ _('Tutte (o la lingua del sito)') }}</option>{% for k, v in langs.items() %}<option value="{{ k }}" {% if cf.get('language') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+        {% if t.kind == 'wordpress' %}<label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ cf.get('user') or '' }}" autocomplete="off" required></label>{% endif %}
+      </div>
+      {% if t.kind == 'github' %}
+      <div class="cols">
+        <label class="field">{{ _('Ramo') }}<input name="branch" value="{{ cf.get('branch') or '' }}" autocomplete="off" placeholder="main"></label>
+        <label class="field">{{ _('Cartella degli articoli') }}<input name="path" value="{{ cf.get('path') or '' }}" autocomplete="off" placeholder="content/blog"></label>
+        <label class="field">{{ _('Cartella delle immagini') }}<input name="image_path" value="{{ cf.get('image_path') or '' }}" autocomplete="off" placeholder="{{ _('come negli articoli del sito') }}"></label>
+        <label class="field">{{ _('Indirizzo degli articoli') }}<input name="article_url" value="{{ cf.get('url') or '' }}" autocomplete="off" placeholder="https://sito.it/blog/{slug}"></label>
+      </div>
+      {% endif %}
+      <div class="cols">
+        <label class="field">{{ _('Chiave IndexNow (facoltativa)') }}<input name="indexnow_key" value="{{ cf.get('indexnow_key') or '' }}" autocomplete="off"></label>
+      </div>
+      {% if t.kind == 'github' %}<label class="check"><input type="checkbox" name="verify" value="1" {% if cf.get('verify') is not sameas false %}checked{% endif %}> {{ _("Pubblica solo se il deploy di anteprima riesce (Vercel, Netlify)") }}</label>{% endif %}
+      {% if t.kind == 'wordpress' %}<label class="check"><input type="checkbox" name="jsonld" value="1" {% if cf.get('jsonld') %}checked{% endif %}> {{ _('Aggiungi i dati strutturati JSON-LD (WordPress, utente amministratore)') }}</label>{% endif %}
+      <label class="check"><input type="checkbox" name="enabled" value="1" {% if t.enabled is not sameas false %}checked{% endif %}> {{ _('Attiva: compare tra le destinazioni delle bozze') }}</label>
+      <div><button class="btn pri" type="submit">{{ _('Salva') }}</button></div>
+    </form>
+    {% if t.secret_env %}
+    <form method="post" action="/ui/secrets/{{ t.secret_env }}" class="form-grid">
+      <label class="field">{{ _('Nuova credenziale {name}', name=t.secret_env) }}<input name="value" type="password" autocomplete="new-password" required></label>
+      <div><button class="btn" type="submit">{{ _('Sostituisci') }}</button></div>
+    </form>
+    {% endif %}
+    <form method="post" action="/ui/targets/{{ t.id }}/delete" class="row" onsubmit='return confirm({{ _('Eliminare {name}? Si cancella anche lo storico delle sue pubblicazioni; gli articoli già inviati restano sul sito.', name=t.name)|string|tojson }})'>
+      <button class="btn danger sm" type="submit">{{ _('Elimina la destinazione') }}</button>
+    </form>
+  </details>
+  {% endif %}
+  {% else %}
+  <p class="hint">{{ _('Nessuna destinazione: le bozze approvate restano qui finché non ne aggiungi una.') }}</p>
+  {% endfor %}
+  {% if caller.can('owner') %}
+  <details class="act add-target" {% if not targets %}open{% endif %}>
+    <summary><span class="ico" aria-hidden="true">+</span>{{ _('Aggiungi una destinazione') if not targets else _("Aggiungi un'altra destinazione") }}</summary>
+  <form method="post" action="/ui/targets" class="target-form form-stack">
+    <input type="hidden" name="site_id" value="{{ site.id }}">
+    <fieldset class="kind-pick">
+      <legend>{{ _('1. Dove escono gli articoli?') }}</legend>
+      {% set about = {'wordpress': _('Il sito è su WordPress: gli articoli arrivano come post.'),
+                      'github': _('Il sito è un repository (Astro, Hugo, Next) pubblicato da Vercel, Netlify o GitHub Pages.'),
+                      'webhook': _('Un tuo sistema riceve ogni articolo in JSON a un indirizzo.'),
+                      'telegram_channel': _('Un canale Telegram dove un bot pubblica gli articoli.')} %}
+      {% for k, label in kinds.items() %}
+      <label><input type="radio" name="kind" value="{{ k }}" {% if loop.first %}checked{% endif %}><strong>{{ _(label) }}</strong><small>{{ about.get(k, '') }}</small></label>
+      {% endfor %}
+    </fieldset>
+    <fieldset class="group">
+      <legend>{{ _('2. Dove si trova') }}</legend>
+      <div class="row fields">
+        <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('Blog principale') }}"></label>
+        <label class="field"><span class="only-wordpress">{{ _('Indirizzo del sito WordPress') }}</span><span class="only-github">{{ _('Repository (owner/repo)') }}</span><span class="only-webhook">{{ _('Indirizzo che riceve gli articoli') }}</span><span class="only-telegram_channel">{{ _('Canale (@nome o id)') }}</span><input name="address" required placeholder="{{ _('https://…, owner/repo oppure @canale') }}"></label>
+        <label class="field">{{ _('Lingua degli articoli') }}<select name="language"><option value="">{{ _('Tutte (o la lingua del sito)') }}</option>{% for k, v in langs.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="row fields only-wordpress">
+        <label class="field">{{ _('Utente WordPress') }}<input name="user" autocomplete="off" placeholder="{{ _('redazione') }}"></label>
+      </div>
+      <div class="row fields only-github">
+        <label class="field">{{ _('Ramo') }}<input name="branch" autocomplete="off" placeholder="main"></label>
+        <label class="field">{{ _('Cartella degli articoli') }}<input name="path" autocomplete="off" placeholder="content/blog"></label>
+        <label class="field">{{ _('Cartella delle immagini') }}<input name="image_path" autocomplete="off" placeholder="{{ _('come negli articoli del sito') }}"></label>
+        <label class="field">{{ _('Indirizzo degli articoli') }}<input name="article_url" autocomplete="off" placeholder="https://sito.it/blog/{slug}"></label>
+      </div>
+    </fieldset>
+    <fieldset class="group">
+      <legend>{{ _('3. La chiave per entrare') }}</legend>
+      <p class="hint only-wordpress">{{ _("In WordPress: Utenti › Profilo › Password applicative, crea una password per Redazia e incollala qui. L'utente deve poter pubblicare articoli.") }}</p>
+      <p class="hint only-github">{{ _("Un token GitHub fine-grained, solo per quel repository, con Contents in lettura e scrittura (e Pull requests se pubblichi come bozza). Come bozza apre una pull request, pubblicata subito committa nel ramo del sito.") }}</p>
+      <p class="hint only-webhook">{{ _("Una chiave a tua scelta: ogni invio porta la firma HMAC-SHA256 del contenuto fatta con questa chiave, così il tuo sistema sa che arriva da noi.") }}</p>
+      <p class="hint only-telegram_channel">{{ _("Il token del bot dato da @BotFather. Il bot va aggiunto al canale come amministratore.") }}</p>
+      <div class="row fields">
+        <label class="field">{{ _('Credenziale') }}<input name="secret" type="password" autocomplete="new-password" placeholder="{{ _('password applicativa, chiave o token') }}"></label>
+      </div>
+      <p class="hint">{{ _("Viene salvata cifrata e non viene più mostrata: puoi solo sostituirla.") }}</p>
+    </fieldset>
+    <details class="act">
+      <summary>{{ _('Opzioni avanzate') }}</summary>
+      <div class="row fields">
+        <label class="field">{{ _('Chiave IndexNow (facoltativa)') }}<input name="indexnow_key" autocomplete="off" placeholder="{{ _('la stessa del file .txt nella radice del sito') }}"><span class="hint">{{ _("Ogni articolo pubblicato viene segnalato subito a Bing e ai motori che usano IndexNow. Il file con la chiave va nella radice del sito, per esempio https://tuosito.it/CHIAVE.txt. Google trova gli articoli dalla sitemap e dai link interni.") }}</span></label>
+        <label class="field">{{ _('Nome della credenziale') }}<input name="secret_env" placeholder="WP_SITO"><span class="hint">{{ _("Vuoto: lo sceglie Redazia. Serve all'amministratore del server che preferisce la variabile EDITOR_SECRET_&lt;TENANT&gt;__&lt;NOME&gt; al posto della credenziale salvata qui.") }}</span></label>
+      </div>
+      <label class="check only-github"><input type="checkbox" name="verify" value="1" checked> {{ _("Pubblica solo se il deploy di anteprima riesce (Vercel, Netlify)") }}</label>
+      <label class="check only-wordpress"><input type="checkbox" name="jsonld" value="1"> {{ _('Aggiungi i dati strutturati JSON-LD (WordPress, utente amministratore)') }}</label>
+    </details>
+    <div><button class="btn pri" type="submit">{{ _('Aggiungi la destinazione') }}</button></div>
+  </form>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+{% endset %}
 {% with page="publications" %}{% include "_help.html.j2" %}{% endwith %}
+{% if site and not targets %}{{ targets_card }}{% endif %}
 
 <section class="card" aria-labelledby="h-pending" style="gap: 0;">
   <div class="card-head"><h2 id="h-pending">{{ _('In attesa di approvazione') }}</h2><span class="hint">{{ pending|length }}</span></div>
@@ -63,87 +173,5 @@
   <p class="empty">{{ _('Ancora nessuna pubblicazione.') }}</p>
   {% endif %}
 </section>
-
-{% if site %}
-<section class="card pad" aria-labelledby="h-targets">
-  <h2 id="h-targets">{{ _('Destinazioni di {domain}', domain=site.domain) }}</h2>
-  {% for t in targets %}
-  <div class="list-row">
-    <span><strong>{{ t.name }}</strong> <span class="chip">{{ _(kinds.get(t.kind, t.kind)) }}</span></span>
-    <span class="hint num">{{ (t.config or {}).get('url') or (t.config or {}).get('repo') or (t.config or {}).get('chat_id') or '' }}{% if (t.config or {}).get('user') %} · {{ _('utente {user}', user=t.config.user) }}{% endif %}{% if t.secret_env %} · {% if t.secret_env in stored %}{{ _('credenziale {name} salvata cifrata', name=t.secret_env) }}{% else %}{{ _('credenziale in {var}', var=secret_var(t.secret_env)) }}{% endif %}{% endif %}{% if t.enabled is sameas false %} · {{ _('disattivata') }}{% endif %}</span>
-  </div>
-  {% if caller.can('owner') %}
-  <details class="act">
-    <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=t.name) }}</summary>
-    {% set cf = t.config or {} %}
-    <form method="post" action="/ui/targets/{{ t.id }}" class="target-form">
-      <div class="cols">
-        <label class="field">{{ _('Nome') }}<input name="name" value="{{ t.name }}" required maxlength="100"></label>
-        <label class="field">{{ _('Indirizzo') }}<input name="address" value="{{ (cf.get('repo') if t.kind == 'github' else cf.get('url') or cf.get('chat_id')) or '' }}" required></label>
-        <label class="field">{{ _('Lingua degli articoli') }}<select name="language"><option value="">{{ _('Tutte (o la lingua del sito)') }}</option>{% for k, v in langs.items() %}<option value="{{ k }}" {% if cf.get('language') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
-        {% if t.kind == 'wordpress' %}<label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ cf.get('user') or '' }}" autocomplete="off" required></label>{% endif %}
-      </div>
-      {% if t.kind == 'github' %}
-      <div class="cols">
-        <label class="field">{{ _('Ramo') }}<input name="branch" value="{{ cf.get('branch') or '' }}" autocomplete="off" placeholder="main"></label>
-        <label class="field">{{ _('Cartella degli articoli') }}<input name="path" value="{{ cf.get('path') or '' }}" autocomplete="off" placeholder="content/blog"></label>
-        <label class="field">{{ _('Cartella delle immagini') }}<input name="image_path" value="{{ cf.get('image_path') or '' }}" autocomplete="off" placeholder="{{ _('come negli articoli del sito') }}"></label>
-        <label class="field">{{ _('Indirizzo degli articoli') }}<input name="article_url" value="{{ cf.get('url') or '' }}" autocomplete="off" placeholder="https://sito.it/blog/{slug}"></label>
-      </div>
-      {% endif %}
-      <div class="cols">
-        <label class="field">{{ _('Chiave IndexNow (facoltativa)') }}<input name="indexnow_key" value="{{ cf.get('indexnow_key') or '' }}" autocomplete="off"></label>
-      </div>
-      {% if t.kind == 'github' %}<label class="check"><input type="checkbox" name="verify" value="1" {% if cf.get('verify') is not sameas false %}checked{% endif %}> {{ _("Pubblica solo se il deploy di anteprima riesce (Vercel, Netlify)") }}</label>{% endif %}
-      {% if t.kind == 'wordpress' %}<label class="check"><input type="checkbox" name="jsonld" value="1" {% if cf.get('jsonld') %}checked{% endif %}> {{ _('Aggiungi i dati strutturati JSON-LD (WordPress, utente amministratore)') }}</label>{% endif %}
-      <label class="check"><input type="checkbox" name="enabled" value="1" {% if t.enabled is not sameas false %}checked{% endif %}> {{ _('Attiva: compare tra le destinazioni delle bozze') }}</label>
-      <div><button class="btn pri" type="submit">{{ _('Salva') }}</button></div>
-    </form>
-    {% if t.secret_env %}
-    <form method="post" action="/ui/secrets/{{ t.secret_env }}" class="form-grid">
-      <label class="field">{{ _('Nuova credenziale {name}', name=t.secret_env) }}<input name="value" type="password" autocomplete="new-password" required></label>
-      <div><button class="btn" type="submit">{{ _('Sostituisci') }}</button></div>
-    </form>
-    {% endif %}
-    <form method="post" action="/ui/targets/{{ t.id }}/delete" class="row" onsubmit='return confirm({{ _('Eliminare {name}? Si cancella anche lo storico delle sue pubblicazioni; gli articoli già inviati restano sul sito.', name=t.name)|string|tojson }})'>
-      <button class="btn danger sm" type="submit">{{ _('Elimina la destinazione') }}</button>
-    </form>
-  </details>
-  {% endif %}
-  {% else %}
-  <p class="hint">{{ _('Nessuna destinazione: le bozze approvate restano qui finché non ne aggiungi una.') }}</p>
-  {% endfor %}
-  {% if caller.can('owner') %}
-  <form method="post" action="/ui/targets" class="target-form">
-    <input type="hidden" name="site_id" value="{{ site.id }}">
-    <div class="cols">
-      <label class="field">{{ _('Tipo') }}<select name="kind">{% for k, label in kinds.items() %}<option value="{{ k }}">{{ _(label) }}</option>{% endfor %}</select></label>
-      <label class="field">{{ _('Nome') }}<input name="name" required placeholder="{{ _('Blog principale') }}"></label>
-      <label class="field">{{ _('Indirizzo') }}<input name="address" placeholder="{{ _('https://…, owner/repo oppure @canale') }}"></label>
-      <label class="field">{{ _('Lingua degli articoli') }}<select name="language"><option value="">{{ _('Tutte (o la lingua del sito)') }}</option>{% for k, v in langs.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
-    </div>
-    <div class="cols only-wordpress">
-      <label class="field">{{ _('Utente WordPress') }}<input name="user" autocomplete="off" placeholder="{{ _('redazione') }}"></label>
-    </div>
-    <div class="cols only-github">
-      <label class="field">{{ _('Ramo') }}<input name="branch" autocomplete="off" placeholder="main"></label>
-      <label class="field">{{ _('Cartella degli articoli') }}<input name="path" autocomplete="off" placeholder="content/blog"></label>
-      <label class="field">{{ _('Cartella delle immagini') }}<input name="image_path" autocomplete="off" placeholder="{{ _('come negli articoli del sito') }}"></label>
-      <label class="field">{{ _('Indirizzo degli articoli') }}<input name="article_url" autocomplete="off" placeholder="https://sito.it/blog/{slug}"></label>
-    </div>
-    <div class="cols">
-      <label class="field">{{ _('Nome della credenziale') }}<input name="secret_env" placeholder="WP_SITO"></label>
-      <label class="field">{{ _('Credenziale') }}<input name="secret" type="password" autocomplete="new-password" placeholder="{{ _('password applicativa, chiave o token') }}"></label>
-      <label class="field">{{ _('Chiave IndexNow (facoltativa)') }}<input name="indexnow_key" autocomplete="off" placeholder="{{ _('la stessa del file .txt nella radice del sito') }}"></label>
-    </div>
-    <label class="check only-github"><input type="checkbox" name="verify" value="1" checked> {{ _("Pubblica solo se il deploy di anteprima riesce (Vercel, Netlify)") }}</label>
-    <label class="check only-wordpress"><input type="checkbox" name="jsonld" value="1"> {{ _('Aggiungi i dati strutturati JSON-LD (WordPress, utente amministratore)') }}</label>
-    <div><button class="btn pri" type="submit">{{ _('Aggiungi la destinazione') }}</button></div>
-  </form>
-  <p class="hint">{{ _("Con la chiave IndexNow, ogni articolo pubblicato viene segnalato subito a Bing e ai motori che la usano, e da lì alle risposte AI che leggono il loro indice. Il file con la chiave va messo nella radice del sito, per esempio https://tuosito.it/CHIAVE.txt. Google non ha un avviso immediato per gli articoli: li trova dalla sitemap e dai link interni.") }}</p>
-  <p class="hint">{{ _("La credenziale (password applicativa di WordPress, chiave del webhook, token del bot Telegram) viene salvata cifrata e non viene più mostrata: puoi solo sostituirla. In alternativa lasciala vuota e l'amministratore del server imposta la variabile EDITOR_SECRET_&lt;TENANT&gt;__&lt;NOME&gt;.") }}</p>
-  <p class="hint">{{ _("GitHub: l'articolo approvato va nel repository come Markdown con front matter e copertina, e il sito (Vercel, GitHub Pages) pubblica da solo al commit. Come bozza apre una pull request, pubblicata subito committa nel ramo del sito. La credenziale è un token GitHub (fine-grained, solo quel repository, Contents in lettura e scrittura).") }}</p>
-  {% endif %}
-</section>
-{% endif %}
+{% if targets %}{{ targets_card }}{% endif %}
 {% endblock %}

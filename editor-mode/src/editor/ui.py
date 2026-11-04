@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from importlib import metadata
 from datetime import UTC, datetime, time, timedelta
 from urllib.parse import quote, unquote
@@ -185,6 +186,13 @@ def export_response(db, tenant_id: str, as_zip: bool = True) -> Response:
                         headers={"Content-Disposition": f'attachment; filename="redazia-{tenant_id}-{day}.zip"'})
     return Response(tenant_data.export_json(db, tenant_id), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{tenant_id}-{day}.json"'})
+
+
+def target_secret_name(kind: str, name: str, site_id: int) -> str:
+    """A name for a destination's credential when the form leaves it empty."""
+    prefix = {"wordpress": "WP", "github": "GH", "webhook": "HOOK", "telegram_channel": "TG"}.get(kind, "PUB")
+    words = re.sub(r"[^A-Z0-9]+", "_", unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().upper())
+    return "_".join(x for x in (prefix, words.strip("_")[:24].strip("_"), str(site_id)) if x)
 
 
 def language_name(code) -> str:
@@ -657,6 +665,31 @@ def register(app, ctx) -> None:
             out.append(box(t("Crediti del mese"), credit["month_used"], credit["month"]))
         return [x for x in out if x]
 
+    def the_day(s, usage, auto_cards, sid) -> dict:
+        """What came out today and how long the month's articles last at
+        this pace: the first thing a director looks for in the morning."""
+        import calendar
+        import math
+
+        since = start_of_day(s)
+        pub, pt = m.publications.c, m.publish_targets.c
+        q = select(func.count()).select_from(m.publications.join(m.publish_targets, pt.id == pub.target_id)).where(
+            pub.status == "published", pub.published_at >= since)
+        if sid is not None:
+            q = q.where(pt.site_id == sid)
+        out = {"published": s.execute(q).scalar() or 0,
+               "discarded": sum(a["day"]["discarded"] for a in auto_cards),
+               "held": sum(a["day"]["held"] for a in auto_cards), "pace": None}
+        if usage and usage.plan.get("max_drafts_month"):
+            now = datetime.now(zone(s))
+            limit, used = int(usage.plan["max_drafts_month"]), int(usage.used.get("drafts_month") or 0)
+            days = calendar.monthrange(now.year, now.month)[1]
+            per_day = used / now.day
+            end = math.ceil(limit / per_day) if per_day else None
+            out["pace"] = {"used": used, "limit": limit, "left": max(0, limit - used),
+                           "month": round(per_day * days), "runs_out": end if end is not None and end <= days else None}
+        return out
+
     @app.get("/", response_class=HTMLResponse)
     def today(request: Request, c: auth.Caller = Depends(viewer)):
         with db.tenant(c.tenant_id) as s:
@@ -794,7 +827,8 @@ def register(app, ctx) -> None:
                           needs_review=draft_counts.get("needs_review", 0), new_today=new_today,
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,
                           proposed_total=proposed_total, collected=collected,
-                          limits=limit_boxes(s, usage, auto_cards, credits.state(s)))
+                          limits=limit_boxes(s, usage, auto_cards, credits.state(s)),
+                          day=the_day(s, usage, auto_cards, sid))
 
     def draft_jobs(s, proposal_ids: list[int]) -> dict[int, dict]:
         """The latest draft job of each accepted proposal still without a
@@ -1060,8 +1094,9 @@ def register(app, ctx) -> None:
             if url not in seen:
                 seen.add(url)
                 ev.append({"url": url, "label": label})
+        prep = profile_prep(s, site) if site and shown is None else None
         return render(request, "site.html.j2", c, s, "site", status_code=status_code, thin_posts=THIN_POSTS, _sites=(sites, site),
-                      profiles=profiles, approved=approved, draft=draft, shown=shown, analysis=analysis,
+                      profiles=profiles, approved=approved, draft=draft, shown=shown, analysis=analysis, prep=prep,
                       tab=tab, confirm_delete=confirm_delete, rows=rows, evidence=ev, editing=editing, error=error,
                       numbers=site_numbers(s, site) if site else None,
                       comparison=prof.compare(approved.body, draft.body) if approved and draft else [],
@@ -1073,6 +1108,25 @@ def register(app, ctx) -> None:
                       feed_base=(getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/"),
                       body_json=json.dumps(shown.body, ensure_ascii=False, indent=2) if shown is not None else "",
                       gsc=search_panel(s, site) if site else None)
+
+    def profile_prep(s, site) -> dict:
+        """Where the first profile of a site is: the newest analysis or brief
+        job for it (queued, running with its step, failed with why) or none."""
+        j = m.jobs.c
+        r = s.execute(select(j.id, j.kind, j.status, j.error, j.progress, j.started_at, j.finished_at)
+                      .where(or_(and_(j.kind == "analysis", j.subject == site.domain),
+                                 and_(j.kind == "brief", j.subject == f"site {site.id}")))
+                      .order_by(j.id.desc()).limit(1)).first()
+        if r is None:
+            return {"state": "none"}
+        step = None
+        if r.progress and r.progress.get("text"):
+            try:
+                step = t(r.progress["text"], **(r.progress.get("values") or {}))
+            except (KeyError, IndexError, ValueError):
+                step = r.progress["text"]
+        return {"state": r.status, "kind": r.kind, "error": r.error, "step": step,
+                "at": r.finished_at or r.started_at}
 
     def search_panel(s, site) -> dict:
         """Google Search Console on the site's page: the property, its
@@ -1680,7 +1734,14 @@ def register(app, ctx) -> None:
                 rows = s.execute(select(d.c.id, d.c.title, d.c.status, d.c.version, d.c.created_at, d.c.flags,
                                         d.c.language, d.c.translation_of,
                                         claims.label("claims")).where(d.c.site_id == site.id)
-                                 .order_by(d.c.created_at.desc()).limit(100)).all()
+                                 .order_by(d.c.created_at.desc()).limit(300)).all()
+                # Each translation right under its original.
+                kids: dict[int, list] = {}
+                shown = {r.id for r in rows}
+                for r in rows:
+                    if r.translation_of in shown:
+                        kids.setdefault(r.translation_of, []).append(r)
+                rows = [x for r in rows if r.translation_of not in shown for x in [r, *kids.get(r.id, [])]]
             # Why the automatic newsroom discarded or held an article: its own note on it.
             why = dict(s.execute(select(m.feedback.c.target_id, m.feedback.c.note).where(
                 m.feedback.c.target == "draft", m.feedback.c.given_by == autopilot.AUTO,
@@ -2034,7 +2095,7 @@ def register(app, ctx) -> None:
         if env_name is not None and (len(env_name) > 40 or not publishing.SECRET_NAME.match(env_name)):
             return done("/publications", t("Il nome del segreto va scritto in MAIUSCOLO, es. WP_SITO."))
         if secret and env_name is None:
-            return done("/publications", t("Dai un nome alla credenziale, es. WP_SITO."))
+            env_name = target_secret_name(kind, name, site_id)
         try:
             with db.tenant(c.tenant_id) as s:
                 if s.execute(select(m.sites.c.id).where(m.sites.c.id == site_id)).scalar() is None:
@@ -2108,7 +2169,9 @@ def register(app, ctx) -> None:
             return render(request, "plan.html.j2", c, s, "plan", usage=usage, cr=cr, moves=moves,
                           credit_prices=credits.prices(s), free_redraws=credits.FREE_REDRAWS,
                           packs=credits.packs(admin, active_only=True, s=s) if cr["enabled"] else [],
-                          meters=meters_of(usage, money=c.operator), room=room, me_email=email,
+                          meters=[x for x in meters_of(usage, money=c.operator)
+                                  if c.operator or x["label"] != QUOTA_LABELS["items"]],
+                          room=room, me_email=email,
                           plans=billing.plans(admin, public_only=True), money=billing.money,
                           online=ctx.gateway is not None)
 

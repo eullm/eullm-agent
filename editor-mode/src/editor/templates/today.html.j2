@@ -45,6 +45,22 @@
 </section>
 {% endif %}
 
+{% if sites %}
+<section class="card pad" aria-labelledby="h-day">
+  <h2 id="h-day">{{ _('Oggi') }}</h2>
+  <div class="trio" style="margin-top: 8px;">
+    <div><span class="num">{{ day.published }}</span><small>{{ _('articoli pubblicati') }}</small></div>
+    {% if auto_cards %}<div><span class="num">{{ day.discarded }}</span><small>{{ _('scartati dalla redazione automatica') }}</small></div>{% endif %}
+    <div><span class="num">{{ decisions or 0 }}</span><small>{{ _('aspettano te') }}{% if decisions %} · <a href="#h-decide">{{ _('vedi') }}</a>{% endif %}</small></div>
+  </div>
+  {% if day.pace %}{% set pc = day.pace %}
+  <p class="{{ 'notice amber' if pc.runs_out else 'hint' }}" style="margin: 12px 0 0;">{{ _('Questo mese 1 articolo su {limit} del piano.', limit=pc.limit) if pc.used == 1 else _('Questo mese {used} articoli su {limit} del piano.', used=pc.used, limit=pc.limit) }}
+    {% if pc.runs_out %}{{ _('A questo ritmo (circa {month} al mese) finiscono verso il giorno {day}.', month=pc.month, day=pc.runs_out) }}{% if caller.can('owner') %} <a href="/plan">{{ _('Più articoli') }}</a>{% endif %}
+    {% else %}{{ _('A questo ritmo bastano per tutto il mese.') }}{% endif %}</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% for a in auto_cards %}
 {% set day = a.day %}{% set last = a.last %}{% set cfg = a.cfg %}
 <section class="card pad" aria-labelledby="h-auto-{{ a.site.id }}" style="border-left: 4px solid var(--teal);">
@@ -112,28 +128,19 @@
     <span class="note">{% if needs_review %}{{ _('{n} da rivedere a mano', n=needs_review) }}{% else %}{{ _('tutte con i controlli superati') }}{% endif %}</span>
   </a>
   {% endif %}
-  <a class="card kpi{% if sites and not news_day %} bad{% endif %}" href="/trends">
+  {% if sites and not news_day %}
+  <a class="card kpi bad" href="/sources">
     <span class="label">{{ _('Notizie in 24 ore') }}</span>
-    <span class="value">{{ news_day }}</span>
-    <span class="note">{% if sites and not news_day %}{{ _('nessuna: controlla la raccolta') }}{% else %}{{ _('ultimo giro alle {time}', time=when(last_fetch, 'time')) }}{% endif %}</span>
+    <span class="value">0</span>
+    <span class="note">{{ _('nessuna: controlla la raccolta') }}</span>
   </a>
-  <a class="card kpi" href="/sources">
-    <span class="label">{{ _('Fonti attive') }}</span>
-    <span class="value">{{ collected.sources }}</span>
-    <span class="note">{{ _('in tutti i siti') if sites|length > 1 and not one else _('del sito') }}</span>
-  </a>
+  {% endif %}
   {% if caller.operator %}
   <div class="card kpi">
     <span class="label">{{ _('Costo modello, 30 giorni') }}</span>
     <span class="value">{{ cost_month|num(2) }}</span>
     <span class="note" title="{{ _('ai prezzi di core.yaml') }}">{{ _('{n} chiamate', n=calls_month|tok) }}</span>
   </div>
-  {% elif credit_state and credit_state.enabled %}
-  <a class="card kpi{% if credit_state.pct >= 100 %} bad{% elif credit_state.pct >= 80 %} warn{% endif %}" href="/plan#crediti">
-    <span class="label">{{ _('Crediti del mese') }}</span>
-    <span class="value">{{ credit_state.month_left }}</span>
-    <span class="note">{{ _('rimasti su {n}', n=credit_state.month) }}{% if credit_state.extra %} · {{ _('{n} extra', n=credit_state.extra) }}{% endif %}</span>
-  </a>
   {% endif %}
 </section>
 
@@ -224,7 +231,7 @@
       <td class="num">{% if x.proposals %}<a class="chip amber" href="#h-decide">{{ x.proposals }}</a>{% else %}0{% endif %}</td>
       <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/drafts">{{ x.drafts }}</a></td>
       {% if caller.operator %}<td class="num">{{ x.cost|num(2) }}<small>{{ _('1 chiamata') if x.calls == 1 else _('{n} chiamate', n=x.calls|tok) }}</small></td>{% endif %}
-      <td>{% if x.next %}<strong style="font-weight: 500;">{{ x.next.title }}</strong>{% if x.next.busy %} <span class="chip teal">{{ _('In attesa') }}</span>{% else %} <span class="chip amber">{{ _('Tocca a te') }}</span>{% endif %}<small>{{ x.next.wait if x.next.busy else x.next.todo }}</small>{% else %}<span class="hint">{{ _('Tutto avviato') }}</span>{% endif %}</td>
+      <td>{% if x.next %}<strong style="font-weight: 500;">{{ x.next.title }}</strong>{% if x.next.busy %} <span class="chip teal">{{ _('In attesa') }}</span>{% else %} <span class="chip amber">{{ _('Tocca a te') }}</span>{% endif %}{% set why = x.next.wait if x.next.busy else x.next.todo %}{% if why %}<small title="{{ why }}">{{ why|truncate(70) }}</small>{% endif %}{% else %}<span class="hint">{{ _('Tutto avviato') }}</span>{% endif %}</td>
       {% if caller.can('editor') %}
       <td><div class="row" style="gap: 6px; flex-wrap: nowrap;">
         {% if caller.can('owner') %}

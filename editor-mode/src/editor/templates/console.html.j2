@@ -736,13 +736,13 @@
     {% if updates.history %}
     <h3 style="margin: 20px 0 6px;">{{ _('Storico degli aggiornamenti') }}</h3>
     <table class="tbl cards">
-      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Da') }}</th><th>{{ _('A') }}</th><th>{{ _('Esito') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Dalla versione') }}</th><th>{{ _('Alla versione') }}</th><th>{{ _('Esito') }}</th></tr></thead>
       <tbody>
       {% for h in updates.history %}
       <tr>
         <td class="num" data-label="{{ _('Quando') }}">{{ (h.at[8:10] ~ '/' ~ h.at[5:7] ~ '/' ~ h.at[0:4] ~ ' ' ~ h.at[11:16]) if h.at else '–' }} <small class="hint" style="display: inline;">UTC</small></td>
-        <td class="num" data-label="{{ _('Da') }}">{{ h['from'] or '–' }}</td>
-        <td class="num" data-label="{{ _('A') }}">{{ h.version or '–' }}</td>
+        <td class="num" data-label="{{ _('Dalla versione') }}">{{ h['from'] or '–' }}</td>
+        <td class="num" data-label="{{ _('Alla versione') }}">{{ h.version or '–' }}</td>
         <td data-label="{{ _('Esito') }}">{% if h.state == 'done' %}<span class="chip green">{{ _('Riuscito') }}</span>{% else %}<span class="chip red">{{ _('Non riuscito') }}</span> <span class="hint">{{ {'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(h.step, h.step or '') }}</span>{% endif %}</td>
       </tr>
       {% endfor %}

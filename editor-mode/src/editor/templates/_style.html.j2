@@ -277,11 +277,27 @@ form.row input[type=number], form.row select { min-height: 36px; padding: 0 10px
 .target-form .field, .target-form .check { white-space: nowrap; }
 .target-form .field input, .target-form .field select { width: 100%; min-width: 0; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
-.target-form .only-wordpress, .target-form .only-github { display: none; }
-.target-form:has(select[name=kind] option[value=wordpress]:checked) .only-wordpress,
-.target-form:has(select[name=kind] option[value=github]:checked) .only-github { display: grid; }
-.target-form:has(select[name=kind] option[value=wordpress]:checked) label.only-wordpress,
-.target-form:has(select[name=kind] option[value=github]:checked) label.only-github { display: flex; }
+.target-form [class*="only-"] { display: none; }
+.target-form:has(input[name=kind][value=wordpress]:checked) .only-wordpress,
+.target-form:has(input[name=kind][value=github]:checked) .only-github,
+.target-form:has(input[name=kind][value=webhook]:checked) .only-webhook,
+.target-form:has(input[name=kind][value=telegram_channel]:checked) .only-telegram_channel { display: flex; }
+.target-form:has(input[name=kind][value=wordpress]:checked) span.only-wordpress,
+.target-form:has(input[name=kind][value=github]:checked) span.only-github,
+.target-form:has(input[name=kind][value=webhook]:checked) span.only-webhook,
+.target-form:has(input[name=kind][value=telegram_channel]:checked) span.only-telegram_channel { display: inline; }
+.target-form:has(input[name=kind][value=wordpress]:checked) p.only-wordpress,
+.target-form:has(input[name=kind][value=github]:checked) p.only-github,
+.target-form:has(input[name=kind][value=webhook]:checked) p.only-webhook,
+.target-form:has(input[name=kind][value=telegram_channel]:checked) p.only-telegram_channel { display: block; }
+.kind-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; border: 0; padding: 0; margin: 0; }
+.kind-pick legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.kind-pick label { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--surface); }
+.kind-pick label small { color: var(--muted); font-size: 13px; }
+.kind-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.kind-pick label:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.kind-pick label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.add-target > summary { font-weight: 600; }
 .field textarea[rows] { min-height: 0; font: 400 14px/1.5 var(--sans); }
 /* A form read top to bottom: groups of fields, each with its title. */
 .form-stack { display: flex; flex-direction: column; gap: 16px; max-width: 820px; margin: 8px 0 20px; }
@@ -289,6 +305,8 @@ form.row input[type=number], form.row select { min-height: 36px; padding: 0 10px
 .form-stack legend { padding: 0 6px; font: 600 14px var(--sans); color: var(--ink); }
 .form-stack .fields { gap: 12px; align-items: flex-end; }
 .form-stack .fields .field { flex: 1 1 160px; min-width: 0; }
+.form-stack .fields.top { align-items: flex-start; }
+.form-stack .field .hint { font-size: 12px; margin: 0; }
 .form-stack .fields .field.wide { flex: 3 1 320px; }
 .form-stack .check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
 .form-stack .hint { margin: 0; }

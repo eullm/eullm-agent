@@ -23,8 +23,15 @@
 
       {% if r.reseller %}
         <p class="hint">{{ _('Questa redazione è fatturata dal tuo rivenditore: per cambiare piano scrivi a lui.') }}</p>
-      {% elif sub and sub.status != 'active' or not sub %}
+      {% else %}
+        {% set changing = sub and sub.status == 'active' %}
+        {% if changing %}
+        <details class="act" id="change-plan">
+        <summary><span class="ico" aria-hidden="true">⇄</span>{{ _('Cambia piano') }}</summary>
+        <p class="hint">{{ _('Il nuovo piano parte appena paghi, con un periodo intero; il piano attuale non si rinnova più. I giorni già pagati del piano attuale non vengono rimborsati: conviene cambiare vicino al rinnovo.') }}</p>
+        {% else %}
         <h3>{{ _('Scegli il piano') }}</h3>
+        {% endif %}
         {% set wished = plans|selectattr('code', 'equalto', sub.desired_plan)|first if sub and sub.desired_plan else none %}
         {% if wished and wished.code != sub.plan_code %}<p class="hint">{{ _('Sul sito hai scelto il piano {plan}: lo trovi già selezionato.', plan=wished.name) }}</p>{% endif %}
         {% if not r.customer %}<p class="hint">{{ _('Prima compila i dati di fatturazione qui sotto.') }}</p>{% endif %}
@@ -33,7 +40,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
           {% for p in plans|selectattr('price_month_cents')|list %}
             <label class="card pad" style="cursor: pointer; display: block;">
-              <span class="row"><input type="radio" name="plan" value="{{ p.code }}" {% if (sub and sub.desired_plan == p.code) or (not (sub and sub.desired_plan in plans|selectattr('price_month_cents')|map(attribute='code')) and loop.first) %}checked{% endif %}> <strong>{{ p.name }}</strong></span>
+              <span class="row"><input type="radio" name="plan" value="{{ p.code }}" {% if (changing and sub.plan_code == p.code) or (not changing and sub and sub.desired_plan == p.code) or (not changing and not (sub and sub.desired_plan in plans|selectattr('price_month_cents')|map(attribute='code')) and loop.first) %}checked{% endif %}> <strong>{{ p.name }}</strong></span>
               <div style="font-size: 22px; font-weight: 600; margin-top: 8px;">{{ money(p.price_month_cents, p.currency) }} <span class="hint">{{ _('al mese') }}</span></div>
               <div class="hint">{{ _("oppure {price} all'anno", price=money(p.price_year_cents, p.currency)) }}</div>
               <p class="hint">{{ p.description }}<br>
@@ -42,12 +49,13 @@
           {% endfor %}
           </div>
           <div class="row" style="margin-top: 12px; align-items: flex-end;">
-            <label class="field">{{ _('Rinnovo') }}<select name="interval"><option value="month">{{ _('Mensile') }}</option><option value="year" {% if sub and sub.desired_interval == 'year' %}selected{% endif %}>{{ _('Annuale') }}</option></select></label>
+            <label class="field">{{ _('Rinnovo') }}<select name="interval"><option value="month">{{ _('Mensile') }}</option><option value="year" {% if sub and (sub.billing_interval if changing else sub.desired_interval) == 'year' %}selected{% endif %}>{{ _('Annuale') }}</option></select></label>
             {% if online %}<button class="btn pri" type="submit" {% if not r.customer %}disabled{% endif %}>{{ _('Vai al pagamento') }}</button>
             {% else %}<span class="hint">{{ _("Il pagamento online non è ancora attivo: per attivare il piano contatta l'assistenza, lo registriamo noi.") }}</span>{% endif %}
           </div>
           <p class="hint">{{ _('Prezzi IVA esclusa. Il primo pagamento autorizza i rinnovi automatici, che puoi disdire quando vuoi da questa pagina.') }}</p>
         </form>
+        {% if changing %}</details>{% endif %}
       {% endif %}
 
       <details class="act" data-tone="green" {% if not r.customer %}open{% endif %}>

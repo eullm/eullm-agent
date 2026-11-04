@@ -162,3 +162,18 @@ def test_the_dashboard_form_stores_the_credential(db, tenant, key, monkeypatch):
     r = c.post("/ui/secrets/WP", data={"value": "nuova"})
     assert "Credenziale WP aggiornata" in r.text
     assert vault.get(db, tenant, "WP") == "nuova"
+
+
+def test_a_credential_without_a_name_gets_one(db, tenant, key, monkeypatch):
+    """The form asks only for the credential: its name comes from the kind,
+    the destination's name and the site."""
+    _, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    token = auth.create_token(db, tenant, "boss", "owner")
+    c = TestClient(create_app(db))
+    c.post("/login", data={"token": token})
+    r = c.post("/ui/targets", data={"site_id": site_id, "kind": "wordpress", "name": "Blog città",
+                                    "address": "https://blog.example", "user": "redazione",
+                                    "secret": "app pass word"})
+    assert "salvata cifrata" in r.text
+    assert vault.get(db, tenant, f"WP_BLOG_CITTA_{site_id}") == "app pass word"

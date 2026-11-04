@@ -6,7 +6,7 @@
     <span class="kicker">{{ _('Impostazioni') }}</span>
     <h1>{{ usage.plan.get('name') if usage else _('Account') }}</h1>
   </div>
-  {% if usage and usage.plan.get('plan') %}<span class="chip dark">{{ _('Piano {plan}', plan=usage.plan.get('plan')) }}</span>{% endif %}
+  {% if plan_state or (usage and usage.plan.get('plan')) %}<a class="btn" href="/plan">{% if plan_state %}{{ _('Piano {plan} · {state}', plan=plan_state.plan_name, state=_(plan_state.label)|lower) }}{% else %}{{ _('Piano {plan}', plan=usage.plan.get('plan')) }}{% endif %}</a>{% endif %}
 </header>
 {% with page="settings" %}{% include "_help.html.j2" %}{% endwith %}
 
@@ -18,14 +18,7 @@
 </section>
 {% endif %}
 
-<div class="cols">
-  <section class="card pad col-wide" aria-labelledby="h-plan">
-    <h2 id="h-plan">{{ _('Piano') }}</h2>
-    <p class="lead">{% if plan_state %}{{ _('Piano {plan} · {state}.', plan=plan_state.plan_name, state=_(plan_state.label)|lower) }}{% elif usage and usage.plan.get('plan') %}{{ _('Piano {plan}', plan=usage.plan.get('plan')) }}{% endif %}</p>
-    <p><a class="btn" href="/plan">{{ _('Piano, consumi e pagamento') }}</a></p>
-  </section>
-
-  <section class="card pad col-side" aria-labelledby="h-prefs">
+<section class="card pad" aria-labelledby="h-prefs">
     <h2 id="h-prefs">{{ _('Preferenze') }}</h2>
     {% if usage %}
     <div class="list-row"><span>{{ _('Fuso orario') }}</span><span class="num">{{ usage.plan.get('timezone') or 'UTC' }}</span></div>
@@ -47,8 +40,7 @@
     {% else %}
     <p class="hint">{{ _('Le cambia il direttore della redazione.') }}</p>
     {% endif %}
-  </section>
-</div>
+</section>
 
 {% if caller.can('owner') %}
 <section class="card pad" aria-labelledby="h-sites">
@@ -162,6 +154,7 @@
 <section class="card pad" aria-labelledby="h-tok">
   <h2 id="h-tok">{{ _('Token per integrazioni') }}</h2>
   <p class="hint">{{ _("Per programmi e integrazioni che usano l'API: ogni token ha il suo ruolo e si revoca da qui.") }}</p>
+  {% if tokens %}
   <div class="scroll">
     <table style="min-width: 520px;">
       <thead><tr><th>{{ _('Nome') }}</th><th>{{ _('Ruolo') }}</th><th>{{ _('Creato') }}</th><th>{{ _('Stato') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
@@ -178,6 +171,9 @@
       </tbody>
     </table>
   </div>
+  {% else %}
+  <p class="hint">{{ _('Ancora nessun token.') }}</p>
+  {% endif %}
   <form method="post" action="/ui/tokens" class="form-grid" style="margin-top: 8px;">
     <label class="field">{{ _('Nome') }}<input name="name" required placeholder="{{ _('WordPress, automazioni') }}"></label>
     <label class="field">{{ _('Ruolo') }}<select name="role"><option value="viewer">{{ _('Lettura') }}</option><option value="editor" selected>{{ _('Redattore') }}</option><option value="owner">{{ _('Direttore') }}</option></select></label>
