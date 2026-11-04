@@ -116,10 +116,18 @@ def save_plan(admin, code: str, fields: dict) -> None:
             raise BillingError(t("piano sconosciuto: {code}", code=code))
 
 
+def plan_code_of(name: str) -> str:
+    """A plan's code from its name: "Pro Plus" → "pro-plus"."""
+    import unicodedata
+
+    plain = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", plain).strip("-")[:40]
+
+
 def create_plan(admin, code: str, name: str) -> str:
     """A new plan in the catalogue, hidden from the public site until its
     prices and limits are set and it is made public."""
-    code = (code or "").strip().lower()
+    code = (code or "").strip().lower() or plan_code_of(name)
     if not re.fullmatch(r"[a-z0-9-]{1,40}", code):
         raise BillingError(t("il codice è fatto di lettere minuscole, numeri e trattini (es. pro-plus)"))
     name = (name or "").strip()[:100]
@@ -435,6 +443,10 @@ def describe(row, now: datetime | None = None) -> dict:
     out["label"] = t(STATUS_LABELS[out["status"]]) if out["status"] in STATUS_LABELS else out["status"]
     if out["status"] == "expired" and out.get("desired_plan") and out["desired_plan"] == out["plan_code"]:
         out["label"] = t("Da pagare")  # bought on the site, waiting for its payment
+    # What the newsroom brings in a month, at list price: nothing on trial or unpaid.
+    month, year = out.get("price_month_cents"), out.get("price_year_cents")
+    out["monthly_cents"] = None if out["status"] != "active" else (
+        round(year / 12) if out.get("billing_interval") == "year" and year is not None else month)
     out["days_left"] = None
     end = out["trial_ends_at"] if out["status"] == "trialing" else out["current_period_end"]
     if end is not None:

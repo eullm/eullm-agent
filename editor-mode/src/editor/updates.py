@@ -169,6 +169,25 @@ def percent(st: dict) -> int:
         return {"backup": 2, "pull": 10, "restart": 80, "check": 90}.get(status.get("step"), 0)
 
 
+HISTORY = 30  # updates kept in history.json
+
+
+def history(where: Path, status: dict | None = None) -> list[dict]:
+    """The updates done or failed, newest first. The script keeps only the
+    last one in status.json: each new ending seen is added here."""
+    past = (_read(where / "history.json") or {}).get("updates") or []
+    st = status or {}
+    if st.get("state") in ("done", "failed") and st.get("at"):
+        entry = {k: st.get(k) for k in ("state", "from", "version", "step", "at")}
+        if not any(x.get("at") == entry["at"] and x.get("version") == entry["version"] for x in past):
+            past = ([entry] + past)[:HISTORY]
+            try:
+                _write(where / "history.json", {"updates": past})
+            except OSError:
+                pass  # shown anyway, kept next time
+    return past
+
+
 def state(where: Path | None, installed: str, now: datetime | None = None) -> dict:
     """What the console shows: installed and available versions, whether an
     update is asked or running, how the last one went."""
@@ -193,6 +212,7 @@ def state(where: Path | None, installed: str, now: datetime | None = None) -> di
         if v == st["version"]:
             out["newer"] = False
     out["percent"] = percent(out)
+    out["history"] = history(where, st)
     try:
         out["log"] = "\n".join((where / "update.log").read_text(encoding="utf-8", errors="replace").splitlines()[-25:])
     except OSError:

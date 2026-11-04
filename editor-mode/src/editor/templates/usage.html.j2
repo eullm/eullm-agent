@@ -42,41 +42,65 @@
     <div class="card-head"><h2 id="h-total">{{ _('Totale degli ultimi {n} giorni', n=r.days) }}</h2></div>
     <div class="pad">
       <table class="tbl">{{ head(_('Tutto')) }}<tbody>{{ row(_('Tutte le redazioni'), r.total) }}</tbody></table>
+      <p class="hint" style="margin: 8px 0 0;">{{ _('Costo registrato: con i prezzi di core.yaml, 0 per un modello gratuito. Costo stimato: con i prezzi di riferimento in fondo alla pagina. * vuol dire che alcuni modelli non hanno un prezzo di riferimento e mancano dalla stima.') }}</p>
       {% if r.average %}
       <p class="lead" style="margin: 12px 0 0;">{{ _('Un articolo costa in media {calls} chiamate, {tin} token in entrata e {tout} in uscita (su {n} articoli scritti), proposta compresa.', calls=r.average.calls|num(1), tin=r.average['in']|tok, tout=r.average.out|tok, n=r.average.articles) }}{% if r.average.estimate is not none %} {{ _('Stima: € {eur} ad articolo.', eur=r.average.estimate|num(4)) }}{% endif %}</p>
       {% endif %}
     </div>
   </section>
 
-  <section class="card" aria-labelledby="h-purpose">
+  <nav class="tabs" id="usage-tabs" aria-label="{{ _('Consumi divisi') }}" style="margin: 4px 0 12px;">
+    <a href="#p-purpose" class="on" aria-current="true">{{ _('Per passo') }}</a><a href="#p-model">{{ _('Per modello') }}</a><a href="#p-tenant">{{ _('Per redazione') }}</a><a href="#p-site">{{ _('Per sito') }}</a><a href="#articoli">{{ _('Per articolo') }}</a>
+  </nav>
+  <section class="card pane" id="p-purpose" aria-labelledby="h-purpose">
     <div class="card-head"><h2 id="h-purpose">{{ _('Per passo') }}</h2></div>
     <div class="pad"><table class="tbl">{{ head(_('Passo')) }}<tbody>
       {% for g in r.by_purpose %}{{ row(_(purposes.get(g.key, g.key)), g) }}{% else %}<tr><td colspan="7" class="hint">{{ _('Nessuna chiamata nel periodo.') }}</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
 
-  <section class="card" aria-labelledby="h-model">
+  <section class="card pane" id="p-model" aria-labelledby="h-model">
     <div class="card-head"><h2 id="h-model">{{ _('Per modello') }}</h2></div>
     <div class="pad"><table class="tbl">{{ head(_('Modello che ha risposto')) }}<tbody>
       {% for g in r.by_model %}{{ row(g.key, g) }}{% else %}<tr><td colspan="7" class="hint">{{ _('Nessuna chiamata nel periodo.') }}</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
 
-  <section class="card" aria-labelledby="h-tenant">
+  <section class="card pane" id="p-tenant" aria-labelledby="h-tenant">
     <div class="card-head"><h2 id="h-tenant">{{ _('Per redazione') }}</h2></div>
     <div class="pad"><table class="tbl">{{ head(_('Redazione')) }}<tbody>
       {% for g in r.by_tenant %}{{ row(names.get(g.key, g.key), g) }}{% else %}<tr><td colspan="7" class="hint">{{ _('Nessuna chiamata nel periodo.') }}</td></tr>{% endfor %}
-    </tbody></table></div>
+    </tbody></table>
+    {% if r.by_tenant %}
+    <h3 style="margin: 18px 0 6px;">{{ _('Un articolo costa, rispetto a quanto lo paga il cliente') }}</h3>
+    <table class="tbl">
+      <thead><tr><th>{{ _('Redazione') }}</th><th class="num">{{ _('Articoli scritti') }}</th><th class="num">{{ _('Costo stimato per articolo') }}</th><th class="num">{{ _('Il piano per articolo') }}</th></tr></thead>
+      <tbody>
+      {% for g in r.by_tenant %}
+      {% set mine = r.articles|selectattr('tenant', 'equalto', g.key)|list %}
+      {% set sb = subs.get(g.key) %}{% set pl = plans.get(sb.plan_code) if sb else None %}
+      <tr>
+        <td>{{ names.get(g.key, g.key) }}{% if sb %}<small>{{ sb.plan_name }} · {{ sb.label }}</small>{% endif %}</td>
+        <td class="num">{{ mine|length }}</td>
+        <td class="num">{% if mine and g.estimate is not none %}{{ eur(g.estimate / mine|length) }}{% else %}–{% endif %}</td>
+        <td class="num">{% if pl and pl.price_month_cents and pl.max_drafts_month %}{{ eur(pl.price_month_cents / 100 / pl.max_drafts_month) }}{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">{{ _('Il costo per articolo divide tutto il costo stimato della redazione nel periodo (analisi, fonti, proposte comprese) per gli articoli scritti. Il piano per articolo è il prezzo al mese diviso per gli articoli al mese del piano: se il primo si avvicina al secondo, il piano non rende.') }}</p>
+    {% endif %}
+    </div>
   </section>
 
-  <section class="card" aria-labelledby="h-site">
+  <section class="card pane" id="p-site" aria-labelledby="h-site">
     <div class="card-head"><h2 id="h-site">{{ _('Per sito') }}</h2></div>
     <div class="pad"><table class="tbl">{{ head(_('Sito')) }}<tbody>
       {% for g in r.by_site %}{{ row(g.key[1] ~ ' · ' ~ names.get(g.key[0], g.key[0]), g) }}{% else %}<tr><td colspan="7" class="hint">{{ _('Nessuna chiamata nel periodo.') }}</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
 
-  <section class="card" id="articoli" aria-labelledby="h-art">
+  <section class="card pane" id="articoli" aria-labelledby="h-art">
     <div class="card-head"><div><h2 id="h-art">{{ _('Costo per articolo') }}</h2>
       <span class="hint">{{ _("Scrittura: ogni tentativo della bozza, correzioni comprese. Proposta: le chiamate che hanno proposto articoli sullo stesso tema. Più versioni della stessa bozza: la scrittura è contata sulla più recente.") }}</span></div></div>
     <div class="pad"><table class="tbl">
@@ -96,6 +120,19 @@
     </table></div>
   </section>
 
+  <script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#usage-tabs a'));
+    var panes = Array.prototype.slice.call(document.querySelectorAll('section.pane'));
+    function pick(id) {
+      if (!panes.some(function (p) { return p.id === id; })) id = 'p-purpose';
+      panes.forEach(function (p) { p.hidden = p.id !== id; });
+      tabs.forEach(function (a) { var on = a.getAttribute('href') === '#' + id; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+    }
+    tabs.forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); pick(a.getAttribute('href').slice(1)); history.replaceState(null, '', a.getAttribute('href')); }); });
+    pick(location.hash.slice(1));
+  })();
+  </script>
   <section class="card" id="modelli" aria-labelledby="h-routes">
     <div class="card-head"><div><h2 id="h-routes">{{ _('Modello per passo') }}</h2>
       <span class="hint">{{ _('Il nome di un modello della sezione models di core.yaml (per esempio haiku, sonnet, opus); vuoto: il modello predefinito del Core. Un nome che core.yaml non conosce non ferma nulla: risponde il predefinito e il log lo segnala. Le redazioni non vedono quale modello usano.') }}</span></div></div>
@@ -103,7 +140,7 @@
       {% for p in routable %}
       <label class="field">{{ _(purposes[p]) }}<input name="{{ p }}" value="{{ routes.get(p, '') }}" placeholder="default" list="model-names" maxlength="100"></label>
       {% endfor %}
-      <datalist id="model-names"><option value="default"><option value="haiku"><option value="sonnet"><option value="opus"></datalist>
+      <datalist id="model-names">{% for name in (['default', 'haiku', 'sonnet', 'opus'] + routes.values()|list)|unique %}<option value="{{ name }}">{% endfor %}</datalist>
       <div style="grid-column: 1 / -1;"><button class="btn" type="submit">{{ _('Salva') }}</button></div>
     </form>
   </section>

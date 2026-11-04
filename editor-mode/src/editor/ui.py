@@ -52,7 +52,7 @@ QUOTA_LABELS = {
     "sites": N_("Siti"),
     "sources": N_("Fonti attive"),
     "items": N_("Notizie oggi"),
-    "drafts": N_("Bozze nel mese"),
+    "drafts": N_("Articoli del mese"),
     "llm_cost": N_("Costo modello nel mese"),
 }
 CHECKS = [

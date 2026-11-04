@@ -138,6 +138,7 @@ details.act > :last-child:not(summary) { margin-bottom: 14px; }
 details.act.sm > summary { min-height: 40px; font-size: 13px; }
 details.act .notice { margin-top: 12px; }
 .btn.sm { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.btn.ghost { border-style: dashed; color: var(--ink-2); }
 .btn:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .link { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: underline; }
 form.inline { display: inline-flex; }
@@ -253,8 +254,18 @@ table.sites td { padding: 9px 10px; }
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { padding: 10px; font-weight: 500; font-size: 12px; color: var(--muted); text-align: left; white-space: nowrap; }
+th.num { font-family: var(--sans); }
 td { padding: 12px 10px; border-top: 1px solid var(--line-2); vertical-align: middle; }
 td small { display: block; font-size: 12px; color: var(--muted); }
+/* A table that becomes one card per row on a phone: each cell says what it is. */
+@media (max-width: 700px) {
+  table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; min-width: 0; }
+  table.cards thead { display: none; }
+  table.cards tr { border-top: 1px solid var(--line); padding: 10px 0; }
+  table.cards td { border: 0; padding: 4px 0; text-align: left !important; }
+  table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  table.cards td .row { justify-content: flex-start !important; flex-wrap: wrap !important; }
+}
 tr.off { background: #FCF6F5; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .field input, .field select, .switch select, .field textarea { min-height: 40px; padding: 0 10px; border: 1px solid #C9CDC7; border-radius: 8px; font: 400 14px var(--sans); color: var(--ink); background: var(--surface); }
@@ -322,6 +333,7 @@ form.row input[type=number], form.row select { min-height: 36px; padding: 0 10px
 .meter { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 2fr) 110px; gap: 12px; align-items: center; font-size: 14px; padding: 8px 0; }
 .list-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; flex-wrap: wrap; }
 .list-row:last-child { border-bottom: 0; }
+.list-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
 .token { font: 13px var(--mono); background: var(--bg); padding: 10px 12px; border-radius: 8px; overflow-wrap: anywhere; user-select: all; }
 .solo { max-width: 420px; margin: 12vh auto; padding: 0 16px; display: flex; flex-direction: column; gap: 16px; }
 .solo .brand { padding: 0; }

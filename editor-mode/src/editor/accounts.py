@@ -164,8 +164,12 @@ def authenticate(admin, email: str, password: str, now: datetime | None = None):
 
 
 def operators(admin) -> list:
+    """The operators, each with its latest sign-in still on record."""
+    last = (select(func.max(m.sessions.c.created_at)).where(m.sessions.c.user_id == m.users.c.id)
+            .correlate(m.users).scalar_subquery())
     with _read(admin) as conn:
-        return conn.execute(select(m.users).where(m.users.c.operator).order_by(m.users.c.email)).all()
+        return conn.execute(select(m.users, last.label("last_login")).where(m.users.c.operator)
+                            .order_by(m.users.c.email)).all()
 
 
 def remove_operator(admin, user_id: int, by_user_id: int) -> str:
