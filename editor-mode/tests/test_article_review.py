@@ -43,3 +43,23 @@ def test_only_github_failing_on_its_side_is_tried_again():
     assert hiccup(httpx.ConnectTimeout("slow"))
     assert not hiccup(publishing.PublishError("GitHub, merge: 422 not mergeable"))
     assert not hiccup(publishing.PublishError("the site's checks failed (x): the site did not change"))
+
+
+def test_check_now_reads_github_again(monkeypatch):
+    import time
+
+    from editor import installs
+
+    calls = []
+
+    class Client:
+        def get(self, url, headers=None):
+            calls.append(url)
+            return httpx.Response(200, json={"tag_name": f"v0.0.{len(calls)}", "html_url": ""},
+                                  request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(installs, "_release", {"at": 0.0, "release": None})
+    assert installs.latest(Client())["version"] == "0.0.1"
+    assert installs.latest(Client())["version"] == "0.0.1"  # kept
+    installs._release["at"] = time.monotonic() - 20
+    assert installs.latest(Client(), fresh=True)["version"] == "0.0.2"  # "Controlla adesso"

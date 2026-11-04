@@ -1442,7 +1442,7 @@
  "Aggiorna": "Actualizar",
  "Versione installata": "Versión instalada",
  "Ultima versione": "Última versión",
- "Controllata il {date} alle {time}. Il controllo si ripete ogni 6 ore.": "Comprobada el {date} a las {time}. La comprobación se repite cada 6 horas.",
+ "Controllata il {date} alle {time}. Il controllo si ripete ogni ora e quando apri questa pagina.": "Comprobada el {date} a las {time}. La comprobación se repite cada hora y cuando abres esta página.",
  "Ultimo controllo non riuscito: {error}": "La última comprobación falló: {error}",
  "La richiesta di aggiornamento alla {version} aspetta da più di 5 minuti: sul server lo script update.sh non è installato o il cron non gira (vedi deploy/server/README.md, \"Updating from the console\").": "La solicitud de actualizar a la {version} lleva más de 5 minutos esperando: en el servidor el script update.sh no está instalado o cron no funciona (ver deploy/server/README.md, \"Updating from the console\").",
  "Aggiornamento alla {version} chiesto: il server lo prende entro un minuto.": "Actualización a la {version} solicitada: el servidor la recoge en un minuto.",
@@ -1532,7 +1532,7 @@
  "Modelli dei passi salvati: valgono dalla prossima chiamata, entro un minuto.": "Modelos de los pasos guardados: se aplican desde la próxima llamada, en un minuto.",
  "Caporedattore AI": "Redactor jefe IA",
  "Installazioni di Redazia": "Instalaciones de Redazia",
- "Ogni installazione chiede a questo server l'ultima versione ogni 6 ore, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.": "Cada instalación pide a este servidor la última versión cada 6 horas, con un identificador aleatorio y la versión instalada. Las instalaciones con EDITOR_TELEMETRY=off no se cuentan.",
+ "Ogni installazione chiede a questo server l'ultima versione ogni ora, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.": "Cada instalación pide a este servidor la última versión cada hora, con un identificador aleatorio y la versión instalada. Las instalaciones con EDITOR_TELEMETRY=off no se cuentan.",
  "Attive negli ultimi 7 giorni": "Activas en los últimos 7 días",
  "versione {version}": "versión {version}",
  "Nuove negli ultimi 30 giorni": "Nuevas en los últimos 30 días",
@@ -2141,5 +2141,13 @@
  "Limiti": "Límites",
  "Ricerca della fonte primaria: {datum}": "Búsqueda de la fuente primaria: {datum}",
  "Ricerca delle fonti primarie": "Búsqueda de fuentes primarias",
- "Motivo:": "Motivo:"
+ "Motivo:": "Motivo:",
+ "la redazione automatica è spenta": "la redacción automática está apagada",
+ "argomento da evitare: {word}": "tema que evitar: {word}",
+ "alcune frasi non superano i controlli sulle fonti: {detail}": "algunas frases no superan los controles de las fuentes: {detail}",
+ "alcune frasi non superano i controlli sulle fonti": "algunas frases no superan los controles de las fuentes",
+ "frase {n}: {problems}": "frase {n}: {problems}",
+ "fonti diverse citate: {n}, ne servono almeno {min}": "fuentes distintas citadas: {n}, se necesitan al menos {min}",
+ "il caporedattore AI non ha risposto: {error}": "el redactor jefe IA no ha respondido: {error}",
+ "non riscritto: {error}": "no reescrito: {error}"
 }

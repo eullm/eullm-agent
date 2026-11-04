@@ -24,7 +24,7 @@ from sqlalchemy import and_, case, func, select, update
 
 from . import credits, drafts, models as m, proposals, publishing, quotas, translate as tr, usage
 from .core_client import CoreClient, CoreError
-from .i18n import N_
+from .i18n import N_, t
 from .progress import step
 from .text import tokens
 
@@ -81,7 +81,9 @@ CHECK_SYSTEM = (
     "first Black woman governor of a US state is not the first Black governor of Georgia): different moments, "
     "measures or scopes are not an error. A live page read at a given time says what was true then. Reply with JSON "
     "only: "
-    '{"publish": true|false, "problems": ["<each rule broken, one sentence each, in English>"], '
+    '{"publish": true|false, "problems": ["<each rule broken, one sentence each, written for the newsroom\'s '
+    'editor in the language named after Reasons in, in plain words: say what is wrong in the article, never '
+    'a rule\'s number>"], '
     '"section": "<the one of the site\'s sections the article belongs to, written exactly as listed, or null>", '
     '"headline_fixes": {"title": "<the title with its typos corrected, or null>", "subtitle": "<same, or null>", '
     '"seo_title": "<same, or null>", "seo_description": "<same, or null>"}}. headline_fixes is a last proofread '
@@ -320,7 +322,8 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
         if word:
             s.execute(update(m.proposals).where(pr.id == r.id, pr.status == "proposed")
                       .values(status="rejected", decided_by=AUTO))
-            proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, f"topic to avoid: {word}", site_id)
+            proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, t(
+                "argomento da evitare: {word}", _language_in(s, r.tenant_id, site_id), word=word), site_id)
             continue
         terms = _angle_terms(r.title, r.angle)
         items = set(s.execute(select(m.proposal_citations.c.item_id).where(
@@ -551,14 +554,33 @@ def _excerpts(db, tenant_id: str, draft_id: int) -> list[str]:
     return out if rows else []
 
 
+def newsroom_language(db, tenant_id: str, site_id: int) -> str:
+    """The language the reasons of a refusal are written in: the newsroom's
+    (the one of its emails and of its pages), else the site's, else
+    English. A translation refused is explained in the newsroom's language
+    too: the reasons are read in the panel, not on the site."""
+    with db.tenant(tenant_id) as s:
+        return _language_in(s, tenant_id, site_id)
+
+
+def _language_in(s, tenant_id: str, site_id: int) -> str:
+    lang = s.execute(select(m.tenants.c.language).where(m.tenants.c.tenant_id == tenant_id)).scalar()
+    lang = (lang or "").strip().lower()[:2] or tr.main_language(s, site_id) or ""
+    return lang if lang in tr.LANGUAGES else "en"
+
+
+def reasons_language(db, tenant_id: str, d) -> str:
+    return tr.LANGUAGES[newsroom_language(db, tenant_id, d.site_id)]
+
+
 def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
     seo = d.seo or {}
     heads = [f"Headlines: title: {d.title} | subtitle: {d.subtitle or ''} | search title: {seo.get('title') or ''} | "
              f"search description: {seo.get('description') or ''}"]
-    prompt = "\n".join(lines + [f"Language: {d.language}", "Article:", d.body_md[:14000], *heads,
-                               *_excerpts(db, tenant_id, d.id)])
+    prompt = "\n".join(lines + [f"Language: {d.language}", f"Reasons in: {reasons_language(db, tenant_id, d)}",
+                               "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id)])
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
         verdict, _calls = core.chat_json(CHECK_SYSTEM, prompt, _check_validator)
     return verdict
@@ -615,23 +637,27 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             .join(m.source_items, m.source_items.c.id == m.draft_claim_sources.c.item_id))
             .where(m.draft_claims.c.draft_id == draft_id)).scalar() or 0
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id}
+    lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
     if not cfg["enabled"]:
-        return _stop(db, tenant_id, d, ["the automatic newsroom was stopped"], out, discard=False)
+        return _stop(db, tenant_id, d, [t("la redazione automatica è spenta", lang)], out, discard=False)
     word = avoided(f"{d.title}\n{d.body_md}", cfg["avoid"])
     if word:  # nothing to fix: the subject itself is out
-        return _stop(db, tenant_id, d, [f"topic to avoid: {word}"], out, discard=cfg["on_problem"] == "fix")
+        return _stop(db, tenant_id, d, [t("argomento da evitare: {word}", lang, word=word)], out,
+                     discard=cfg["on_problem"] == "fix")
     fixable = []
     if d.status == "needs_review":
-        fixable.append("some sentences failed the source checks: " + "; ".join(
-            f"sentence {f.get('claim')}: {', '.join(f.get('problems') or [])}" for f in (d.flags or []))[:1500])
+        fixable.append(t("alcune frasi non superano i controlli sulle fonti: {detail}", lang, detail="; ".join(
+            t("frase {n}: {problems}", lang, n=f.get("claim"), problems=", ".join(f.get("problems") or []))
+            for f in (d.flags or [])))[:1500])
     if cited < cfg["min_sources"]:
-        fixable.append(f"{cited} different sources cited, at least {cfg['min_sources']} needed")
+        fixable.append(t("fonti diverse citate: {n}, ne servono almeno {min}", lang, n=cited, min=cfg["min_sources"]))
     if not fixable:
         step(N_("Il caporedattore AI rilegge l'articolo"))
         try:
             verdict = editor_check(db, tenant_id, d, body, core)
         except CoreError as e:
-            return _stop(db, tenant_id, d, [f"the editor-in-chief did not answer: {e}"], out, discard=False)
+            return _stop(db, tenant_id, d, [t("il caporedattore AI non ha risposto: {error}", lang, error=e)], out,
+                         discard=False)
         if not verdict["publish"]:
             fixable += verdict["problems"]
         section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
@@ -653,7 +679,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         try:
             again = rewrite(draft_id, "; ".join(fixable)[:3000])
         except (CoreError, ValueError, quotas.QuotaExceeded) as e:
-            return {**out, "discarded": fixable + [f"not written again: {e}"]}
+            return {**out, "discarded": fixable + [t("non riscritto: {error}", lang, error=e)]}
         res = finish(db, tenant_id, again, core, publish, translate, rewrite, cover, rounds + 1)
         return {**res, "rewritten_from": draft_id}
     if cover is not None:
@@ -708,10 +734,11 @@ def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
     cfg = settings_of(body)
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id, "language": d.language}
+    lang = newsroom_language(db, tenant_id, d.site_id)
     if not cfg["enabled"]:
-        return _stop(db, tenant_id, d, ["the automatic newsroom was stopped"], out, discard=False)
+        return _stop(db, tenant_id, d, [t("la redazione automatica è spenta", lang)], out, discard=False)
     if d.status == "needs_review":  # the original stays published; this language is skipped
-        return _stop(db, tenant_id, d, ["some sentences failed the source checks"], out,
+        return _stop(db, tenant_id, d, [t("alcune frasi non superano i controlli sulle fonti", lang)], out,
                      discard=cfg["on_problem"] == "fix")
     return {**out, **_send(db, tenant_id, d, cfg, False, publish)}
 

@@ -1442,7 +1442,7 @@
  "Aggiorna": "Update",
  "Versione installata": "Installed version",
  "Ultima versione": "Latest version",
- "Controllata il {date} alle {time}. Il controllo si ripete ogni 6 ore.": "Checked on {date} at {time}. The check runs every 6 hours.",
+ "Controllata il {date} alle {time}. Il controllo si ripete ogni ora e quando apri questa pagina.": "Checked on {date} at {time}. The check runs every hour and when you open this page.",
  "Ultimo controllo non riuscito: {error}": "Last check failed: {error}",
  "La richiesta di aggiornamento alla {version} aspetta da più di 5 minuti: sul server lo script update.sh non è installato o il cron non gira (vedi deploy/server/README.md, \"Updating from the console\").": "The request to update to {version} has been waiting for more than 5 minutes: on the server the update.sh script is not installed or cron is not running (see deploy/server/README.md, \"Updating from the console\").",
  "Aggiornamento alla {version} chiesto: il server lo prende entro un minuto.": "Update to {version} requested: the server picks it up within a minute.",
@@ -1532,7 +1532,7 @@
  "Modelli dei passi salvati: valgono dalla prossima chiamata, entro un minuto.": "Step models saved: they apply from the next call, within a minute.",
  "Caporedattore AI": "AI managing editor",
  "Installazioni di Redazia": "Redazia installations",
- "Ogni installazione chiede a questo server l'ultima versione ogni 6 ore, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.": "Every installation asks this server for the latest version every 6 hours, with a random identifier and the installed version. Installations with EDITOR_TELEMETRY=off are not counted.",
+ "Ogni installazione chiede a questo server l'ultima versione ogni ora, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.": "Every installation asks this server for the latest version every hour, with a random identifier and the installed version. Installations with EDITOR_TELEMETRY=off are not counted.",
  "Attive negli ultimi 7 giorni": "Active in the last 7 days",
  "versione {version}": "version {version}",
  "Nuove negli ultimi 30 giorni": "New in the last 30 days",
@@ -2141,5 +2141,13 @@
  "Limiti": "Limits",
  "Ricerca della fonte primaria: {datum}": "Looking for the primary source: {datum}",
  "Ricerca delle fonti primarie": "Search for primary sources",
- "Motivo:": "Reason:"
+ "Motivo:": "Reason:",
+ "la redazione automatica è spenta": "the automatic newsroom is off",
+ "argomento da evitare: {word}": "topic to avoid: {word}",
+ "alcune frasi non superano i controlli sulle fonti: {detail}": "some sentences fail the source checks: {detail}",
+ "alcune frasi non superano i controlli sulle fonti": "some sentences fail the source checks",
+ "frase {n}: {problems}": "sentence {n}: {problems}",
+ "fonti diverse citate: {n}, ne servono almeno {min}": "different sources cited: {n}, at least {min} needed",
+ "il caporedattore AI non ha risposto: {error}": "the AI editor-in-chief did not answer: {error}",
+ "non riscritto: {error}": "not written again: {error}"
 }

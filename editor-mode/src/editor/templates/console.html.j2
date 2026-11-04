@@ -571,7 +571,7 @@
     <div class="list-row"><span>{{ _('Versione installata') }}</span><span class="num">{{ updates.installed }}</span></div>
     {% if updates.enabled %}
     <div class="list-row"><span>{{ _('Ultima versione') }}</span><span class="num">{% if av.version %}{% if av.url %}<a href="{{ av.url }}" rel="noopener" target="_blank">{{ av.version }}</a>{% else %}{{ av.version }}{% endif %}{% else %}–{% endif %}</span></div>
-    {% if av.checked_at %}<p class="hint">{{ _('Controllata il {date} alle {time}. Il controllo si ripete ogni 6 ore.', date=av.checked_at[8:10] ~ '/' ~ av.checked_at[5:7], time=av.checked_at[11:16] ~ ' UTC') }}{% if av.error %} {{ _('Ultimo controllo non riuscito: {error}', error=av.error) }}{% endif %}</p>{% endif %}
+    {% if av.checked_at %}<p class="hint">{{ _('Controllata il {date} alle {time}. Il controllo si ripete ogni ora e quando apri questa pagina.', date=av.checked_at[8:10] ~ '/' ~ av.checked_at[5:7], time=av.checked_at[11:16] ~ ' UTC') }}{% if av.error %} {{ _('Ultimo controllo non riuscito: {error}', error=av.error) }}{% endif %}</p>{% endif %}
     {% if updates.pending %}
       {% if updates.stale %}<p class="error">{{ _('La richiesta di aggiornamento alla {version} aspetta da più di 5 minuti: sul server lo script update.sh non è installato o il cron non gira (vedi deploy/server/README.md, "Updating from the console").', version=updates.pending.version) }}</p>
       {% else %}<p class="lead">{{ _('Aggiornamento alla {version} chiesto: il server lo prende in pochi secondi (al più un minuto, su un server senza systemd).', version=updates.pending.version) }}</p>{% endif %}
@@ -642,7 +642,7 @@
     {% endif %}
     {% if installs.seen %}
     <h3 id="installazioni" style="margin-top: 18px;">{{ _('Installazioni di Redazia') }}</h3>
-    <p class="hint">{{ _("Ogni installazione chiede a questo server l'ultima versione ogni 6 ore, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.") }}</p>
+    <p class="hint">{{ _("Ogni installazione chiede a questo server l'ultima versione ogni ora, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.") }}</p>
     <div class="list-row"><span>{{ _('Attive negli ultimi 7 giorni') }}</span><span class="num">{{ installs.active }}</span></div>
     {% for v, n in installs.versions %}<div class="list-row"><span class="hint">{{ _('versione {version}', version=v) }}</span><span class="num">{{ n }}</span></div>{% endfor %}
     <div class="list-row"><span>{{ _('Nuove negli ultimi 30 giorni') }}</span><span class="num">{{ installs.new_30 }}</span></div>

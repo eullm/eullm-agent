@@ -271,6 +271,8 @@ def register(app, ctx) -> None:
                 billing.sync_refunds(admin, ctx.gateway, room)
             except Exception:
                 log.exception("refunds of %s not synced", room)
+        if view == "aggiornamenti" and (where := updates.folder(ctx.updates_dir)) is not None:
+            updates.refresh(where, INSTALLED, updates.this_install())
         resp = pages.TemplateResponse(request, "console.html.j2", {
             "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),
@@ -423,10 +425,10 @@ def register(app, ctx) -> None:
         return page(request, s, view="redazione", room=tenant_id)
 
     @app.get("/api/public/latest")
-    def public_latest(v: str = "", id: str = ""):
+    def public_latest(v: str = "", id: str = "", fresh: int = 0):
         """The latest release for an installation that checks for updates;
         the check is counted (installs.py)."""
-        rel = installs.latest()
+        rel = installs.latest(fresh=bool(fresh))
         if rel is None:
             raise HTTPException(503, "latest release not known")
         if v or id:
