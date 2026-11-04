@@ -49,7 +49,10 @@ def test_collect_dedups_and_observes(db, tenant):
     with db.tenant(tenant) as s:
         dups = s.execute(text("SELECT count(*) FROM editor.source_items WHERE duplicate_of IS NOT NULL")).scalar()
         obs = s.execute(text("SELECT count(*) FROM editor.observations")).scalar()
-        etag = s.execute(text("SELECT etag FROM editor.sources WHERE url = :u"), {"u": FEED}).scalar()
+        # The newsroom's source and the archive's share the address; the etag is
+        # kept on the archive's, the one that is read. Which row comes first is
+        # up to the database (on PostgreSQL it changed from run to run).
+        etag = s.execute(text("SELECT max(etag) FROM editor.sources WHERE url = :u"), {"u": FEED}).scalar()
     assert dups == 1 and obs == 2 and etag == '"a"'
 
     # Second run: the feed answers 304, HN items are updated and observed again.
