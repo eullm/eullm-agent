@@ -92,13 +92,18 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         # The automatic newsroom stays within the plan's articles: credits are spent only on what
         # a person asks for, and on the extras the newsroom was allowed to pay (args["paid"]).
         pay = bool(args.get("paid"))
+        with db.tenant(tenant) as s:  # the outlets the article must cite, asked from the first writing
+            outlets = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == args["site_id"],
+                m.editorial_profiles.c.status == "approved")).scalar())["min_sources"]
+
         def write(purpose="draft", notes=None):
             if http_factory is None:
                 return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=pay,
-                                          purpose=purpose, notes=notes)
+                                          purpose=purpose, notes=notes, outlets=outlets)
             with http_factory() as client:
                 return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=pay,
-                                          purpose=purpose, notes=notes)
+                                          purpose=purpose, notes=notes, outlets=outlets)
 
         def cover(did):  # drawn only for an article that passed every check
             if imager is not None:

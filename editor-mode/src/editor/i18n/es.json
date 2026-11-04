@@ -2323,5 +2323,12 @@
  "{p} pubblicati, {d} scartati, {h} fermati": "{p} publicados, {d} descartados, {h} retenidos",
  "€ {amount} al mese a listino": "{amount} € al mes a precio de lista",
  "Dalla versione": "Desde la versión",
- "Alla versione": "A la versión"
+ "Alla versione": "A la versión",
+ "Scartata dalla redazione automatica": "Descartado por la redacción automática",
+ "Tolte le frasi che non superano i controlli": "Quitadas las frases que no superan los controles",
+ "dopo i tagli l'articolo non supera i controlli": "tras los cortes el artículo no supera los controles",
+ "il caporedattore AI vuole togliere: {sentences}": "el redactor jefe IA quiere quitar: {sentences}",
+ "parla delle fonti invece che della notizia": "habla de las fuentes en lugar de la noticia",
+ "più 1 traduzione": "más 1 traducción",
+ "più {n} traduzioni": "más {n} traducciones"
 }

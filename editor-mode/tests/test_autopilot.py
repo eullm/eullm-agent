@@ -411,3 +411,67 @@ def test_other_outlets_telling_the_same_story_count_as_sources(db, tenant):
                                        "url_hash": "a" * 64, "content_hash": "b" * 64, "duplicate_of": None,
                                        "fetched_at": datetime.now(UTC)}))
         assert ap.source_count(s, pid) == before + 1 and ap.source_count(s, pid, 1) <= before
+
+
+def _long(db, tenant, prop):
+    """An article of seven sentences: a heading about its own sources, and one
+    sentence with a number its source does not give."""
+    pid, cited = prop
+    one = [cited[0]]
+    answer = json.dumps({"title": "Bari in fibra", "subtitle": "La rete è completa", "sections": [
+        {"heading": None, "claims": [{"text": "Open Fiber ha lavorato a Bari.", "sources": one},
+                                     {"text": "La rete in fibra è completa.", "sources": one}]},
+        {"heading": "Cosa è confermato e cosa no", "claims": [{"text": "I lavori sono finiti.", "sources": one},
+                                                             {"text": "Il cantiere è chiuso.", "sources": one}]},
+        {"heading": "La città", "claims": [{"text": "I quartieri sono collegati.", "sources": one},
+                                           {"text": "Servono 4217 chilometri di cavo.", "sources": one},
+                                           {"text": "Le scuole hanno la fibra.", "sources": one}]}]})
+    with respx.mock() as router:
+        router.post(CORE).mock(return_value=chat(answer))
+        return drafts.write_draft(db, tenant, pid, core(), None)
+
+
+def test_a_few_wrong_sentences_are_cut_not_paid_for_again(db, tenant, monkeypatch):
+    """2026-11-04: seven of eight articles of a day discarded after they were
+    written, most for one sentence. The sentences the checks find wrong and
+    the headings about the sources are cut for free; the editor-in-chief cuts
+    instead of refusing; only what cutting cannot fix is written again."""
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    _, site_id, prop = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=1)
+    pub.add_target(db, tenant, site_id, "webhook", "sito", {"url": "https://hooks.example/it"}, None)
+    did = _long(db, tenant, prop)
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.drafts.c.status).where(m.drafts.c.id == did)).scalar() == "needs_review"
+    sent, rewrites = [], []
+    ok = chat(json.dumps({"publish": True, "problems": []}))
+    with respx.mock() as router:
+        llm = router.post(CORE).mock(return_value=ok)
+        out = ap.finish(db, tenant, did, core(), sent.append, rewrite=lambda *a: rewrites.append(a))
+    assert len(llm.calls) == 1 and not rewrites and out["approved"] and out["cut"] == 1
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+    assert d.status == "approved" and "4217" not in d.body_md and "Cosa è confermato" not in d.body_md
+    assert "I lavori sono finiti." in d.body_md  # the sentences under that heading stay
+
+    # The editor-in-chief: publishable without one sentence.
+    did2 = _long(db, tenant, prop)
+    cutting = chat(json.dumps({"publish": True, "problems": [], "cut": ["Le scuole hanno la fibra."]}))
+    with respx.mock() as router:
+        router.post(CORE).mock(return_value=cutting)
+        out = ap.finish(db, tenant, did2, core(), sent.append, rewrite=lambda *a: rewrites.append(a))
+    assert out["approved"] and not rewrites
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.drafts.c.body_md).where(m.drafts.c.id == did2)).scalar()
+        assert "Le scuole hanno la fibra" not in body and "I quartieri sono collegati." in body
+        # Discarded by the automatic newsroom, refused by a person: shown apart.
+    from editor.ui import draft_state
+    assert draft_state("rejected", ap.AUTO) == "discarded" and draft_state("rejected", "Francesco") == "rejected"
+
+
+def test_the_writer_never_talks_about_its_sources():
+    assert drafts.about_sources("Cosa è confermato e cosa no")
+    assert drafts.about_sources("Le fonti consultate non indicano la causa della morte")
+    assert drafts.about_sources("What is not yet clear")
+    assert not drafts.about_sources("Le fonti rinnovabili disponibili crescono")
+    assert "never your sources or your checking" in drafts.SYSTEM

@@ -2323,5 +2323,12 @@
  "{p} pubblicati, {d} scartati, {h} fermati": "{p} veröffentlicht, {d} verworfen, {h} angehalten",
  "€ {amount} al mese a listino": "€ {amount} pro Monat zum Listenpreis",
  "Dalla versione": "Von Version",
- "Alla versione": "Auf Version"
+ "Alla versione": "Auf Version",
+ "Scartata dalla redazione automatica": "Von der automatischen Redaktion verworfen",
+ "Tolte le frasi che non superano i controlli": "Sätze entfernt, die die Prüfungen nicht bestehen",
+ "dopo i tagli l'articolo non supera i controlli": "nach den Kürzungen besteht der Artikel die Prüfungen nicht",
+ "il caporedattore AI vuole togliere: {sentences}": "der KI-Chefredakteur will entfernen: {sentences}",
+ "parla delle fonti invece che della notizia": "spricht über die Quellen statt über die Nachricht",
+ "più 1 traduzione": "plus 1 Übersetzung",
+ "più {n} traduzioni": "plus {n} Übersetzungen"
 }

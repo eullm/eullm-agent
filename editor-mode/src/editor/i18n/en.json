@@ -2323,5 +2323,12 @@
  "{p} pubblicati, {d} scartati, {h} fermati": "{p} published, {d} discarded, {h} held",
  "€ {amount} al mese a listino": "€ {amount} per month at list price",
  "Dalla versione": "From version",
- "Alla versione": "To version"
+ "Alla versione": "To version",
+ "Scartata dalla redazione automatica": "Discarded by the automatic newsroom",
+ "Tolte le frasi che non superano i controlli": "Sentences that fail the checks removed",
+ "dopo i tagli l'articolo non supera i controlli": "after the cuts the article does not pass the checks",
+ "il caporedattore AI vuole togliere: {sentences}": "the AI editor-in-chief wants to remove: {sentences}",
+ "parla delle fonti invece che della notizia": "talks about the sources instead of the news",
+ "più 1 traduzione": "plus 1 translation",
+ "più {n} traduzioni": "plus {n} translations"
 }
