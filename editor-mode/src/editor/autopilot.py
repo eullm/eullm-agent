@@ -26,6 +26,7 @@ from . import credits, drafts, models as m, proposals, publishing, quotas, trans
 from .core_client import CoreClient, CoreError
 from .i18n import N_
 from .progress import step
+from .text import tokens
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +72,11 @@ CHECK_SYSTEM = (
     + "; ".join(f"({n}) {r}" for n, r in enumerate(RULES, 1))
     + ". Refuse it also if it goes against the newsroom's directives or is about a topic it must avoid. Do not "
     "refuse for style, length or a dull title. Check every number, superlative and cause against the source "
-    "excerpts given after the article; a source given only by its title cannot support details. Reply with JSON "
+    "excerpts given after the article; a source given only by its title cannot support details. Before "
+    "calling two statements a contradiction, check that they refer to the same moment (a count at 71% of the "
+    "votes is not the final result, a forecast is not the outcome), the same measure and the same scope (the "
+    "first Black woman governor of a US state is not the first Black governor of Georgia): different moments, "
+    "measures or scopes are not an error. A live page read at a given time says what was true then. Reply with JSON "
     "only: "
     '{"publish": true|false, "problems": ["<each rule broken, one sentence each, in English>"], '
     '"section": "<the one of the site\'s sections the article belongs to, written exactly as listed, or null>"}'
@@ -242,11 +247,45 @@ def source_count(s, proposal_id: int, need: int = 0) -> int:
 OPPORTUNITY_FLOOR = 0.5
 
 
+# A proposal is left for later when it tells what an article of the last
+# two days (or one chosen in the same round) already tells: at least this
+# many shared words, and this share of the shorter title with angle. Found by
+# an external review, 2026-11-04: four pieces on the same midterm night.
+OVERLAP_DAYS = 2
+OVERLAP_WORDS = 3
+OVERLAP_SHARE = 0.4
+
+
+def _angle_terms(title: str, angle: str | None) -> set[str]:
+    return set(tokens(title)) | set(tokens(angle or ""))
+
+
+def overlaps(terms: set[str], others: list[set[str]]) -> bool:
+    for o in others:
+        shared = len(terms & o)
+        if shared >= OVERLAP_WORDS and shared >= OVERLAP_SHARE * min(len(terms), len(o)):
+            return True
+    return False
+
+
+def recent_angles(s, site_id: int, now: datetime) -> list[set[str]]:
+    """Words of the proposals the newsroom took on in the last days, those
+    still being written included, and not the ones discarded."""
+    pr, dr = m.proposals.c, m.drafts.c
+    kept = select(dr.proposal_id).where(dr.status != "rejected", dr.translation_of.is_(None))
+    rows = s.execute(select(pr.title, pr.angle).where(
+        pr.site_id == site_id, pr.decided_by == AUTO, pr.created_at >= now - timedelta(days=OVERLAP_DAYS),
+        (pr.status == "accepted") | ((pr.status == "drafted") & pr.id.in_(kept)))).all()
+    return [_angle_terms(r.title, r.angle) for r in rows]
+
+
 def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False) -> list:
     """The best proposals of the last day and a half that pass the
     guardrails, those over the minimum opportunity first; those on a topic
-    to avoid are turned down for good."""
+    to avoid are turned down for good, those telling what a recent article
+    already tells wait (they may become an update of it)."""
     pr = m.proposals.c
+    seen = recent_angles(s, site_id, now)
     rows = s.execute(select(m.proposals).where(
         pr.site_id == site_id, pr.status == "proposed", pr.created_at >= now - timedelta(hours=36),
         pr.opportunity >= (cfg["min_opportunity"] * OPPORTUNITY_FLOOR if minimum is None else minimum))
@@ -263,8 +302,12 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
                       .values(status="rejected", decided_by=AUTO))
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, f"topic to avoid: {word}", site_id)
             continue
+        terms = _angle_terms(r.title, r.angle)
+        if overlaps(terms, seen):
+            continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
             out.append(r)
+            seen.append(terms)
     return out
 
 

@@ -82,7 +82,7 @@
   {% for x in limits %}
   <div class="limit {{ x.level }}" title="{{ x.note }}">
     <span class="top"><span>{{ x.label }}</span><strong>{{ x.used }} / {{ x.limit }}</strong></span>
-    <span class="meter"><i style="width: {{ x.pct }}%"></i></span>
+    <span class="gauge"><i style="width: {{ x.pct }}%"></i></span>
     {% if x.note %}<small>{{ x.note }}</small>{% endif %}
   </div>
   {% endfor %}
