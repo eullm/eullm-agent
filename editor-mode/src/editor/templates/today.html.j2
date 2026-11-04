@@ -66,8 +66,9 @@
     {% if x.publication == 'published' and a.urls.get(x.id) %}<a href="{{ a.urls[x.id] }}" target="_blank" rel="noopener">{{ x.title }}</a>{% else %}<a href="/drafts/{{ x.id }}">{{ x.title }}</a>{% endif %}
     · {% if x.discarded is not none %}<span class="chip" title="{{ x.discarded }}">{{ _('scartato') }}</span>{% elif x.held %}<span class="chip amber" title="{{ x.held }}">{{ _('fermato') }}</span>{% elif x.publication == 'published' %}<span class="chip green">{{ _('pubblicato') }}</span>{% elif x.publication == 'failed' %}<span class="chip red">{{ _('pubblicazione non riuscita') }}</span>{% elif x.status == 'approved' %}<span class="chip">{{ _('approvato') }}</span>{% else %}<span class="chip">{{ _('in lavorazione') }}</span>{% endif %}
     {% if x.publication == 'published' and caller.can('owner') %}<a class="hint" href="/drafts/{{ x.id }}">{{ _('modifica o ritira') }}</a>{% endif %}
+    {% if x.discarded %}<br><span class="hint">{{ _('Motivo:') }} {{ x.discarded[:240] }}</span>{% elif x.held %}<br><span class="hint">{{ _('Motivo:') }} {{ x.held[:240] }}</span>{% endif %}
   </li>{% endfor %}</ul>
-  {% if day['items']|length > 8 %}<p class="hint"><a href="/publications">{{ _('Vedi tutti ({n})', n=day['items']|length) }}</a></p>{% endif %}
+  {% if day['items']|length > 8 %}<p class="hint"><a href="/drafts">{{ _('Vedi tutti ({n})', n=day['items']|length) }}</a></p>{% endif %}
   {% else %}<p class="hint">{{ _('Nessun articolo oggi per ora.') }}</p>{% endif %}
   {% if a.left_out %}
   <p class="notice-up">{{ _('Notizie di qualità rimaste fuori dal tetto di oggi: {n}. Si pubblicherebbero con più articoli al giorno.', n=a.left_out) }}

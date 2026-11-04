@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.35
+
+### Fixed
+
+- **Gli articoli scartati non si trovavano** (Francesco): "Vedi tutti" del
+  Desk portava a Pubblicazioni, che elenca solo ciò che è stato inviato, e
+  gli scartati non hanno una pubblicazione. Ora porta alle Bozze, dove ogni
+  articolo scartato o fermato dalla redazione automatica mostra il motivo
+  sotto il titolo; nel Desk il motivo compare scritto anche sotto ogni
+  scartato (prima era solo un suggerimento al passaggio del mouse).
+
 ## 0.28.34
 
 ### Added
