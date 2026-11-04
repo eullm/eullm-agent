@@ -12,6 +12,12 @@
 - **Il controllo automatico degli aggiornamenti era ogni 6 ore**: ora è ogni
   ora, e aprire la pagina Aggiornamenti controlla da sé se l'ultimo
   controllo ha più di dieci minuti (con un'attesa massima di 5 secondi).
+- **I motivi degli articoli scartati erano in inglese** (Francesco, con "Rule
+  9: ..."): il caporedattore AI li scrive nella lingua della redazione (se
+  non è impostata, in quella del sito), a parole semplici e senza numeri di
+  regola; anche i motivi scritti dal programma (fonti troppo poche,
+  argomento da evitare, frasi che non superano i controlli) sono tradotti. I
+  motivi già salvati restano come sono.
 
 ## 0.28.36
 

@@ -170,6 +170,8 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
         assert "editor-in-chief" in asked[0]["content"] and "superlative" in asked[0]["content"]
         # It checks the article against what the sources say, not against itself.
         assert "Cited sources" in asked[-1]["content"]
+        # The reasons of a refusal are read in the panel: in the newsroom's language, in plain words.
+        assert "Reasons in: Italiano" in asked[-1]["content"] and "never a rule's number" in asked[0]["content"]
     assert out["target"] == "sito" and translations == ["en"] and sent == [out["publication_id"]]
     with db.tenant(tenant) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
@@ -207,7 +209,7 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
     with respx.mock(assert_all_called=False) as router:
         llm = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True})))
         out = ap.finish(db, tenant, did3, core(), sent.append)
-    assert not llm.calls and "1 different sources cited, at least 3 needed" in out["held"]
+    assert not llm.calls and "fonti diverse citate: 1, ne servono almeno 3" in out["held"]
 
 
 def test_the_automatic_newsroom_fixes_or_discards_and_draws_only_what_passes(db, tenant, monkeypatch):

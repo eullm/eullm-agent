@@ -2141,5 +2141,13 @@
  "Limiti": "Limits",
  "Ricerca della fonte primaria: {datum}": "Looking for the primary source: {datum}",
  "Ricerca delle fonti primarie": "Search for primary sources",
- "Motivo:": "Reason:"
+ "Motivo:": "Reason:",
+ "la redazione automatica è spenta": "the automatic newsroom is off",
+ "argomento da evitare: {word}": "topic to avoid: {word}",
+ "alcune frasi non superano i controlli sulle fonti: {detail}": "some sentences fail the source checks: {detail}",
+ "alcune frasi non superano i controlli sulle fonti": "some sentences fail the source checks",
+ "frase {n}: {problems}": "sentence {n}: {problems}",
+ "fonti diverse citate: {n}, ne servono almeno {min}": "different sources cited: {n}, at least {min} needed",
+ "il caporedattore AI non ha risposto: {error}": "the AI editor-in-chief did not answer: {error}",
+ "non riscritto: {error}": "not written again: {error}"
 }

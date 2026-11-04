@@ -2141,5 +2141,13 @@
  "Limiti": "Limits",
  "Ricerca della fonte primaria: {datum}": "Suche nach der Primärquelle: {datum}",
  "Ricerca delle fonti primarie": "Suche nach Primärquellen",
- "Motivo:": "Grund:"
+ "Motivo:": "Grund:",
+ "la redazione automatica è spenta": "die automatische Redaktion ist ausgeschaltet",
+ "argomento da evitare: {word}": "zu vermeidendes Thema: {word}",
+ "alcune frasi non superano i controlli sulle fonti: {detail}": "einige Sätze bestehen die Quellenprüfung nicht: {detail}",
+ "alcune frasi non superano i controlli sulle fonti": "einige Sätze bestehen die Quellenprüfung nicht",
+ "frase {n}: {problems}": "Satz {n}: {problems}",
+ "fonti diverse citate: {n}, ne servono almeno {min}": "verschiedene zitierte Quellen: {n}, mindestens {min} nötig",
+ "il caporedattore AI non ha risposto: {error}": "der KI-Chefredakteur hat nicht geantwortet: {error}",
+ "non riscritto: {error}": "nicht neu geschrieben: {error}"
 }

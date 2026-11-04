@@ -2141,5 +2141,13 @@
  "Limiti": "Limites",
  "Ricerca della fonte primaria: {datum}": "Recherche de la source primaire : {datum}",
  "Ricerca delle fonti primarie": "Recherche des sources primaires",
- "Motivo:": "Motif :"
+ "Motivo:": "Motif :",
+ "la redazione automatica è spenta": "la rédaction automatique est éteinte",
+ "argomento da evitare: {word}": "sujet à éviter : {word}",
+ "alcune frasi non superano i controlli sulle fonti: {detail}": "certaines phrases ne passent pas les contrôles des sources : {detail}",
+ "alcune frasi non superano i controlli sulle fonti": "certaines phrases ne passent pas les contrôles des sources",
+ "frase {n}: {problems}": "phrase {n} : {problems}",
+ "fonti diverse citate: {n}, ne servono almeno {min}": "sources différentes citées : {n}, il en faut au moins {min}",
+ "il caporedattore AI non ha risposto: {error}": "le rédacteur en chef IA n'a pas répondu : {error}",
+ "non riscritto: {error}": "pas réécrit : {error}"
 }
