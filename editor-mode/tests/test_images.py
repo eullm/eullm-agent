@@ -191,3 +191,12 @@ def test_flux_on_openrouter_gets_no_quality_and_a_refused_option_is_dropped():
     first, second = (json.loads(c.request.content) for c in route.calls)
     assert "quality" not in first and "resolution" in first
     assert set(second) == {"model", "prompt", "n", "aspect_ratio"} and content == jpeg and mime == "image/jpeg"
+
+
+def test_covers_are_photographs_not_renders():
+    """2026-11-04: covers "a bit too cartoon". Both styles ask for a scene a
+    photographer could shoot, and say no to renders."""
+    for style in ("impact", "editorial"):
+        system = images.system_for({"settings": {"cover_style": style}})
+        assert "real photograph" in system and "no 3D render" in system and "could actually have shot" in system
+        assert "saturated palette" not in system and "illustration," not in system.split("never an")[0]
