@@ -12,6 +12,8 @@ new page at once with IndexNow; Google has no such call for articles.
 
 from __future__ import annotations
 
+import math
+
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -121,6 +123,8 @@ def remember_published(s, tenant_id: str, site_id: int) -> int:
 # A word in more than this share of the site's titles says little on its
 # own ("intelligenza artificiale" on a site about AI).
 COMMON = 0.08
+# Share of the article's own weighted words a linked title must share.
+RELEVANCE = 0.3
 
 
 def site_links(s, site_id: int, title: str, keyphrase: str, limit: int = INTERNAL_LINKS) -> list[dict]:
@@ -138,16 +142,23 @@ def site_links(s, site_id: int, title: str, keyphrase: str, limit: int = INTERNA
     words = [set(tokens(r.title)) for r in rows]
     df: dict[str, int] = {}
     for w in words:
-        for t in w & terms:
+        for t in w:
             df[t] = df.get(t, 0) + 1
-    rare = {t for t, n in df.items() if len(rows) < 25 or n / len(rows) <= COMMON}
+    n = max(len(rows), 1)
+    rare = {t for t in terms if len(rows) < 25 or df.get(t, 0) / n <= COMMON}
+    # What each word says: the rarer in the site's titles, the more.
+    weight = {t: math.log(1 + n / (1 + df[t])) for t in terms if t in df}  # words the site's titles know
+    total = sum(weight.values()) or 1.0
     scored = []
     for i, (r, w) in enumerate(zip(rows, words, strict=True)):
         shared = terms & w
         if r.title.strip().lower() == title.strip().lower():
             continue
-        if shared & rare:
-            scored.append((-len(shared & rare), -len(shared), i, r.title, r.url))
+        # A rare word is the first filter; the link is worth it only if the
+        # shared words carry a real share of what the article is about.
+        relevance = sum(weight.get(t, 0) for t in shared) / total
+        if shared & rare and relevance >= RELEVANCE:
+            scored.append((-relevance, i, r.title, r.url))
     scored.sort()
     return [{"title": t, "url": u} for *_, t, u in scored[:limit]]
 

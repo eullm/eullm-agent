@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.28.34
+
+### Added
+
+- **Fonte primaria quando manca il dato centrale** (revisione esterna degli
+  articoli di aitoday.it: il comunicato Gimbe, l'annuncio OpenAI): prima di
+  scrivere, un controllo a basso costo dice se il fatto centrale (una cifra,
+  una decisione, un annuncio) viene da un documento che le fonti date
+  riportano solo di seconda mano. Se manca, la redazione segue i link della
+  notizia e la pagina iniziale dell'ente che l'ha pubblicata, legge al più
+  5 pagine e tiene un documento solo se un secondo controllo conferma ente,
+  argomento, data e che il testo dice davvero il dato. Il documento entra
+  come ORIGINALE e vince sui giornali. Non usa un motore di ricerca: il Core
+  legge pagine, e una pagina suggerita dal modello vale solo dopo la verifica.
+  Tetto di 40 chiamate al giorno per redazione, pagine già lette riutilizzate,
+  esito ricordato sulla proposta (una riscrittura non cerca di nuovo). Passo
+  "Ricerca delle fonti primarie" nei Consumi e instradabile.
+- **Refusi**: il caporedattore rilegge titolo, sottotitolo, titolo e
+  descrizione per i motori e corregge un refuso chiaro ("i Senato"), solo se
+  è un piccolo cambio (oltre il 20% è una riscrittura e non si applica).
+
+### Changed
+
+- **Proposte vicine**: lo stesso argomento non è la stessa notizia. Una
+  proposta con almeno una notizia che nessun articolo recente ha usato e un
+  titolo non quasi uguale è uno sviluppo nuovo e va avanti, anche se arriva
+  entro i due giorni. Restano in attesa solo la stessa storia raccontata di
+  nuovo (65% delle parole e almeno 4) o lo stesso argomento senza nulla di
+  nuovo (40% e notizie già usate).
+- **"Leggi anche"**: la parola rara è solo il primo filtro; i titoli
+  collegati devono condividere almeno il 30% del peso delle parole
+  dell'articolo (le più rare del sito pesano di più). L'analisi del sito
+  aggiorna i titoli già noti con quelli dal vivo.
+- **GitHub che sbaglia dal suo lato** (502, 500, 503, 504, limite): ogni
+  richiesta di scrittura della pubblicazione si ripete dopo una pausa (sono
+  tutte ripetibili senza danno); il merge no, ma prima di ripeterlo guarda se
+  la pull request è già unita. Se la pubblicazione fallisce comunque per un
+  errore del genere, riprova da sola due volte (dopo 30 e 120 secondi).
+
 ## 0.28.33
 
 ### Fixed

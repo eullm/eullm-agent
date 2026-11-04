@@ -47,6 +47,15 @@ class PublishError(RuntimeError):
     pass
 
 
+GITHUB_AGAIN = (30, 120)  # seconds before each new try of a publication GitHub failed on its side
+
+
+def _github_hiccup(e: Exception) -> bool:
+    if isinstance(e, httpx.TransportError):
+        return True
+    return isinstance(e, PublishError) and bool(re.search(r"^GitHub, .*: (429|500|502|503|504)\b", str(e)))
+
+
 def _public_addresses(host: str, port: int, resolver=None) -> list[str]:
     """Every address ``host`` resolves to, refusing if any is not public."""
     resolver = resolver or socket.getaddrinfo
@@ -382,7 +391,17 @@ class Publisher:
         secret = None
         try:
             secret = resolve_secret(db, target) if target.secret_env else None
-            ext_id, ext_url = getattr(self, f"_{target.kind}")(target, pub, cms_url, secret, image)
+            for pause in (*GITHUB_AGAIN, None):
+                try:
+                    ext_id, ext_url = getattr(self, f"_{target.kind}")(target, pub, cms_url, secret, image)
+                    break
+                except (PublishError, httpx.HTTPError) as e:
+                    # GitHub failing on its side: the whole publication, which GitHub's flow can repeat
+                    # (the branch and the pull request are found again), is tried once more after a pause.
+                    if target.kind != "github" or pause is None or not _github_hiccup(e):
+                        raise
+                    log.warning("GitHub hiccup publishing %s (%s): trying again in %s s", pub_id, e, pause)
+                    self.sleep(pause)
         except (PublishError, httpx.HTTPError, KeyError, ValueError) as e:
             msg = f"{type(e).__name__}: {e}"
             if secret:  # a token can sit in the request URL (Telegram)

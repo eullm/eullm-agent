@@ -2138,5 +2138,7 @@
  "riprende domani": "resumes tomorrow",
  "Articoli del mese": "Articles this month",
  "Notizie lette oggi": "News read today",
- "Limiti": "Limits"
+ "Limiti": "Limits",
+ "Ricerca della fonte primaria: {datum}": "Looking for the primary source: {datum}",
+ "Ricerca delle fonti primarie": "Search for primary sources"
 }
