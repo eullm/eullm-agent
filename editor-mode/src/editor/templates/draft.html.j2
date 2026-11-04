@@ -58,109 +58,6 @@
   </article>
 
   <div class="col-side">
-    <section class="card pad" aria-labelledby="h-checks">
-      <h2 id="h-checks">{{ _('Controlli automatici') }}</h2>
-      <ul class="checks">
-        {% for ch in checks %}
-        <li><span class="{{ 'up' if ch.ok else 'down' }}" aria-hidden="true">{{ '✓' if ch.ok else '✕' }}</span><span>{{ _(ch.label) }}{% if not ch.ok %} <span class="sr">{{ _('non superato') }}</span>{% endif %}</span></li>
-        {% endfor %}
-      </ul>
-      {% if flags %}
-      <div class="dashed">
-        <strong>{{ _('Frasi da rivedere') }}</strong>
-        {% for f in flags[:8] %}<span class="hint">«{{ f.text|truncate(90) }}»: {{ f.problems|map('flag')|join('; ') }}</span>{% endfor %}
-      </div>
-      {% endif %}
-    </section>
-
-    {% if sd %}
-    <section class="card pad" aria-labelledby="h-seo">
-      <h2 id="h-seo">{{ _('Google e risposte AI') }} · {{ seo_checks|selectattr('ok')|list|length }}/{{ seo_checks|length }}</h2>
-      <dl class="kv" style="margin: 0; display: grid; gap: 6px;">
-        <div><dt class="hint">{{ _('Frase chiave') }}</dt><dd>{{ sd.keyphrase or '–' }}</dd></div>
-        <div><dt class="hint">{{ _('Titolo per Google') }} ({{ (sd.title or '')|length }})</dt><dd>{{ sd.title or '–' }}</dd></div>
-        <div><dt class="hint">{{ _('Descrizione per Google') }} ({{ (sd.description or '')|length }})</dt><dd>{{ sd.description or '–' }}</dd></div>
-        <div><dt class="hint">{{ _('Indirizzo') }}</dt><dd><code>/{{ sd.slug }}</code></dd></div>
-        {% if sd.links %}<div><dt class="hint">{{ _('Link ad altri articoli del sito') }}</dt><dd>{% for x in sd.links %}<a href="{{ x.url }}" rel="noopener noreferrer" target="_blank">{{ x.title }}</a>{{ '; ' if not loop.last }}{% endfor %}</dd></div>{% endif %}
-      </dl>
-      <ul class="checks">
-        {% for ch in seo_checks %}
-        <li><span class="{{ 'up' if ch.ok else 'down' }}" aria-hidden="true">{{ '✓' if ch.ok else '✕' }}</span><span>{{ ch.label }}{% if not ch.ok %} <span class="sr">{{ _('non superato') }}</span>{% endif %}</span></li>
-        {% endfor %}
-      </ul>
-      <p class="hint">{{ _("Alla pubblicazione titolo, descrizione, indirizzo e dati strutturati (articolo, fonti, domande frequenti) vanno al sito insieme al testo.") }}</p>
-    </section>
-    {% endif %}
-
-    <section class="card pad" aria-labelledby="h-src">
-      <h2 id="h-src">{{ _('Fonti') }} · {{ sources|length }}</h2>
-      <p class="hint">{{ _('Clicca un numero nel testo per vedere da dove viene la frase.') }}</p>
-      <ol class="srclist">
-        {% for x in sources %}
-        <li id="src-{{ x.n }}"><span class="n">{{ x.n }}</span><div><a href="{{ x.url }}" rel="noopener noreferrer" target="_blank">{{ x.title }}</a><small class="hint">{{ x.source }}{% if x.published_at %} · {{ when(x.published_at, 'day') }}{% endif %}</small></div></li>
-        {% endfor %}
-      </ol>
-    </section>
-
-    {% if image or images_on %}
-    <section class="card pad" aria-labelledby="h-image">
-      <h2 id="h-image">{{ _('Immagine di copertina') }}</h2>
-      {% if image %}
-      <img src="/media/{{ image.token }}" alt="{{ image.alt }}" width="{{ image.width or 1344 }}" height="{{ image.height or 768 }}" style="width: 100%; height: auto; border-radius: 8px;">
-      <p class="hint">{{ _('Testo alternativo: {alt}', alt=image.alt) }}</p>
-      {% endif %}
-      {% if img_busy %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Immagine in preparazione') }}</span>
-      {% elif caller.can('editor') %}
-      <div class="row">
-        {% if images_on %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/image"><button class="btn sm" type="submit">{{ _('Rifai l\'immagine') if image else _('Crea l\'immagine') }}</button></form>{% endif %}
-        {% if image %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/image/delete"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
-      </div>
-      {% endif %}
-      {% if images_on and cover and cover.credits.enabled and not img_busy %}
-      <p class="hint">{% if cover.cost %}{{ _('Le copertine gratuite di questo articolo sono finite: una nuova costa {n} crediti (te ne restano {left}).', n=cover.cost, left=cover.credits.left) }}{% elif image %}{{ _('Ancora {n} nuove copertine gratuite per questo articolo, poi si pagano in crediti.', n=cover.free) }}{% endif %}</p>
-      {% endif %}
-      <p class="hint">{{ _("Disegnata per l'articolo, mai presa dalle notizie di origine (hanno i diritti dei loro editori). Alla pubblicazione va al sito come immagine in evidenza.") }}</p>
-    </section>
-    {% endif %}
-
-    <section class="card pad" aria-labelledby="h-langs">
-      <h2 id="h-langs">{{ _('Lingue') }}</h2>
-      {% if original %}
-      <div class="list-row">
-        <span>{{ langs.get(original.language, original.language or '–') }} · {{ _('originale') }}</span>
-        {% if original.id == d.id %}<span class="hint">{{ _('questa') }}</span>{% else %}<a href="/drafts/{{ original.id }}">{{ _('Apri') }}</a>{% endif %}
-      </div>
-      {% endif %}
-      {% for x in translations %}
-      <div class="list-row">
-        <span>{{ langs.get(x.language, x.language) }}</span>
-        {% set ts = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))}.get(x.status, ('', x.status)) %}
-        {% if x.id == d.id %}<span class="chip {{ ts[0] }}">{{ ts[1] }}</span>{% else %}<a class="chip {{ ts[0] }}" href="/drafts/{{ x.id }}">{{ ts[1] }}</a>{% endif %}
-      </div>
-      {% endfor %}
-      {% for code in wanted %}
-      <div class="list-row">
-        <span>{{ langs.get(code, code) }}</span>
-        {% if code in translating %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('In traduzione') }}</span>
-        {% elif caller.can('editor') and can_translate %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/translate"><input type="hidden" name="language" value="{{ code }}"><button class="btn sm" type="submit">{{ _('Traduci') }}</button></form>
-        {% else %}<span class="hint">{{ _('da tradurre') }}</span>{% endif %}
-      </div>
-      {% endfor %}
-      <p class="hint">{% if translations or wanted %}{{ _("Quando approvi l'originale, l'agente lo traduce da solo nelle altre lingue del sito. Ogni traduzione ha le stesse fonti e gli stessi controlli, si approva a parte e conta come un articolo del piano.") }}{% else %}{{ _('Il sito pubblica in una sola lingua. Le lingue in cui tradurre gli articoli approvati si scelgono in <a href="/site#h-languages">Sito e profilo</a>.') }}{% endif %}</p>
-    </section>
-
-    <section class="card pad" aria-labelledby="h-delivery">
-      <h2 id="h-delivery">{{ _('Consegna') }}</h2>
-      <div class="row" style="flex-wrap: wrap;">
-        <a class="btn sm" href="/drafts/{{ d.id }}/package.zip" download>{{ _('Scarica il pacchetto') }}</a>
-        <button class="btn sm" type="button" data-copy="body-html">{{ _('Copia HTML') }}</button>
-        <button class="btn sm" type="button" data-copy="body-md">{{ _('Copia Markdown') }}</button>
-      </div>
-      <textarea id="body-html" hidden readonly>{{ body_html }}</textarea>
-      <textarea id="body-md" hidden readonly>{{ d.body_md }}</textarea>
-      <p class="hint">{{ _("Il pacchetto ZIP contiene la pagina pronta (article.html), il testo da incollare nel CMS (body.html), il Markdown per i siti statici, l'immagine e i campi per Google (meta.json). «Copia HTML» copia il testo senza titolo, da incollare nell'editor del CMS in modalità codice.") }}{% if d.status != 'approved' %} {{ _('Prima di pubblicarla, approva la bozza.') }}{% endif %}</p>
-    </section>
-
     <section class="card pad" aria-labelledby="h-pub">
       <h2 id="h-pub">{{ _('Pubblicazione') }}</h2>
       {% for p in pubs %}
@@ -234,6 +131,111 @@
       <p class="hint">{{ _('Si può pubblicare dopo aver approvato la bozza.') }}</p>
       {% endif %}
     </section>
+
+    <section class="card pad" aria-labelledby="h-checks">
+      <h2 id="h-checks">{{ _('Controlli automatici') }}</h2>
+      <ul class="checks">
+        {% for ch in checks %}
+        <li><span class="{{ 'up' if ch.ok else 'down' }}" aria-hidden="true">{{ '✓' if ch.ok else '✕' }}</span><span>{{ _(ch.label) }}{% if not ch.ok %} <span class="sr">{{ _('non superato') }}</span>{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% if flags %}
+      <div class="dashed">
+        <strong>{{ _('Frasi da rivedere') }}</strong>
+        {% for f in flags[:8] %}<span class="hint">«{{ f.text|truncate(90) }}»: {{ f.problems|map('flag')|join('; ') }}</span>{% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    {% if sd %}
+    <section class="card pad" aria-labelledby="h-seo">
+      <h2 id="h-seo">{{ _('Google e risposte AI') }} · {{ seo_checks|selectattr('ok')|list|length }}/{{ seo_checks|length }}</h2>
+      <dl class="kv" style="margin: 0; display: grid; gap: 6px;">
+        <div><dt class="hint">{{ _('Frase chiave') }}</dt><dd>{{ sd.keyphrase or '–' }}</dd></div>
+        <div><dt class="hint">{{ _('Titolo per Google') }} ({{ (sd.title or '')|length }})</dt><dd>{{ sd.title or '–' }}</dd></div>
+        <div><dt class="hint">{{ _('Descrizione per Google') }} ({{ (sd.description or '')|length }})</dt><dd>{{ sd.description or '–' }}</dd></div>
+        <div><dt class="hint">{{ _('Indirizzo') }}</dt><dd><code>/{{ sd.slug }}</code></dd></div>
+        {% if sd.links %}<div><dt class="hint">{{ _('Link ad altri articoli del sito') }}</dt><dd>{% for x in sd.links %}<a href="{{ x.url }}" rel="noopener noreferrer" target="_blank">{{ x.title }}</a>{{ '; ' if not loop.last }}{% endfor %}</dd></div>{% endif %}
+      </dl>
+      <ul class="checks">
+        {% for ch in seo_checks %}
+        <li><span class="{{ 'up' if ch.ok else 'down' }}" aria-hidden="true">{{ '✓' if ch.ok else '✕' }}</span><span>{{ ch.label }}{% if not ch.ok %} <span class="sr">{{ _('non superato') }}</span>{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% if seo_checks|rejectattr('ok')|list %}<p class="hint">{{ _('Le voci con la croce non fermano la pubblicazione: aiutano Google e le risposte AI a trovare l\'articolo. Titolo, descrizione e frase chiave si correggono da Modifica.') }}</p>{% endif %}
+      <p class="hint">{{ _("Alla pubblicazione titolo, descrizione, indirizzo e dati strutturati (articolo, fonti, domande frequenti) vanno al sito insieme al testo.") }}</p>
+    </section>
+    {% endif %}
+
+    <section class="card pad" aria-labelledby="h-src">
+      <h2 id="h-src">{{ _('Fonti') }} · {{ sources|length }}</h2>
+      <p class="hint">{{ _('Clicca un numero nel testo per vedere da dove viene la frase.') }}</p>
+      <ol class="srclist">
+        {% for x in sources %}
+        <li id="src-{{ x.n }}"><span class="n">{{ x.n }}</span><div><a href="{{ x.url }}" rel="noopener noreferrer" target="_blank">{{ x.title }}</a><small class="hint">{{ x.source }}{% if x.published_at %} · {{ when(x.published_at, 'day') }}{% endif %}</small></div></li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    {% if image or images_on %}
+    <section class="card pad" aria-labelledby="h-image">
+      <h2 id="h-image">{{ _('Immagine di copertina') }}</h2>
+      {% if image %}
+      <img src="/media/{{ image.token }}" alt="{{ image.alt }}" width="{{ image.width or 1344 }}" height="{{ image.height or 768 }}" style="width: 100%; height: auto; border-radius: 8px;">
+      <p class="hint">{{ _('Testo alternativo: {alt}', alt=image.alt) }}</p>
+      {% endif %}
+      {% if img_busy %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Immagine in preparazione') }}</span>
+      {% elif caller.can('editor') %}
+      <div class="row">
+        {% if images_on %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/image"><button class="btn sm" type="submit">{{ _('Rifai l\'immagine') if image else _('Crea l\'immagine') }}</button></form>{% endif %}
+        {% if image %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/image/delete"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
+      </div>
+      {% endif %}
+      {% if images_on and cover and cover.credits.enabled and not img_busy %}
+      <p class="hint">{% if cover.cost %}{{ _('Le copertine gratuite di questo articolo sono finite: una nuova costa {n} crediti (te ne restano {left}).', n=cover.cost, left=cover.credits.left) }}{% elif image %}{{ _('Ancora {n} nuove copertine gratuite per questo articolo, poi si pagano in crediti.', n=cover.free) }}{% endif %}</p>
+      {% endif %}
+      <p class="hint">{{ _("Disegnata per l'articolo, mai presa dalle notizie di origine (hanno i diritti dei loro editori). Alla pubblicazione va al sito come immagine in evidenza.") }}</p>
+    </section>
+    {% endif %}
+
+    <section class="card pad" aria-labelledby="h-langs">
+      <h2 id="h-langs">{{ _('Lingue') }}</h2>
+      {% if original %}
+      <div class="list-row">
+        <span>{{ langs.get(original.language, original.language or '–') }} · {{ _('originale') }}</span>
+        {% if original.id == d.id %}<span class="hint">{{ _('questa') }}</span>{% else %}<a href="/drafts/{{ original.id }}">{{ _('Apri') }}</a>{% endif %}
+      </div>
+      {% endif %}
+      {% for x in translations %}
+      <div class="list-row">
+        <span>{{ langs.get(x.language, x.language) }}</span>
+        {% set ts = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))}.get(x.status, ('', x.status)) %}
+        {% if x.id == d.id %}<span class="chip {{ ts[0] }}">{{ ts[1] }}</span>{% else %}<a class="chip {{ ts[0] }}" href="/drafts/{{ x.id }}">{{ ts[1] }}</a>{% endif %}
+      </div>
+      {% endfor %}
+      {% for code in wanted %}
+      <div class="list-row">
+        <span>{{ langs.get(code, code) }}</span>
+        {% if code in translating %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('In traduzione') }}</span>
+        {% elif caller.can('editor') and can_translate %}<form class="inline" method="post" action="/ui/drafts/{{ d.id }}/translate"><input type="hidden" name="language" value="{{ code }}"><button class="btn sm" type="submit">{{ _('Traduci') }}</button></form>
+        {% else %}<span class="hint">{{ _('da tradurre') }}</span>{% endif %}
+      </div>
+      {% endfor %}
+      <p class="hint">{% if translations or wanted %}{{ _("Quando approvi l'originale, l'agente lo traduce da solo nelle altre lingue del sito. Ogni traduzione ha le stesse fonti e gli stessi controlli, si approva a parte e conta come un articolo del piano.") }}{% else %}{{ _('Il sito pubblica in una sola lingua. Le lingue in cui tradurre gli articoli approvati si scelgono in <a href="/site#h-languages">Sito e profilo</a>.') }}{% endif %}</p>
+    </section>
+
+    <section class="card pad" aria-labelledby="h-delivery">
+      <h2 id="h-delivery">{{ _('Consegna') }}</h2>
+      <div class="row" style="flex-wrap: wrap;">
+        <a class="btn sm" href="/drafts/{{ d.id }}/package.zip" download>{{ _('Scarica il pacchetto') }}</a>
+        <button class="btn sm" type="button" data-copy="body-html">{{ _('Copia HTML') }}</button>
+        <button class="btn sm" type="button" data-copy="body-md">{{ _('Copia Markdown') }}</button>
+      </div>
+      <textarea id="body-html" hidden readonly>{{ body_html }}</textarea>
+      <textarea id="body-md" hidden readonly>{{ d.body_md }}</textarea>
+      <p class="hint">{{ _("Il pacchetto ZIP contiene la pagina pronta (article.html), il testo da incollare nel CMS (body.html), il Markdown per i siti statici, l'immagine e i campi per Google (meta.json). «Copia HTML» copia il testo senza titolo, da incollare nell'editor del CMS in modalità codice.") }}{% if d.status != 'approved' %} {{ _('Prima di pubblicarla, approva la bozza.') }}{% endif %}</p>
+    </section>
+
   </div>
 </div>
 {% endif %}

@@ -30,8 +30,8 @@
   </div>
   {% if caller.can('owner') %}
   <div class="row">
-    <form class="inline" method="post" action="/ui/sites/{{ site.id }}/review"><button class="btn" type="submit">{{ _('Rianalizza ora') }}</button></form>
-    {% if shown %}<a class="btn" href="/site?edit=1">{{ _('Modifica il profilo') }}</a>{% endif %}
+    {% if shown %}<form class="inline" method="post" action="/ui/sites/{{ site.id }}/review"><button class="btn" type="submit">{{ _('Rianalizza ora') }}</button></form>
+    <a class="btn" href="/site?edit=1">{{ _('Modifica il profilo') }}</a>{% endif %}
   </div>
   {% endif %}
 </header>
@@ -57,7 +57,12 @@
       <span class="chip green">{{ _('Accesa') }}</span>
       <form class="inline" method="post" action="/ui/sites/{{ site.id }}/auto/stop"><button class="btn" type="submit">{{ _('Ferma subito') }}</button></form>
     </div>
-    {% else %}<span class="chip">{{ _('Spenta') }}</span>{% endif %}
+    {% else %}
+    <div class="row" style="align-items: center; gap: 8px;">
+      <span class="chip">{{ _('Spenta') }}</span>
+      {% if numbers.auto_allowed %}<button class="btn pri" type="submit" form="auto-rules" name="enabled" value="1" title="{{ _('Salva le regole qui sotto e accende la redazione automatica.') }}">{{ _('Accendi con queste regole') }}</button>{% endif %}
+    </div>
+    {% endif %}
   </div>
   {% if not a.enabled %}<p class="lead">{{ _("Il sito scrive e pubblica da solo: ogni ora sceglie le notizie migliori che rispettano le tue regole, scrive l'articolo con le fonti, fa la copertina, lo fa rileggere a un caporedattore AI e lo pubblica. Ogni articolo dice che è scritto dall'intelligenza artificiale senza revisione umana, come chiede l'AI Act.") }}</p>{% endif %}
   {% if a.enabled %}
@@ -78,23 +83,38 @@
 
 <section class="card pad" aria-labelledby="h-rules">
   <h2 id="h-rules">{{ _('Regole') }}</h2>
-  <form method="post" action="/ui/sites/{{ site.id }}/auto" style="display: flex; flex-direction: column; gap: 12px;">
+  <form method="post" action="/ui/sites/{{ site.id }}/auto" id="auto-rules" style="display: flex; flex-direction: column; gap: 12px;">
     <label class="field">{{ _('Contesto: di cosa parla il sito, per chi, con quale obiettivo') }}<textarea name="brief" rows="4" maxlength="4000" placeholder="{{ _('Es.: notizie dal mondo per lettori italiani curiosi; obiettivo: più lettori possibili, titoli che invogliano senza ingannare.') }}">{{ a.brief }}</textarea></label>
     <label class="field">{{ _('Rubriche, una per riga') }}<textarea name="sections" rows="4">{{ a.sections|join('\n') }}</textarea></label>
     <label class="field">{{ _('Direttive: come scrivere, cosa preferire') }}<textarea name="directives" rows="3" maxlength="4000">{{ a.directives }}</textarea></label>
     <label class="field">{{ _('Argomenti da non trattare mai, separati da virgola') }}<input name="avoid" value="{{ a.avoid|join(', ') }}"></label>
-    <div class="row" style="gap: 12px; flex-wrap: wrap;">
-      <label class="field">{{ _('Articoli al giorno') }}<input name="per_day" type="number" min="1" max="48" value="{{ a.per_day }}" style="width: 6em;" title="{{ _('Articoli pubblicati. Quelli scartati vengono sostituiti, fino al doppio dei tentativi al giorno.') }}"></label>
-      <label class="field">{{ _('Opportunità minima') }}<input name="min_opportunity" type="number" min="0" max="100" value="{{ a.min_opportunity|int }}" style="width: 6em;"></label>
-      <label class="field">{{ _('Fonti diverse minime') }}<input name="min_sources" type="number" min="1" max="3" value="{{ a.min_sources }}" style="width: 6em;"></label>
-      <label class="field" title="{{ _('Quota degli articoli del giorno pubblicati alla prima ora: prima si esce, prima ci si posiziona. Il resto si distribuisce nella giornata.') }}">{{ _('Al mattino (%)') }}<input name="morning_share" type="number" min="0" max="100" value="{{ a.morning_share }}" style="width: 6em;"></label>
-      <label class="field" title="{{ _('Se una notizia importante arriva a articoli del giorno finiti, ne pubblica fino a questo numero portandoli avanti dal giorno dopo: domani ne scrive altrettanti in meno. Gratis.') }}">{{ _('Anticipi dal giorno dopo') }}<input name="borrow" type="number" min="0" max="20" value="{{ a.borrow }}" style="width: 6em;"></label>
-      <label class="field" title="{{ _('Articoli in più al giorno, oltre agli anticipi, pagati con i crediti. 0 = mai.') }}">{{ _('Extra con i crediti') }}<input name="extra_credits" type="number" min="0" max="20" value="{{ a.extra_credits }}" style="width: 6em;"></label>
-      <label class="field" title="{{ _('Solo le notizie con almeno questa opportunità escono oltre gli articoli del giorno.') }}">{{ _('Opportunità minima per gli extra') }}<input name="extra_min_opportunity" type="number" min="0" max="100" value="{{ a.extra_min_opportunity|int }}" style="width: 6em;"></label>
-      <label class="field">{{ _('Dalle ore') }}<input name="start" type="number" min="0" max="23" value="{{ a.hours[0] }}" style="width: 5em;"></label>
-      <label class="field">{{ _('Alle ore') }}<input name="end" type="number" min="1" max="24" value="{{ a.hours[1] }}" style="width: 5em;"></label>
-      <label class="field">{{ _('Destinazione') }}<select name="target_id"><option value="">{{ _('La prima adatta') }}</option>{% for x in numbers.auto_targets %}<option value="{{ x.id }}" {% if a.target_id == x.id %}selected{% endif %}>{{ x.name }} ({{ x.kind }})</option>{% endfor %}</select></label>
-      <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (own_language or site.language or 'it')[:2] == k %}selected{% endif %}>{{ k|langname }}</option>{% endfor %}</select></label>
+    <div class="form-stack" style="max-width: none; margin: 4px 0;">
+      <fieldset class="group">
+        <legend>{{ _('Quanti articoli') }}</legend>
+        <div class="row fields top">
+          <label class="field">{{ _('Articoli al giorno') }}<input name="per_day" type="number" min="1" max="48" value="{{ a.per_day }}"><span class="hint">{{ _('pubblicati; gli scartati si sostituiscono') }}</span></label>
+          <label class="field">{{ _('Al mattino (%)') }}<input name="morning_share" type="number" min="0" max="100" value="{{ a.morning_share }}"><span class="hint">{{ _('quanti escono alla prima ora') }}</span></label>
+          <label class="field">{{ _('Anticipi dal giorno dopo') }}<input name="borrow" type="number" min="0" max="20" value="{{ a.borrow }}"><span class="hint">{{ _('per una notizia forte a giornata finita; gratis') }}</span></label>
+          <label class="field">{{ _('Extra con i crediti') }}<input name="extra_credits" type="number" min="0" max="20" value="{{ a.extra_credits }}"><span class="hint">{{ _('in più al giorno, pagati con i crediti; 0 = mai') }}</span></label>
+          <label class="field">{{ _('Opportunità minima per gli extra') }}<input name="extra_min_opportunity" type="number" min="0" max="100" value="{{ a.extra_min_opportunity|int }}"><span class="hint">{{ _('solo notizie molto forti escono oltre il giorno') }}</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Quali notizie') }}</legend>
+        <div class="row fields top">
+          <label class="field">{{ _('Opportunità minima') }}<input name="min_opportunity" type="number" min="0" max="100" value="{{ a.min_opportunity|int }}"><span class="hint">{{ _('su 100: quanto la notizia conviene al sito') }}</span></label>
+          <label class="field">{{ _('Fonti diverse minime') }}<input name="min_sources" type="number" min="1" max="3" value="{{ a.min_sources }}"><span class="hint">{{ _('quante fonti devono parlarne') }}</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Quando e dove') }}</legend>
+        <div class="row fields">
+          <label class="field">{{ _('Dalle ore') }}<input name="start" type="number" min="0" max="23" value="{{ a.hours[0] }}"></label>
+          <label class="field">{{ _('Alle ore') }}<input name="end" type="number" min="1" max="24" value="{{ a.hours[1] }}"></label>
+          <label class="field">{{ _('Destinazione') }}<select name="target_id"><option value="">{{ _('La prima adatta') }}</option>{% for x in numbers.auto_targets %}<option value="{{ x.id }}" {% if a.target_id == x.id %}selected{% endif %}>{{ x.name }} ({{ x.kind }})</option>{% endfor %}</select></label>
+          <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (own_language or site.language or 'it')[:2] == k %}selected{% endif %}>{{ k|langname }}</option>{% endfor %}</select></label>
+        </div>
+      </fieldset>
     </div>
     {% set am = numbers.auto_month %}
     {% if am %}
@@ -112,7 +132,6 @@
     </select></label>
     <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="credit" value="1" {% if a.credit %}checked{% endif %}> {{ _('Sotto ogni articolo il link a Redazia') }}</label>
     <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="enabled" value="1" {% if a.enabled %}checked{% endif %}> {{ _('Accendi la redazione automatica') }}</label>
-    {% if not numbers.auto_allowed %}<p class="hint">{{ _('Il tuo piano non comprende la redazione automatica: le regole restano salvate e partono quando passi a un piano che la comprende.') }} <a href="/plan">{{ _('Vedi i piani') }}</a></p>{% endif %}
     {% if not numbers.auto_allowed %}<p class="hint">{{ _('Il tuo piano non comprende la redazione automatica: le regole restano salvate e partono quando passi a un piano che la comprende.') }} <a href="/plan">{{ _('Vedi i piani') }}</a></p>{% endif %}
     <p class="hint">{{ _("Il caporedattore AI ferma sempre: accuse non confermate contro persone o aziende, privati e minori, consigli medici, legali o finanziari, odio, violenza descritta nei dettagli, voci date per certe, titoli che promettono ciò che l'articolo non dice.") }}</p>
     <div class="row">
@@ -351,7 +370,32 @@
   </div>
 </section>
 {% else %}
-<section class="card pad"><h2>{{ _('Profilo in preparazione') }}</h2><p class="lead">{{ _("L'analisi del sito non ha ancora prodotto un profilo. Torna tra poco o rianalizza.") }}</p></section>
+<section class="card pad" aria-labelledby="h-prep">
+  {% set ps = (prep or {}).get('state') %}
+  {% if ps == 'failed' %}
+  <h2 id="h-prep">{{ _('Profilo non creato') }}</h2>
+  <p class="error" style="margin: 0;">{{ _("L'analisi del sito non è riuscita: {why}", why=(prep.error or _('motivo non registrato'))|problem) }}</p>
+  <p class="hint">{{ _("Rianalizza quando il sito risponde. Se ha pochi articoli, scrivi tu di cosa parla in Redazione automatica › Crea il profilo dal contesto.") }}</p>
+  {% elif ps == 'running' %}
+  <h2 id="h-prep">{{ _('Profilo in preparazione') }}</h2>
+  <p class="lead">{{ _('Analisi in corso') }}{% if prep.step %}: {{ prep.step }}{% endif %}. {{ _('Di solito bastano pochi minuti: la pagina si aggiorna da sola a fine lavoro.') }}</p>
+  {% elif ps == 'queued' %}
+  <h2 id="h-prep">{{ _('Profilo in preparazione') }}</h2>
+  <p class="lead">{{ _("Analisi in coda: parte appena finiscono i lavori già avviati (due alla volta per redazione).") }}</p>
+  {% elif ps == 'done' %}
+  <h2 id="h-prep">{{ _('Profilo non creato') }}</h2>
+  <p class="lead">{{ _("L'analisi è finita senza un profilo: il sito ha troppo poco da leggere. Scrivi tu di cosa parla in Redazione automatica › Crea il profilo dal contesto, oppure rianalizza dopo aver pubblicato qualche articolo.") }}</p>
+  {% else %}
+  <h2 id="h-prep">{{ _('Profilo da creare') }}</h2>
+  <p class="lead">{{ _("Nessuna analisi avviata per questo sito. Avviala qui: legge fino a 25 articoli e ne ricava settore, pubblico, temi e tono.") }}</p>
+  {% endif %}
+  {% if caller.can('owner') and ps not in ('running', 'queued') %}
+  <div class="row">
+    <form class="inline" method="post" action="/ui/sites/{{ site.id }}/review"><button class="btn pri" type="submit">{{ _('Analizza il sito') if ps == 'none' else _('Rianalizza ora') }}</button></form>
+    <a class="btn" href="/site?tab=auto#h-rules">{{ _('Crea il profilo dal contesto') }}</a>
+  </div>
+  {% endif %}
+</section>
 {% endif %}
 {% endif %}
 {% if tab == 'publish' %}

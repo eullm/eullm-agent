@@ -8,7 +8,7 @@
 {% include "_style.html.j2" %}
 </head>
 <body>
-{% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'items': _('Notizie oggi'), 'drafts': _('Bozze nel mese'), 'llm_cost': _('Costo modello nel mese')} %}
+{% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'items': _('Notizie oggi'), 'drafts': _('Articoli del mese'), 'llm_cost': _('Costo modello nel mese')} %}
 <div class="shell">
 {% include "_admin_nav.html.j2" %}
 <main class="main">
@@ -46,43 +46,66 @@
   {% if view == 'redazioni' %}
 {% with page="console" %}{% include "_help.html.j2" %}{% endwith %}
   {% if rooms %}
+  {% set states = {} %}
+  {% for r in rooms %}{% set sub = subs.get(r.tenant_id) %}{% set _ = states.update({r.tenant_id: 'stopped' if r.active is sameas false or r.hold == 'billing' else 'none' if not sub else 'trial' if sub.status == 'trialing' else 'paying' if sub.status == 'active' else 'stopped'}) %}{% endfor %}
   <section class="card" aria-label="{{ _('Redazioni') }}">
-    <div class="pad" style="padding-bottom: 0;">
+    <div class="pad" style="padding-bottom: 0; display: flex; flex-direction: column; gap: 12px;">
       <input type="search" id="room-filter" class="search" placeholder="{{ _('Cerca per nome, id, piano o stato') }}" aria-label="{{ _('Cerca per nome, id, piano o stato') }}" autocomplete="off">
+      <nav class="tabs" id="room-states" aria-label="{{ _('Mostra') }}">
+        {% for key, label in [('', _('Tutte')), ('paying', _('Paganti')), ('trial', _('In prova')), ('stopped', _('Ferme o sospese')), ('none', _('Senza abbonamento'))] %}
+        {% set n = states.values()|select('equalto', key)|list|length if key else rooms|length %}
+        {% if n or not key %}<a href="#" data-state="{{ key }}" {% if not key %}class="on" aria-current="true"{% endif %}>{{ label }} <span class="hint">{{ n }}</span></a>{% endif %}
+        {% endfor %}
+      </nav>
     </div>
-    <div class="pad" style="overflow-x: auto;">
-    <table class="tbl rooms">
-      <thead><tr><th>{{ _('Redazione') }}</th><th>{{ _('Abbonamento') }}</th><th class="num">{{ _('Siti') }}</th><th class="num">{{ _('Bozze nel mese') }}</th><th class="num">{{ _('Costo modello nel mese') }}</th><th>{{ _('Dal') }}</th><th></th></tr></thead>
+    <div class="pad">
+    <table class="tbl rooms cards">
+      <thead><tr><th>{{ _('Redazione') }}</th><th>{{ _('Abbonamento') }}</th><th class="num">{{ _('Siti') }}</th><th class="num">{{ _('Articoli del mese') }}</th><th class="num" title="{{ _('Prezzo del piano al mese, a listino, meno il costo del modello nel mese') }}">{{ _('Margine nel mese') }}</th><th>{{ _('Dal') }}</th><th></th></tr></thead>
       <tbody>
       {% for r in rooms %}
       {% set sub = subs.get(r.tenant_id) %}
-      <tr data-find="{{ (r.name ~ ' ' ~ r.tenant_id ~ ' ' ~ (sub.plan_name if sub else r.plan or '') ~ ' ' ~ (sub.label if sub else ''))|lower }}">
-        <td><a class="room-name" href="/admin/newsrooms/{{ r.tenant_id }}">{{ r.name }}</a><br><span class="hint num">{{ r.tenant_id }}</span></td>
-        <td>
-          {% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}</span>{% else %}<span class="hint">{{ plan_names.get(r.plan, r.plan) or '–' }}</span>{% endif %}
-          {% if r.hold == 'billing' %}<span class="chip amber">{{ _('Ferma') }}</span>{% elif r.active is sameas false %}<span class="chip red">{{ _('Sospesa') }}</span>{% endif %}
+      {% set us = r.usage.get('sites') or {} %}{% set ud = r.usage.get('drafts') or {} %}{% set uc = r.usage.get('llm_cost') or {} %}
+      <tr data-state="{{ states[r.tenant_id] }}" data-find="{{ (r.name ~ ' ' ~ r.tenant_id ~ ' ' ~ (sub.plan_name if sub else '') ~ ' ' ~ (sub.label if sub else ''))|lower }}">
+        <td data-label="{{ _('Redazione') }}"><a class="room-name" href="/admin/newsrooms/{{ r.tenant_id }}">{{ r.name }}</a><br><span class="hint num">{{ r.tenant_id }}</span></td>
+        <td data-label="{{ _('Abbonamento') }}">
+          {% if r.active is sameas false %}<span class="chip red">{{ _('Sospesa') }}</span>
+          {% elif r.hold == 'billing' %}<span class="chip amber">{{ _('Ferma: da pagare') }}</span>{% endif %}
+          {% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}</span>{% if sub.status == 'trialing' and sub.days_left is not none %}<br><span class="hint">{{ _('ancora {n} giorni', n=sub.days_left) if sub.days_left != 1 else _('ancora 1 giorno') }}</span>{% endif %}
+          {% else %}<span class="hint">{{ _('nessun abbonamento') }}</span>{% endif %}
         </td>
-        {% set us = r.usage.get('sites') or {} %}{% set ud = r.usage.get('drafts') or {} %}{% set uc = r.usage.get('llm_cost') or {} %}
-        <td class="num">{{ (us.used or 0)|int }}{% if us.limit is not none and us.limit %} / {{ us.limit|int }}{% endif %}</td>
-        <td class="num">{{ (ud.used or 0)|int }}{% if ud.limit is not none and ud.limit %} / {{ ud.limit|int }}{% endif %}</td>
-        <td class="num">€ {{ (uc.used or 0)|num }}</td>
-        <td class="hint num">{{ r.created_at.strftime('%d/%m/%Y') if r.created_at else '–' }}</td>
-        <td><span class="row" style="justify-content: flex-end; flex-wrap: nowrap;"><a class="btn sm" href="/admin/newsrooms/{{ r.tenant_id }}">{{ _('Apri') }}</a><a class="btn sm" href="/admin/enter/{{ r.tenant_id }}">{{ _('Entra') }}</a></span></td>
+        <td class="num" data-label="{{ _('Siti') }}">{{ (us.used or 0)|int }}{% if us.limit is not none and us.limit %} / {{ us.limit|int }}{% endif %}</td>
+        <td class="num" data-label="{{ _('Articoli del mese') }}">{{ (ud.used or 0)|int }}{% if ud.limit is not none and ud.limit %} / {{ ud.limit|int }}{% endif %}</td>
+        <td class="num" data-label="{{ _('Margine nel mese') }}">{% set income = (sub.monthly_cents or 0) / 100 if sub else 0 %}{% set gain = income - (uc.used or 0) %}<span {% if gain < 0 %}style="color: var(--red);"{% endif %}>€ {{ gain|num }}</span><br><span class="hint">{{ _('{income} − modello {cost}', income=income|num, cost=(uc.used or 0)|num) }}</span></td>
+        <td class="hint num" data-label="{{ _('Dal') }}">{{ r.created_at.strftime('%d/%m/%Y') if r.created_at else '–' }}</td>
+        <td><span class="row" style="justify-content: flex-end; flex-wrap: nowrap;"><a class="btn sm" href="/admin/newsrooms/{{ r.tenant_id }}">{{ _('Scheda') }}</a><a class="btn sm ghost" href="/admin/enter/{{ r.tenant_id }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a></span></td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
     <p class="empty" id="room-none" hidden>{{ _('Nessuna redazione corrisponde alla ricerca.') }}</p>
+    <p class="hint">{{ _('Il margine è il prezzo del piano al mese, a listino (un piano annuale diviso per dodici, zero in prova), meno il costo del modello nel mese.') }}</p>
     </div>
   </section>
   <script>
   (function () {
-    var box = document.getElementById('room-filter'), none = document.getElementById('room-none');
+    var box = document.getElementById('room-filter'), none = document.getElementById('room-none'), state = '';
     var rows = Array.prototype.slice.call(document.querySelectorAll('table.rooms tbody tr'));
-    box.addEventListener('input', function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#room-states a'));
+    function show() {
       var q = box.value.trim().toLowerCase(), shown = 0;
-      rows.forEach(function (tr) { var on = !q || tr.dataset.find.indexOf(q) >= 0; tr.hidden = !on; if (on) shown++; });
+      rows.forEach(function (tr) {
+        var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!state || tr.dataset.state === state);
+        tr.hidden = !on; if (on) shown++;
+      });
       none.hidden = shown > 0;
+    }
+    box.addEventListener('input', show);
+    tabs.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault(); state = a.dataset.state;
+        tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+        show();
+      });
     });
   })();
   </script>
@@ -98,13 +121,15 @@
     <div class="card-head">
       <div style="display: flex; flex-direction: column; gap: 2px;">
         <h2 id="h-{{ r.tenant_id }}">{{ r.name }}</h2>
-        <span class="hint"><span class="num">{{ r.tenant_id }}</span> · {{ _('piano {plan}', plan=plan_names.get(r.plan, r.plan) or '–') }} · {{ r.members }} {{ _('persona') if r.members == 1 else _('persone') }}{% if r.external_ref %} · {{ _('rif.') }} <span class="num">{{ r.external_ref }}</span>{% endif %} · {{ _('dal {date}', date=r.created_at.strftime('%d/%m/%Y') if r.created_at else '–') }}</span>
+        {% set sub = subs.get(r.tenant_id) %}
+        <span class="hint"><span class="num">{{ r.tenant_id }}</span> · {% if sub %}{{ _('piano {plan}', plan=sub.plan_name) }}{% else %}{{ _('nessun abbonamento') }}{% endif %} · {{ r.members }} {{ _('persona') if r.members == 1 else _('persone') }}{% if r.external_ref %} · {{ _('rif.') }} <span class="num">{{ r.external_ref }}</span>{% endif %} · {{ _('dal {date}', date=r.created_at.strftime('%d/%m/%Y') if r.created_at else '–') }}</span>
       </div>
       <div class="row">
-        {% set sub = subs.get(r.tenant_id) %}
-        {% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}{% if sub.days_left is not none and sub.status != 'expired' %} · {{ _('{n} gg', n=sub.days_left) }}{% endif %}</span>{% endif %}
-        {% if r.hold == 'billing' %}<span class="chip amber">{{ _('Ferma: piano da pagare') }}</span>{% elif r.active is sameas false %}<span class="chip red">{{ _('Sospesa') }}</span>{% else %}<span class="chip green">{{ _('Attiva') }}</span>{% endif %}
-        <a class="btn sm" href="/admin/enter/{{ r.tenant_id }}">{{ _('Entra') }}</a>
+        {% if r.active is sameas false %}<span class="chip red" title="{{ _('Le persone non entrano e il lavoro programmato è fermo; i dati restano.') }}">{{ _('Sospesa') }}</span>
+        {% elif r.hold == 'billing' %}<span class="chip amber" title="{{ _('Lavora di nuovo appena il piano è pagato.') }}">{{ _('Ferma: piano da pagare') }}</span>
+        {% elif sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}{% if sub.days_left is not none and sub.status != 'expired' %} · {{ _('{n} gg', n=sub.days_left) }}{% endif %}</span>
+        {% else %}<span class="chip">{{ _('Nessun abbonamento') }}</span>{% endif %}
+        <a class="btn sm ghost" href="/admin/enter/{{ r.tenant_id }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a>
         <form class="inline" method="post" action="/admin/newsrooms/{{ r.tenant_id }}/active">
           <input type="hidden" name="active" value="{{ '1' if r.active is sameas false else '0' }}">
           <button class="btn sm" type="submit">{{ _('Riattiva') if r.active is sameas false else _('Sospendi') }}</button>
@@ -122,6 +147,34 @@
         <span class="num" style="text-align: right;">{% if what == 'llm_cost' %}€ {{ (u.used or 0)|num }}{% if u.limit is not none %} / {{ u.limit|num(0) }}{% endif %}{% else %}{{ (u.used or 0)|int }}{% if u.limit is not none %} / {{ u.limit|int }}{% endif %}{% endif %}</span>
       </div>
       {% endfor %}
+      {% set uc = r.usage.get('llm_cost') or {} %}{% set income = (sub.monthly_cents or 0) / 100 if sub else 0 %}
+      <p class="hint" style="margin: 6px 0 0;">{{ _('Margine nel mese: € {gain} (piano € {income} meno modello € {cost}).', gain=(income - (uc.used or 0))|num, income=income|num, cost=(uc.used or 0)|num) }}</p>
+      {% if work %}
+      <h3 style="margin: 18px 0 6px;">{{ _('Siti') }}</h3>
+      {% if work.sites %}
+      <table class="tbl cards" style="width: 100%;">
+        <thead><tr><th>{{ _('Sito') }}</th><th>{{ _('Profilo') }}</th><th>{{ _('Redazione automatica') }}</th><th class="num">{{ _('Oggi') }}</th></tr></thead>
+        <tbody>
+        {% for w in work.sites %}
+        <tr>
+          <td data-label="{{ _('Sito') }}">{{ w.name }}{% if w.name != w.domain %}<small>{{ w.domain }}</small>{% endif %}</td>
+          <td data-label="{{ _('Profilo') }}">{% if w.profile == 'approved' %}<span class="chip green">{{ _('Approvato') }}</span>{% elif w.profile == 'draft' %}<span class="chip amber">{{ _('Da approvare') }}</span>{% else %}<span class="chip">{{ _('Non ancora fatto') }}</span>{% endif %}</td>
+          <td data-label="{{ _('Redazione automatica') }}">{% if w.auto %}<span class="chip teal">{{ _('Accesa') }}</span> <span class="hint">{{ _('{n} articoli al giorno', n=w.per_day) }}</span>{% else %}<span class="hint">{{ _('Spenta') }}</span>{% endif %}</td>
+          <td class="num" data-label="{{ _('Oggi') }}">{% if w.auto %}{{ _('{p} pubblicati, {d} scartati, {h} fermati', p=w.published, d=w.discarded, h=w.held) }}{% else %}–{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="hint">{{ _('Nessun sito: il direttore lo aggiunge da Primi passi.') }}</p>
+      {% endif %}
+      {% if work.failed %}
+      <h3 style="margin: 18px 0 6px;">{{ _('Lavori falliti negli ultimi 7 giorni') }}</h3>
+      {% for j in work.failed %}
+      <div class="list-row"><span>{{ j.what }}{% if j.subject %} <span class="hint">{{ j.subject }}</span>{% endif %}<small style="color: var(--red);">{{ (j.error or '')|problem|truncate(160) }}</small></span><span class="hint num">{{ (j.finished_at or j.started_at).strftime('%d/%m %H:%M') if (j.finished_at or j.started_at) else '' }}</span></div>
+      {% endfor %}
+      {% endif %}
+      {% endif %}
       <details class="act" data-tone="green" id="{{ here }}--sub" {% if notice_at == here ~ '--sub' %}open{% endif %}>
         <summary><span class="ico" aria-hidden="true">€</span>{{ _('Abbonamento') }}<span class="sub">{% if sub %}{{ sub.plan_name }}, {{ sub.label|lower }}{% if sub.current_period_end %}, {{ _('pagato fino al {date}', date=sub.current_period_end.strftime('%d/%m/%Y')) }}{% elif sub.trial_ends_at %}, {{ _('prova fino al {date}', date=sub.trial_ends_at.strftime('%d/%m/%Y')) }}{% endif %}{% if sub.provider == 'mollie' %} (Mollie){% elif sub.provider == 'reseller' %} ({{ _('rivenditore') }}){% endif %}{% endif %}</span></summary>
         <form method="post" action="/admin/subscriptions/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">
@@ -302,21 +355,32 @@
     <div class="card-head"><h2 id="h-customers" class="sr">{{ _('Clienti') }}</h2><span class="hint">{{ _('1 cliente') if customers|length == 1 else _('{n} clienti', n=customers|length) }}</span></div>
     {% if notice and notice_at == 'clienti' %}<p class="notice" role="status" style="margin: 12px 16px 0;">{{ notice }}</p>{% endif %}
     {% if customers %}
-    <div class="pad" style="overflow-x: auto;">
-    <table class="tbl">
-      <thead><tr><th>{{ _('Cliente') }}</th><th>{{ _('Fiscale') }}</th><th>{{ _('Indirizzo') }}</th><th>{{ _('Redazioni') }}</th><th>{{ _('Rivenditore') }}</th></tr></thead>
+    {% set kinds = {} %}
+    {% for c in customers %}{% set st = c.newsrooms|map(attribute='status')|list %}{% set _ = kinds.update({c.id: 'paying' if 'active' in st else 'trial' if 'trialing' in st else 'none' if not c.newsrooms else 'stopped'}) %}{% endfor %}
+    <div class="pad" style="padding-bottom: 0; display: flex; flex-direction: column; gap: 12px;">
+      <input type="search" id="cust-filter" class="search" placeholder="{{ _('Cerca per nome, email, P.IVA, città o redazione') }}" aria-label="{{ _('Cerca per nome, email, P.IVA, città o redazione') }}" autocomplete="off">
+      <nav class="tabs" id="cust-kinds" aria-label="{{ _('Mostra') }}">
+        {% for key, label in [('', _('Tutti')), ('paying', _('Paganti')), ('trial', _('In prova')), ('stopped', _('Scaduti o fermi')), ('none', _('Senza redazione'))] %}
+        {% set n = kinds.values()|select('equalto', key)|list|length if key else customers|length %}
+        {% if n or not key %}<a href="#" data-kind="{{ key }}" {% if not key %}class="on" aria-current="true"{% endif %}>{{ label }} <span class="hint">{{ n }}</span></a>{% endif %}
+        {% endfor %}
+        {% if reseller_names %}<select id="cust-seller" aria-label="{{ _('Rivenditore') }}" style="min-height: 36px; border-radius: 18px; padding: 0 12px; border: 1px solid #C9CDC7; background: var(--surface); font: 500 13px var(--sans);"><option value="">{{ _('Diretti e rivenditori') }}</option><option value="0">{{ _('Solo diretti') }}</option>{% for rid, rname in reseller_names.items() %}<option value="{{ rid }}">{{ rname }}</option>{% endfor %}</select>{% endif %}
+      </nav>
+    </div>
+    <div class="pad">
+    <table class="tbl cards customers">
+      <thead><tr><th>{{ _('Cliente') }}</th><th>{{ _('Fiscale') }}</th><th>{{ _('Indirizzo') }}</th><th>{{ _('Redazioni') }}</th><th>{{ _('Rivenditore') }}</th><th></th></tr></thead>
       <tbody>
       {% for c in customers %}
-      <tr>
-        <td><strong>{{ c.name }}</strong><br><span class="hint">{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %}</span>{% if c.external_ref %}<br><span class="hint">{{ _('rif.') }} <span class="num">{{ c.external_ref }}</span></span>{% endif %}</td>
-        <td class="hint">{% if c.vat_number %}{{ _('P.IVA') }} {{ c.vat_number }}<br>{% endif %}{% if c.tax_code %}{{ _('CF') }} {{ c.tax_code }}<br>{% endif %}{% if c.sdi_code %}SDI {{ c.sdi_code }}<br>{% endif %}{% if c.pec %}PEC {{ c.pec }}{% endif %}</td>
-        <td class="hint">{{ c.address }}{% if c.city %}<br>{{ c.postal_code }} {{ c.city }}{% if c.province %} ({{ c.province }}){% endif %}{% endif %}<br>{{ c.country }}</td>
-        <td>{% for n in c.newsrooms %}<div>{{ n.name }} <span class="hint">{{ plan_names.get(n.plan_code, n.plan_code) or '–' }} · {{ _(statuses[n.status]) if n.status in statuses else '–' }}</span></div>{% else %}<span class="hint">{{ _('nessuna') }}</span>{% endfor %}</td>
-        <td class="hint">{{ reseller_names.get(c.reseller_id) or _('diretto') }}</td>
+      <tr class="cust" data-kind="{{ kinds[c.id] }}" data-seller="{{ c.reseller_id or 0 }}" data-find="{{ (c.name ~ ' ' ~ c.email ~ ' ' ~ (c.vat_number or '') ~ ' ' ~ (c.tax_code or '') ~ ' ' ~ (c.city or '') ~ ' ' ~ (c.newsrooms|map(attribute='name')|join(' ')))|lower }}">
+        <td data-label="{{ _('Cliente') }}"><strong>{{ c.name }}</strong><br><span class="hint">{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %}</span>{% if c.external_ref %}<br><span class="hint">{{ _('rif.') }} <span class="num">{{ c.external_ref }}</span></span>{% endif %}</td>
+        <td class="hint" data-label="{{ _('Fiscale') }}">{% if c.vat_number %}{{ _('P.IVA') }} {{ c.vat_number }}<br>{% endif %}{% if c.tax_code %}{{ _('CF') }} {{ c.tax_code }}<br>{% endif %}{% if c.sdi_code %}SDI {{ c.sdi_code }}<br>{% endif %}{% if c.pec %}PEC {{ c.pec }}{% endif %}</td>
+        <td class="hint" data-label="{{ _('Indirizzo') }}">{{ c.address }}{% if c.city %}<br>{{ c.postal_code }} {{ c.city }}{% if c.province %} ({{ c.province }}){% endif %}{% endif %}<br>{{ c.country }}</td>
+        <td data-label="{{ _('Redazioni') }}">{% for n in c.newsrooms %}<div><a href="/admin/newsrooms/{{ n.tenant_id }}">{{ n.name }}</a> <span class="hint">{% if n.plan_code %}{{ plan_names.get(n.plan_code, n.plan_code) }} · {{ _(statuses[n.status]) if n.status in statuses else n.status }}{% else %}{{ _('nessun abbonamento') }}{% endif %}</span>{% if payments.get(n.tenant_id) %} · <a class="hint" href="/admin/newsrooms/{{ n.tenant_id }}#r-{{ n.tenant_id }}--pay">{{ _('pagamenti') }}</a>{% endif %}</div>{% else %}<span class="hint">{{ _('nessuna') }}</span>{% endfor %}</td>
+        <td class="hint" data-label="{{ _('Rivenditore') }}">{{ reseller_names.get(c.reseller_id) or _('diretto') }}</td>
+        <td><button class="btn sm" type="button" data-edit="c-{{ c.id }}" aria-label="{{ _('Modifica o elimina {name}', name=c.name) }}" aria-controls="c-{{ c.id }}" aria-expanded="{{ 'true' if notice_at == 'c-' ~ c.id else 'false' }}">{{ _('Modifica') }}</button></td>
       </tr>
-      <tr><td colspan="5">
-        <details class="act sm" id="c-{{ c.id }}" {% if notice_at == 'c-' ~ c.id %}open{% endif %}>
-          <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Modifica o elimina {name}', name=c.name) }}</summary>
+      <tr class="cust-edit" id="c-{{ c.id }}" {% if notice_at != 'c-' ~ c.id %}hidden{% endif %}><td colspan="6">
           {% if notice and notice_at == 'c-' ~ c.id %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
           <form method="post" action="/admin/customers/{{ c.id }}" class="form-grid" style="margin-top: 8px;">
             <label class="field">{{ _('Tipo') }}<select name="kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if c.kind == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
@@ -326,16 +390,49 @@
             <div><button class="btn" type="submit">{{ _('Salva') }}</button></div>
           </form>
           {% if not c.newsrooms %}
-          <form method="post" action="/admin/customers/{{ c.id }}/delete" onsubmit='return confirm({{ _('Eliminare il cliente {name}?', name=c.name)|string|tojson }})'><button class="btn sm danger" type="submit">{{ _('Elimina il cliente') }}</button></form>
+          <form method="post" action="/admin/customers/{{ c.id }}/delete" style="margin-top: 10px;" onsubmit='return confirm({{ _('Eliminare il cliente {name}?', name=c.name)|string|tojson }})'><button class="btn sm danger" type="submit">{{ _('Elimina il cliente') }}</button></form>
           {% else %}
           <p class="hint">{{ _('Si può eliminare quando non ha più redazioni.') }}</p>
           {% endif %}
-        </details>
       </td></tr>
       {% endfor %}
       </tbody>
     </table>
+    <p class="empty" id="cust-none" hidden>{{ _('Nessun cliente corrisponde alla ricerca.') }}</p>
     </div>
+    <script>
+    (function () {
+      var box = document.getElementById('cust-filter'), seller = document.getElementById('cust-seller');
+      var none = document.getElementById('cust-none'), kind = '';
+      var rows = Array.prototype.slice.call(document.querySelectorAll('table.customers tr.cust'));
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('#cust-kinds a'));
+      function show() {
+        var q = box.value.trim().toLowerCase(), who = seller ? seller.value : '', shown = 0;
+        rows.forEach(function (tr) {
+          var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!kind || tr.dataset.kind === kind) && (!who || tr.dataset.seller === who);
+          tr.hidden = !on; if (!on) tr.nextElementSibling.hidden = true; if (on) shown++;
+        });
+        none.hidden = shown > 0;
+      }
+      box.addEventListener('input', show);
+      if (seller) seller.addEventListener('change', show);
+      tabs.forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault(); kind = a.dataset.kind;
+          tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+          show();
+        });
+      });
+      document.querySelectorAll('table.customers [data-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var row = document.getElementById(b.dataset.edit); row.hidden = !row.hidden;
+          b.setAttribute('aria-expanded', row.hidden ? 'false' : 'true');
+        });
+      });
+      var open = location.hash && document.getElementById(location.hash.slice(1));
+      if (open && open.classList.contains('cust-edit')) { open.hidden = false; open.scrollIntoView(); }
+    })();
+    </script>
     {% else %}
     <p class="empty">{{ _('Nessun cliente: arrivano dal sito con <code>POST /api/operator/signup</code>, o dai rivenditori.') }}</p>
     {% endif %}
@@ -372,14 +469,18 @@
   {% endif %}
 
   {% if view == 'rivenditori' %}
-  <div class="cols">
-    <section class="card pad col-wide" id="rivenditori" aria-labelledby="h-resellers">
+  <div>
+    <section class="card pad" id="rivenditori" aria-labelledby="h-resellers">
       <h2 id="h-resellers" class="sr">{{ _('Rivenditori') }}</h2>
       {% if notice and notice_at == 'rivenditori' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
       <p class="hint">{{ _('Un rivenditore iscrive e gestisce i suoi clienti con la sua chiave API e li fattura lui: vede solo i suoi.') }}</p>
       {% for x in resellers %}
       <div class="list-row">
-        <span>{{ x.name }} <span class="hint">{{ x.email }} · {{ x.customers }} {{ _('cliente') if x.customers == 1 else _('clienti') }}{% if x.discount_pct %} · {{ _('sconto {pct}%', pct=x.discount_pct|num(0)) }}{% endif %}</span></span>
+        {% set theirs = customers|selectattr('reseller_id', 'equalto', x.id)|map(attribute='newsrooms')|sum(start=[]) %}
+        {% set income = namespace(cents=0, trial=0) %}
+        {% for n in theirs %}{% set sb = subs.get(n.tenant_id) %}{% if sb %}{% set income.cents = income.cents + (sb.monthly_cents or 0) %}{% if sb.status == 'trialing' %}{% set income.trial = income.trial + 1 %}{% endif %}{% endif %}{% endfor %}
+        <span>{{ x.name }} <span class="hint">{{ x.email }}{% if x.discount_pct %} · {{ _('sconto {pct}%', pct=x.discount_pct|num(0)) }}{% endif %}</span>
+          <small>{{ x.customers }} {{ _('cliente') if x.customers == 1 else _('clienti') }} · {{ theirs|length }} {{ _('redazione') if theirs|length == 1 else _('redazioni') }}{% if income.trial %} · {{ _('{n} in prova', n=income.trial) }}{% endif %} · {{ _('€ {amount} al mese a listino', amount=(income.cents / 100)|num) }}</small></span>
         <span class="row">
           {% if x.active %}<form class="inline" method="post" action="/admin/resellers/{{ x.id }}/key"><button class="btn sm" type="submit">{{ _('Nuova chiave') }}</button></form>{% else %}<span class="chip">{{ _('Disattivato') }}</span>{% endif %}
           <form class="inline" method="post" action="/admin/resellers/{{ x.id }}/active"><input type="hidden" name="active" value="{{ '0' if x.active else '1' }}"><button class="btn sm" type="submit">{{ _('Disattiva') if x.active else _('Riattiva') }}</button></form>
@@ -408,19 +509,34 @@
         <div><button class="btn" type="submit">{{ _('Aggiungi rivenditore') }}</button></div>
       </form>
     </section>
-    <section class="card pad col-side" aria-labelledby="h-pay">
-      <h2 id="h-pay">{{ _('Pagamenti') }}</h2>
-      {% if online %}<p class="lead">{{ _('Pagamenti online attivi (Mollie): il cliente sceglie il piano e paga dalla pagina Abbonamento; i rinnovi sono automatici.') }}</p>
-      {% else %}<p class="lead">{{ _('Pagamenti online non configurati: registra i bonifici da "Abbonamento" di ogni redazione. Per attivarli metti <code>EDITOR_MOLLIE_API_KEY</code> nel <code>.env</code>.') }}</p>{% endif %}
-    </section>
   </div>
   {% endif %}
 
   {% if view == 'piani' %}
   <section class="card" id="piani" aria-labelledby="h-plans">
     <div class="card-head"><h2 id="h-plans" class="sr">{{ _('Piani') }}</h2>
-    {% if notice and notice_at == 'piani' %}<p class="notice" role="status" style="margin: 0 16px;">{{ notice }}</p>{% endif %}<span class="hint">{{ _('prezzi IVA esclusa') }}</span></div>
+    {% if notice and notice_at == 'piani' %}<p class="notice" role="status" style="margin: 0 16px;">{{ notice }}</p>{% endif %}<span class="hint">{{ _('prezzi IVA esclusa') }}</span>
+    <span class="chip {{ 'green' if online else '' }}" id="pagamenti" title="{{ _('Pagamenti online attivi (Mollie): il cliente sceglie il piano e paga dalla pagina Abbonamento; i rinnovi sono automatici.') if online else _('Registra i bonifici da Abbonamento di ogni redazione. Per i pagamenti online serve la chiave di Mollie (EDITOR_MOLLIE_API_KEY) nel file .env del server.') }}">{{ _('Pagamenti online: Mollie attivo') if online else _('Pagamenti online spenti: solo bonifici') }}</span></div>
     <div class="pad">
+    <div style="overflow-x: auto;">
+    <table class="tbl plans-grid">
+      <thead><tr><th></th>{% for p in plans %}<th class="num"><a href="#p-{{ p.code }}">{{ p.name }}</a></th>{% endfor %}</tr></thead>
+      <tbody>
+      {% set unlimited = _('senza limite') %}
+      {% for label, key in [(_('Al mese'), 'price_month_cents'), (_("All'anno"), 'price_year_cents')] %}
+      <tr><td>{{ label }}</td>{% for p in plans %}<td class="num">{{ money(p[key], p.currency) if p[key] is not none else '–' }}</td>{% endfor %}</tr>
+      {% endfor %}
+      <tr><td>{{ _('Giorni di prova') }}</td>{% for p in plans %}<td class="num">{{ p.trial_days or '–' }}</td>{% endfor %}</tr>
+      {% for label, key in [(_('Siti'), 'max_sites'), (_('Lingue per sito'), 'max_languages'), (_('Fonti attive'), 'max_active_sources'), (_('Notizie al giorno'), 'max_items_per_day'), (_('Articoli al mese'), 'max_drafts_month'), (_('Crediti al mese'), 'credits_month')] %}
+      <tr><td>{{ label }}</td>{% for p in plans %}<td class="num">{{ p[key] if p[key] is not none else unlimited }}</td>{% endfor %}</tr>
+      {% endfor %}
+      <tr><td>{{ _('Redazione automatica') }}</td>{% for p in plans %}<td class="num">{{ _('Sì') if p.autopilot is not false else _('No') }}</td>{% endfor %}</tr>
+      <tr><td>{{ _('Sul sito') }}</td>{% for p in plans %}<td class="num">{% if p.public %}<span class="chip green">{{ _('Sì') }}</span>{% else %}{{ _('No') }}{% endif %}</td>{% endfor %}</tr>
+      <tr><td>{{ _('Redazioni con questo piano') }}</td>{% for p in plans %}<td class="num">{{ subs.values()|selectattr('plan_code', 'equalto', p.code)|list|length }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="hint">{{ _('Per cambiare un piano aprilo qui sotto. In verde quelli che il sito di vendita mostra.') }}</p>
     {% for p in plans %}
     <details class="act" id="p-{{ p.code }}" {% if p.public %}data-tone="green"{% endif %} {% if notice_at == 'p-' ~ p.code %}open{% endif %}>
     <summary><span class="ico" aria-hidden="true">€</span>{{ p.name }}<span class="sub">{% if p.price_month_cents is not none %}{{ money(p.price_month_cents, p.currency) }} {{ _('al mese') }}{% endif %}{% if p.price_year_cents is not none %} · {{ money(p.price_year_cents, p.currency) }} {{ _("all'anno") }}{% endif %}{% if p.trial_days %} · {{ _('{n} giorni di prova', n=p.trial_days) }}{% endif %} · {{ _('sul sito') if p.public else _('non sul sito') }}</span></summary>
@@ -447,8 +563,8 @@
     </details>
     {% endfor %}
     <form method="post" action="/admin/plans" class="form-grid" style="margin: 20px 0 16px;">
-      <label class="field">{{ _('Codice del nuovo piano') }}<input name="code" required maxlength="40" pattern="[a-z0-9-]{1,40}" placeholder="pro-plus"></label>
-      <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100"></label>
+      <label class="field">{{ _('Nome del nuovo piano') }}<input name="name" required maxlength="100" placeholder="Pro Plus"></label>
+      <label class="field">{{ _('Codice (facoltativo)') }}<input name="code" maxlength="40" pattern="[a-z0-9-]{1,40}" placeholder="{{ _('dal nome: pro-plus') }}"></label>
       <div><button class="btn" type="submit">{{ _('Aggiungi un piano') }}</button></div>
     </form>
     <p class="hint">{{ _('Il sito pubblico legge i piani da <code>/api/public/plans</code>. Il piano "Prova" è quello di chi si iscrive.') }}</p>
@@ -617,6 +733,22 @@
       {% if updates.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
     {% endif %}
     <form method="post" action="/admin/updates/check" style="margin-top: 8px;"><button class="btn sm" type="submit">{{ _('Controlla adesso') }}</button></form>
+    {% if updates.history %}
+    <h3 style="margin: 20px 0 6px;">{{ _('Storico degli aggiornamenti') }}</h3>
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Dalla versione') }}</th><th>{{ _('Alla versione') }}</th><th>{{ _('Esito') }}</th></tr></thead>
+      <tbody>
+      {% for h in updates.history %}
+      <tr>
+        <td class="num" data-label="{{ _('Quando') }}">{{ (h.at[8:10] ~ '/' ~ h.at[5:7] ~ '/' ~ h.at[0:4] ~ ' ' ~ h.at[11:16]) if h.at else '–' }} <small class="hint" style="display: inline;">UTC</small></td>
+        <td class="num" data-label="{{ _('Dalla versione') }}">{{ h['from'] or '–' }}</td>
+        <td class="num" data-label="{{ _('Alla versione') }}">{{ h.version or '–' }}</td>
+        <td data-label="{{ _('Esito') }}">{% if h.state == 'done' %}<span class="chip green">{{ _('Riuscito') }}</span>{% else %}<span class="chip red">{{ _('Non riuscito') }}</span> <span class="hint">{{ {'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(h.step, h.step or '') }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
     {% if updates.pending or st.state == 'running' %}
     {% set target = (updates.pending or {}).version or st.version %}
     {% set steps = {'request': _('in attesa del server'), 'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica'), 'done': _('fatto')} %}
@@ -674,19 +806,24 @@
   {% endif %}
 
   {% if view == 'operatori' %}
-  <div class="cols">
-    <section class="card pad col-wide" id="operatori" aria-labelledby="h-ops">
+  <div>
+    <section class="card pad" id="operatori" aria-labelledby="h-ops">
       <h2 id="h-ops" class="sr">{{ _('Amministratori') }}</h2>
+      <p class="hint">{{ _('Gli amministratori entrano in questa console e vedono tutte le redazioni. Ognuno ha il suo account: non condividere le password.') }}</p>
       {% for o in operators %}
-      <div class="list-row"><span>{{ o.name or o.email }}{% if o.name %} <span class="hint">{{ o.email }}</span>{% endif %}</span><span class="row">{% if not o.password_hash %}<span class="chip amber">{{ _('Invito non accettato') }}</span>{% endif %}{% if o.id != me.user_id %}<form class="inline" method="post" action="/admin/operators/{{ o.id }}/remove" onsubmit='return confirm({{ _('Togliere la console a {email}? Le sue redazioni restano.', email=o.email)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}</span></div>
+      <div class="list-row"><span>{{ o.name or o.email }}{% if o.name %} <span class="hint">{{ o.email }}</span>{% endif %}<small>{% if o.last_login %}{{ _('ultimo accesso {date}', date=o.last_login.strftime('%d/%m/%Y %H:%M')) }} UTC{% elif o.password_hash %}{{ _('nessun accesso negli ultimi 30 giorni') }}{% else %}{{ _('non è ancora entrato') }}{% endif %}</small></span><span class="row">{% if not o.password_hash %}<span class="chip amber">{{ _('Invito non accettato') }}</span>{% endif %}{% if o.id == me.user_id %}<span class="chip" title="{{ _('Non puoi togliere te stesso: chiedilo a un altro amministratore.') }}">{{ _('Sei tu') }}</span>{% else %}<form class="inline" method="post" action="/admin/operators/{{ o.id }}/remove" onsubmit='return confirm({{ _('Togliere la console a {email}? Le sue redazioni restano.', email=o.email)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}</span></div>
       {% endfor %}
       {% for i in pending %}
-      <div class="list-row"><span>{{ i.email }}</span><span class="row"><span class="chip">{{ _('Invitato, scade {date}', date=i.expires_at.strftime('%d/%m')) }}</span><form class="inline" method="post" action="/admin/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form></span></div>
+      <div class="list-row"><span>{{ i.email }}<small>{{ _('invito inviato, non ancora accettato') }}</small></span><span class="row"><span class="chip">{{ _('Invitato, scade {date}', date=i.expires_at.strftime('%d/%m')) }}</span><form class="inline" method="post" action="/admin/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form></span></div>
       {% endfor %}
       <form method="post" action="/admin/operators" class="form-grid">
         <label class="field">{{ _('Email') }}<input name="email" type="email" required></label>
         <div><button class="btn" type="submit">{{ _('Invita un amministratore') }}</button></div>
       </form>
+    </section>
+    <section class="card pad" aria-labelledby="h-reset" style="margin-top: 16px;">
+      <h2 id="h-reset">{{ _('Chi non riesce a entrare') }}</h2>
+      <p class="hint">{{ _('Per qualsiasi account, anche il direttore o un collaboratore di una redazione: crea un link per scegliere una nuova password, valido 24 ore. Arriva per email alla persona; se la posta non è configurata lo vedi qui e lo mandi tu.') }}</p>
       <form method="post" action="/admin/reset" class="form-grid">
         <label class="field">{{ _('Email di un account') }}<input name="email" type="email" required></label>
         <div><button class="btn" type="submit">{{ _('Link per nuova password') }}</button></div>

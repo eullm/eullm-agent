@@ -215,7 +215,7 @@ def test_the_desk_shows_every_site_or_the_one_chosen(db, tenant):
     assert "Siti più attivi" not in page and "1 sito" in page
     # Its numbers, not the newsroom's: the new site has no sources yet.
     import re
-    kpi = re.search(r'Fonti attive</span>\s*<span class="value">(\d+)', page)
+    kpi = re.search(r'<span class="num">(\d+)</span><small>fonti attive</small>', page)
     assert kpi and kpi.group(1) == "0"
     # Back to all: to the Desk, whatever page it was chosen on.
     r = c.get("/switch?site=all&back=/sources", follow_redirects=False)

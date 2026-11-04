@@ -48,7 +48,7 @@ def test_the_newsroom_sees_its_credits_never_the_model_cost(db, tenant):
     for path in ("/",):
         page = c.get(path).text
         assert "Costo modello" not in page and "Siti più costosi" not in page, path
-        assert "Crediti del mese" in page and "rimasti su 250" in page, path
+        assert "Crediti del mese" in page and "0 / 250" in page, path
 
 
 def test_the_desk_shows_how_far_each_limit_is(db, tenant):

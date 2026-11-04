@@ -512,7 +512,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                       name=name.strip()), f"p-{code}")
 
     @app.post("/admin/plans")
-    def ui_new_plan(code: str = Form(...), name: str = Form(...), s=Depends(need_console)):
+    def ui_new_plan(code: str = Form(""), name: str = Form(...), s=Depends(need_console)):
         try:
             code = billing.create_plan(admin, code, name)
         except billing.BillingError as e:

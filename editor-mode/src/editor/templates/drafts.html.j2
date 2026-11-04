@@ -13,22 +13,58 @@
 
 <section class="card" aria-label="{{ _('Elenco bozze') }}">
   {% if rows %}
+  {% set states = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))} %}
+  <div class="pad" style="padding-bottom: 0; display: flex; flex-direction: column; gap: 12px;">
+    <input type="search" id="draft-filter" class="search" placeholder="{{ _('Cerca nei titoli') }}" aria-label="{{ _('Cerca nei titoli') }}" autocomplete="off">
+    <nav class="tabs" id="draft-states" aria-label="{{ _('Mostra') }}">
+      <a href="#" data-state="" class="on" aria-current="true">{{ _('Tutte') }} <span class="hint">{{ rows|length }}</span></a>
+      {% for key, st in states.items() %}{% set n = rows|selectattr('status', 'equalto', key)|list|length %}{% if n %}<a href="#" data-state="{{ key }}">{{ st[1] }} <span class="hint">{{ n }}</span></a>{% endif %}{% endfor %}
+      {% set used_langs = rows|map(attribute='language')|reject('none')|unique|list %}
+      {% if used_langs|length > 1 %}<select id="draft-lang" aria-label="{{ _('Lingua') }}" style="min-height: 36px; border-radius: 18px; padding: 0 12px; border: 1px solid #C9CDC7; background: var(--surface); font: 500 13px var(--sans);"><option value="">{{ _('Tutte le lingue') }}</option>{% for l in used_langs %}<option value="{{ l }}">{{ langs.get(l, l) }}</option>{% endfor %}</select>{% endif %}
+    </nav>
+  </div>
   <div class="scroll">
-    <table style="min-width: 640px;">
+    <table style="min-width: 640px;" id="draft-rows">
       <thead><tr><th>{{ _('Titolo') }}</th><th>{{ _('Frasi con fonte') }}</th><th>{{ _('Controlli') }}</th><th>{{ _('Creata') }}</th><th>{{ _('Stato') }}</th></tr></thead>
       <tbody>
       {% for r in rows %}
-      <tr {% if r.status == 'rejected' %}class="off"{% endif %}>
-        <td style="max-width: 380px;"><a href="/drafts/{{ r.id }}"><strong>{{ r.title }}</strong></a>{% if r.translation_of %}<small>{{ _('traduzione in {language}', language=langs.get(r.language, r.language)) }}</small>{% elif r.version > 1 %}<small>{{ _('versione {n}', n=r.version) }}</small>{% endif %}{% if why.get(r.id) %}<small>{{ _('Motivo:') }} {{ why[r.id][:300] }}</small>{% endif %}</td>
+      <tr class="{{ 'off' if r.status == 'rejected' }}{{ ' sub' if r.translation_of }}" data-state="{{ r.status }}" data-lang="{{ r.language or '' }}" data-find="{{ r.title|lower }}">
+        <td style="max-width: 380px;{% if r.translation_of %} padding-left: 28px;{% endif %}">{% if r.translation_of %}<span class="hint" aria-hidden="true">↳ </span>{% endif %}<a href="/drafts/{{ r.id }}"><strong>{{ r.title }}</strong></a>{% if r.translation_of %}<small>{{ _('traduzione in {language}', language=langs.get(r.language, r.language)) }}</small>{% elif r.version > 1 %}<small>{{ _('versione {n}', n=r.version) }}</small>{% endif %}{% if why.get(r.id) %}<small>{{ _('Motivo:') }} {{ why[r.id][:300] }}</small>{% endif %}</td>
         <td class="num">{{ r.claims }}</td>
         <td>{% if r.flags %}<span class="chip amber">{{ _('{n} frasi da rivedere', n=r.flags|length) }}</span>{% else %}<span class="chip green">{{ _('Superati') }}</span>{% endif %}</td>
         <td>{{ when(r.created_at) }}</td>
-        <td>{% set st = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'rejected': ('', _('Rifiutata'))}.get(r.status, ('', r.status)) %}<span class="chip {{ st[0] }}">{{ st[1] }}</span></td>
+        <td>{% set st = states.get(r.status, ('', r.status)) %}<span class="chip {{ st[0] }}">{{ st[1] }}</span></td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
+    <p class="empty" id="draft-none" hidden>{{ _('Nessuna bozza corrisponde alla ricerca.') }}</p>
   </div>
+  <script>
+  (function () {
+    var box = document.getElementById('draft-filter'), lang = document.getElementById('draft-lang');
+    var none = document.getElementById('draft-none'), state = '';
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#draft-rows tbody tr'));
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#draft-states a'));
+    function show() {
+      var q = box.value.trim().toLowerCase(), l = lang ? lang.value : '', shown = 0;
+      rows.forEach(function (tr) {
+        var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!state || tr.dataset.state === state) && (!l || tr.dataset.lang === l);
+        tr.hidden = !on; if (on) shown++;
+      });
+      none.hidden = shown > 0;
+    }
+    box.addEventListener('input', show);
+    if (lang) lang.addEventListener('change', show);
+    tabs.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault(); state = a.dataset.state;
+        tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+        show();
+      });
+    });
+  })();
+  </script>
   {% else %}
   <p class="empty">{{ _("Nessuna bozza ancora. Accetta una proposta da <a href='/trends'>Trend e piano</a> e l'agente la scrive.") }}</p>
   {% endif %}

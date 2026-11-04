@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.28.39
+
+Secondo e terzo lotto dell'audit: la console di amministrazione e il pannello
+della redazione.
+
+### Changed
+
+- **Redazioni in console**: schede per stato (Paganti, In prova, Ferme o
+  sospese, Senza abbonamento) e ricerca; colonne "Articoli del mese" e
+  "Margine nel mese" (prezzo del piano a listino meno il costo del modello);
+  "Scheda" e "Entra come direttore" separati. La scheda della redazione ha un
+  solo stato, il margine, i siti con profilo, redazione automatica e articoli
+  di oggi, e i lavori falliti degli ultimi 7 giorni.
+- **Clienti**: ricerca, schede per tipo, filtro per rivenditore, "Modifica"
+  che apre la riga, link alle redazioni e ai pagamenti.
+- **Piani**: tabella di confronto dei limiti, stato di Mollie in alto, nuovo
+  piano dal nome (il codice è facoltativo e si ricava dal nome).
+- **Rivenditori** con clienti, redazioni, quante in prova ed euro al mese a
+  listino. **Amministratori** con ultimo accesso e "Sei tu"; il reset della
+  password ha una sezione sua. **Aggiornamenti** con lo storico.
+- **Consumi a schede**, una vista alla volta, con il costo per articolo
+  contro il prezzo per articolo del piano.
+- **Desk**: riquadro "Oggi" con pubblicati, scartati e cosa aspetta te, e se
+  gli articoli del piano bastano al ritmo del mese; tolti i riquadri doppi.
+- **Redazione automatica**: "Accendi con queste regole" in un clic, regole
+  in tre gruppi (Quanti articoli, Quali notizie, Quando e dove) con le
+  spiegazioni sotto ogni campo.
+- **Bozze**: ricerca, schede per stato, filtro per lingua, traduzioni sotto
+  l'originale. Nella bozza la pubblicazione sta in cima alla colonna; i
+  controlli SEO dicono che non fermano la pubblicazione.
+- **Pubblicazioni guidate dal tipo**: si sceglie prima dove escono gli
+  articoli (WordPress, GitHub, webhook, Telegram), poi i campi e la
+  spiegazione della credenziale di quel tipo; il nome della credenziale lo
+  sceglie Redazia se resta vuoto. Un sito senza destinazioni vede il modulo
+  per primo.
+- **Fonti e Trend** con un solo testo che spiega (il riquadro in cima);
+  l'elenco delle fonti sale, "Aggiungi fonti a mano" va sotto.
+- **Profilo in preparazione dice a che punto è**: in coda, in corso con il
+  passo, non riuscito con il motivo, mai avviato con il pulsante per
+  avviarlo.
+- **Il mio piano**: "Cambia piano" per chi ha già un abbonamento attivo;
+  "Notizie oggi" solo agli amministratori.
+- **Impostazioni**: tolto il riquadro Piano doppio (il piano è un pulsante
+  in alto), la tabella dei token compare solo se ce ne sono.
+
 ## 0.28.38
 
 Primo lotto dell'audit di amministrazione e redazione.

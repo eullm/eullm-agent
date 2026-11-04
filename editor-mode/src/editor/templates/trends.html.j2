@@ -16,7 +16,7 @@
 {% else %}
 <section class="card" id="moment" aria-labelledby="h-moment" style="gap: 0;">
   <div class="card-head"><h2 id="h-moment">{{ _('Il trend del momento') }}</h2>{% if snap %}<span class="hint">{{ _('aggiornato alle {time}', time=local(snap.taken_at).strftime('%H:%M')) }}</span>{% endif %}</div>
-  <p class="hint" style="margin: 0; padding: 0 20px 12px;">{{ _("Ogni giorno alle 7:00, e poi ogni tre ore, l'archivio fissa i temi che crescono di più nel settore. Qui vedi quelli adatti a questo sito: scegli un titolo e l'agente scrive la bozza, oppure chiedi tre titoli tra cui scegliere.") }}</p>
+  {% if moment %}<p class="hint" style="margin: 0; padding: 0 20px 12px;">{{ _("Scegli un titolo e l'agente scrive la bozza, oppure chiedi tre titoli tra cui scegliere.") }}</p>{% endif %}
   {% for x in moment %}
   <div class="item" style="align-items: flex-start;">
     <span class="chip blue">{{ _('Hype {n}', n=x.hype|s100) }}</span>
@@ -59,8 +59,8 @@
 <div class="cols">
   <section class="card pad col-wide" aria-labelledby="h-map">
     <h2 id="h-map">{{ _('Mappa dei temi') }}</h2>
-    <p class="hint">{{ _('Ogni tema della settimana sta in uno dei quattro riquadri, secondo due punteggi da 0 a 100: Opportunità, quanto conviene a questo sito, e Hype, quanto se ne parla nel settore. La soglia è 50. Si scrive da «Scrivi ora» e «Nicchia utile».') }}</p>
     {% if dots %}
+    <p class="hint">{{ _('Soglia 50 su entrambi i punteggi. Si scrive da «Scrivi ora» e «Nicchia utile».') }}</p>
     {% set quads = [
       (_('Scrivi ora'), _('conviene al sito e se ne parla'), dots|selectattr('opportunity', 'ge', 50)|selectattr('hype', 'ge', 50)|list, 'green'),
       (_('Nicchia utile'), _('conviene al sito, se ne parla poco'), dots|selectattr('opportunity', 'ge', 50)|selectattr('hype', 'lt', 50)|list, 'blue'),

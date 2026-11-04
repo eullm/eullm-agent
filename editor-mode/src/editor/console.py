@@ -29,6 +29,10 @@ from .i18n import t
 
 log = logging.getLogger(__name__)
 
+
+def _utc(when: datetime) -> datetime:
+    return when.replace(tzinfo=UTC) if when.tzinfo is None else when
+
 COOKIE = "editor_token"
 INSTALLED = metadata.version("eullm-editor-mode")
 SITE_COOKIE = "editor_site"
@@ -259,6 +263,39 @@ def register(app, ctx) -> None:
             return None
         return s
 
+    def room_work(room: str) -> dict:
+        """A newsroom's sites with their state and its recent failed work,
+        for its card: what the operator checks before answering a customer."""
+        from datetime import timedelta
+
+        from . import activity, autopilot, jobs
+
+        start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        out = {"sites": [], "failed": []}
+        try:
+            with db.tenant(room) as ts:
+                profiles = {}
+                for r in ts.execute(select(m.editorial_profiles.c.site_id, m.editorial_profiles.c.status,
+                                           m.editorial_profiles.c.body)
+                                    .order_by(m.editorial_profiles.c.version)).all():
+                    profiles.setdefault(r.site_id, {})[r.status] = r.body
+                for site in ts.execute(select(m.sites).order_by(m.sites.c.id)).all():
+                    mine = profiles.get(site.id, {})
+                    cfg = autopilot.settings_of(mine.get("approved"))
+                    day = autopilot.today(ts, site.id, start)
+                    out["sites"].append({
+                        "id": site.id, "name": site.name or site.domain, "domain": site.domain,
+                        "profile": "approved" if "approved" in mine else "draft" if "draft" in mine else "none",
+                        "auto": bool(mine.get("approved")) and cfg["enabled"], "per_day": cfg["per_day"],
+                        "published": day["published"], "discarded": day["discarded"], "held": day["held"]})
+                week = datetime.now(UTC) - timedelta(days=7)
+                out["failed"] = [dict(j, what=t(activity.KINDS[j["kind"]]) if j["kind"] in activity.KINDS else j["kind"])
+                                 for j in jobs.recent(ts, 40) if j["status"] == "failed"
+                                 and _utc(j["finished_at"] or j["started_at"] or week) >= week][:5]
+        except Exception:
+            log.exception("work of %s not read", room)
+        return out
+
     def page(request: Request, s, status_code: int = 200, view: str = "redazioni", room: str | None = None,
              **data):
         """One page of the console: `view` is the section of the menu, `room`
@@ -282,6 +319,7 @@ def register(app, ctx) -> None:
             "plan_names": {p["code"]: p["name"] for p in plans},
             "subs": billing.subscriptions(admin), "payments": billing.payments_by_tenant(admin),
             "single_room": room, "people": accounts.members(admin, room) if room else [],
+            "work": room_work(room) if room and view == "redazione" else None,
             "room_customer": billing.customer_of(admin, room) if room else None,
             "credits": credits.balances(admin), "credit_prices": credit_prices(), "packs": credits.packs(admin),
             "reseller_names": {r["id"]: r["name"] for r in billing.resellers(admin)},
@@ -345,6 +383,7 @@ def register(app, ctx) -> None:
         resp = pages.TemplateResponse(request, "usage.html.j2", {
             "me": s, "r": usage.report(admin, db, tenants, days), "names": names, "purposes": usage.PURPOSES,
             "routable": usage.ROUTABLE, "routes": usage.route_list(admin),
+            "subs": billing.subscriptions(admin), "plans": {p["code"]: p for p in billing.plans(admin)},
             "notice": unquote(notice) if notice else None, "view": "consumi",
             "updates": updates.state(updates.folder(ctx.updates_dir), INSTALLED),
             "mine": accounts.memberships(admin, s.user_id)})
