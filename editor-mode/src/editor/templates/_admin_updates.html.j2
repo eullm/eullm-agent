@@ -1,0 +1,109 @@
+{# Console › Aggiornamenti: the installed version, the latest one, the update from here. #}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Aggiornamenti') }}</h1>
+    <p class="ph-sub">{{ _('Versione installata') }}: <span class="num">{{ updates.installed }}</span>{% if updates.newer %} · <span class="chip teal">{{ _('È disponibile la {version}', version=updates.available.version) }}</span>{% endif %}</p>
+  </div>
+  {% if updates.enabled %}<div class="ph-actions"><form class="inline" method="post" action="/admin/updates/check"><button class="btn" type="submit">{{ _('Controlla adesso') }}</button></form></div>{% endif %}
+</header>
+  <section class="card pad" id="aggiornamenti" aria-labelledby="h-updates">
+    <h2 id="h-updates" class="sr">{{ _('Aggiornamenti') }}</h2>
+    {% set st = updates.status or {} %}
+    {% set av = updates.available or {} %}
+    <div class="list-row"><span>{{ _('Versione installata') }}</span><span class="num">{{ updates.installed }}</span></div>
+    {% if updates.enabled %}
+    <div class="list-row"><span>{{ _('Ultima versione') }}</span><span class="num">{% if av.version %}{% if av.url %}<a href="{{ av.url }}" rel="noopener" target="_blank">{{ av.version }}</a>{% else %}{{ av.version }}{% endif %}{% else %}–{% endif %}</span></div>
+    {% if av.checked_at %}<p class="hint">{{ _('Controllata il {date} alle {time}. Il controllo si ripete ogni ora e quando apri questa pagina.', date=av.checked_at[8:10] ~ '/' ~ av.checked_at[5:7], time=av.checked_at[11:16] ~ ' UTC') }}{% if av.error %} {{ _('Ultimo controllo non riuscito: {error}', error=av.error) }}{% endif %}</p>{% endif %}
+    {% if updates.pending %}
+      {% if updates.stale %}<p class="error">{{ _('La richiesta di aggiornamento alla {version} aspetta da più di 5 minuti: sul server lo script update.sh non è installato o il cron non gira (vedi deploy/server/README.md, "Updating from the console").', version=updates.pending.version) }}</p>
+      {% else %}<p class="lead">{{ _('Aggiornamento alla {version} chiesto: il server lo prende in pochi secondi (al più un minuto, su un server senza systemd).', version=updates.pending.version) }}</p>{% endif %}
+    {% elif st.state == 'running' %}
+      <p class="lead">{{ _('Aggiornamento alla {version} in corso: {step}.', version=st.version, step={'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(st.step, st.step)) }}</p>
+    {% elif updates.newer %}
+      <p class="lead">{{ _('È disponibile la versione {version}.', version=av.version) }}</p>
+      <form method="post" action="/admin/updates/apply" onsubmit='return confirm({{ _('Aggiornare alla versione {version}? Prima viene fatto un backup; il pannello resta fermo per qualche secondo.', version=av.version)|string|tojson }})'>
+        <input type="hidden" name="version" value="{{ av.version }}">
+        <button class="btn pri" type="submit">{{ _('Aggiorna alla {version}', version=av.version) }}</button>
+      </form>
+      <p class="hint">{{ _('Leggi le note della versione prima di aggiornare: il link è sul numero di versione.') }}</p>
+    {% elif updates.mismatch %}
+      <p class="error">{{ _('L\'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un\'altra versione. Rilanciarlo non serve: aspetta la prossima versione.', version=updates.mismatch, installed=updates.installed) }}</p>
+    {% else %}
+      <p class="hint">{{ _('Il server è aggiornato.') }}</p>
+    {% endif %}
+    {% if st.state in ('done', 'failed') %}
+      {% if st.state == 'done' %}<p class="hint">{{ _('Ultimo aggiornamento: dalla {old} alla {version}, il {date}.', old=st['from'], version=st.version, date=st.at[8:10] ~ '/' ~ st.at[5:7] ~ ' ' ~ st.at[11:16] ~ ' UTC') }}</p>
+      {% else %}<p class="error">{{ _('Aggiornamento alla {version} non riuscito durante: {step}.', version=st.version, step={'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(st.step, st.step)) }}
+        {% if st.step in ('backup', 'pull') %}{{ _('Non è cambiato niente: il server è ancora alla {old}.', old=st['from']) }}{% else %}{{ _('La {version} è installata ma non risponde come dovrebbe: guarda il registro. Il backup fatto prima è nella cartella backup del server.', version=st.version) }}{% endif %}</p>{% endif %}
+      {% if updates.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
+    {% endif %}
+    {% if updates.history %}
+    <h3 style="margin: 20px 0 6px;">{{ _('Storico degli aggiornamenti') }}</h3>
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Dalla versione') }}</th><th>{{ _('Alla versione') }}</th><th>{{ _('Esito') }}</th></tr></thead>
+      <tbody>
+      {% for h in updates.history %}
+      <tr>
+        <td class="num" data-label="{{ _('Quando') }}">{{ (h.at[8:10] ~ '/' ~ h.at[5:7] ~ '/' ~ h.at[0:4] ~ ' ' ~ h.at[11:16]) if h.at else '–' }} <small class="hint" style="display: inline;">UTC</small></td>
+        <td class="num" data-label="{{ _('Dalla versione') }}">{{ h['from'] or '–' }}</td>
+        <td class="num" data-label="{{ _('Alla versione') }}">{{ h.version or '–' }}</td>
+        <td data-label="{{ _('Esito') }}">{% if h.state == 'done' %}<span class="chip green">{{ _('Riuscito') }}</span>{% else %}<span class="chip red">{{ _('Non riuscito') }}</span> <span class="hint">{{ {'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(h.step, h.step or '') }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if updates.pending or st.state == 'running' %}
+    {% set target = (updates.pending or {}).version or st.version %}
+    {% set steps = {'request': _('in attesa del server'), 'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica'), 'done': _('fatto')} %}
+    <div id="update-bar" data-target="{{ target }}" data-steps='{{ steps|tojson }}' style="margin: 12px 0;">
+      <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 13px;"><span id="update-step">{{ steps.get(st.step if st.state == 'running' else 'request') }}</span><span class="num" id="update-pct">{{ updates.percent }}%</span></div>
+      <progress id="update-progress" max="100" value="{{ updates.percent }}" style="width: 100%; height: 14px;" aria-label="{{ _('Avanzamento dell\'aggiornamento') }}"></progress>
+    </div>
+    <p class="notice" role="status" id="update-wait">{{ _('Il pannello si ferma per qualche secondo durante il riavvio e torna da solo quando la {version} risponde: non serve ricaricare la pagina. I lavori in corso tornano in coda e ripartono, i dati non si toccano.', version=target) }}</p>
+    <script>
+    /* Follows the update: every 2 seconds the bar reads where the script is;
+       while the server restarts nothing answers (expected), then the page
+       reloads once /api/health answers with the target version. */
+    (function () {
+      var box = document.getElementById('update-bar');
+      var target = box.dataset.target, steps = JSON.parse(box.dataset.steps), tries = 0;
+      var bar = document.getElementById('update-progress'), pct = document.getElementById('update-pct'),
+          label = document.getElementById('update-step');
+      function show(p, step) {
+        if (p > bar.value || step === 'done') { bar.value = p; pct.textContent = p + '%'; }
+        if (step && steps[step]) label.textContent = steps[step];
+      }
+      function reload() { location.replace('/admin/updates?updated=' + Date.now() + '#aggiornamenti'); }
+      function health() {
+        return fetch('/api/health', {cache: 'no-store'}).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (h) { if (h && h.version === target) { show(100, 'done'); setTimeout(reload, 800); return true; } return false; });
+      }
+      function poll() {
+        if (++tries > 600) return reload();  // twenty minutes: the panel then shows what happened
+        fetch('/admin/updates/progress', {cache: 'no-store', credentials: 'same-origin'})
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (p) {
+            if (p && p.installed === target) { show(100, 'done'); return setTimeout(reload, 800); }
+            if (p && p.state === 'failed') return reload();
+            if (p) show(p.pending ? 0 : p.percent, p.pending ? 'request' : p.step);
+            return health().then(function (ok) { if (!ok) setTimeout(poll, 2000); });
+          })
+          .catch(function () { health().catch(function () { return false; }).then(function (ok) { if (!ok) setTimeout(poll, 2000); }); });
+      }
+      setTimeout(poll, 1000);
+    })();
+    </script>
+    {% endif %}
+    {% else %}
+    <p class="hint">{{ _('Per aggiornare da qui serve lo script update.sh sul server: vedi deploy/server/README.md, "Updating from the console". Senza, si aggiorna dal terminale.') }}</p>
+    {% endif %}
+    {% if installs.seen %}
+    <h3 id="installazioni" style="margin-top: 18px;">{{ _('Installazioni di Redazia') }}</h3>
+    <p class="hint">{{ _("Ogni installazione chiede a questo server l'ultima versione ogni ora, con un identificativo casuale e la versione installata. Chi ha EDITOR_TELEMETRY=off non viene contato.") }}</p>
+    <div class="list-row"><span>{{ _('Attive negli ultimi 7 giorni') }}</span><span class="num">{{ installs.active }}</span></div>
+    {% for v, n in installs.versions %}<div class="list-row"><span class="hint">{{ _('versione {version}', version=v) }}</span><span class="num">{{ n }}</span></div>{% endfor %}
+    <div class="list-row"><span>{{ _('Nuove negli ultimi 30 giorni') }}</span><span class="num">{{ installs.new_30 }}</span></div>
+    <div class="list-row"><span>{{ _('Viste in tutto') }}</span><span class="num">{{ installs.seen }}</span></div>
+    {% endif %}
+  </section>

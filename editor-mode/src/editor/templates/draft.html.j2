@@ -71,6 +71,7 @@
         {% if p.id in changing %}
         <p class="hint"><span class="spin" aria-hidden="true"></span> {{ _('Modifica sul sito in corso: la segui nel riquadro Attività.') }}</p>
         {% else %}
+        {% if p.id in stale_cover and d.status == 'approved' %}<p class="notice" style="margin: 6px 0;">{{ _('La copertina è cambiata dopo la pubblicazione: online c\'è ancora quella vecchia. Premi «Aggiorna sul sito» per sostituirla.') }}</p>{% endif %}
         <div class="row" style="flex-wrap: wrap; gap: 8px;">
           {% if d.status == 'approved' %}
           <form class="inline" method="post" action="/ui/publications/{{ p.id }}/update"><button class="btn sm" type="submit">{{ _('Rimetti online') if p.withdrawn_at else _('Aggiorna sul sito') }}</button></form>

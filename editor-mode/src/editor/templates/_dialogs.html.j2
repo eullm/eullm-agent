@@ -1,0 +1,58 @@
+<script>
+/* The windows of the console (<dialog>). Buttons open and close them with
+   command/commandfor; a browser that does not know those attributes yet
+   gets the same through this script. A window whose action failed opens
+   again with the reason, and a link to #id opens that window. Rows of a
+   table with data-href open their page. */
+(function () {
+  if (!('commandForElement' in HTMLButtonElement.prototype)) {
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('button[commandfor]');
+      if (!b) return;
+      var d = document.getElementById(b.getAttribute('commandfor')), c = b.getAttribute('command');
+      if (!d || typeof d.showModal !== 'function') return;
+      if (c === 'show-modal' && !d.open) d.showModal();
+      else if (c === 'close' && d.open) d.close();
+    });
+  }
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    /* Click outside to close, where the browser does not do it for
+       closedby="any": the press and the release both outside, so a text
+       selection that ends on the backdrop does not close the window. */
+    var outside = function (e, d) {
+      var r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    document.querySelectorAll('dialog[closedby="any"]').forEach(function (d) {
+      var down = false;
+      d.addEventListener('pointerdown', function (e) { down = outside(e, d); });
+      d.addEventListener('pointerup', function (e) { if (down && outside(e, d)) d.close(); });
+    });
+  }
+  function open(id, why) {
+    var d = id && document.getElementById(id);
+    if (!d || d.tagName !== 'DIALOG' || typeof d.showModal !== 'function' || d.open) return false;
+    if (why) {
+      var p = document.createElement('p'), body = d.querySelector('.dlg-body') || d;
+      p.className = 'error'; p.setAttribute('role', 'alert'); p.textContent = why;
+      body.insertBefore(p, body.firstChild);
+    }
+    d.showModal();
+    return true;
+  }
+  var at = {{ (reopen or notice_at or '')|tojson }}, failed = {{ (notice_error or reopen or false)|tojson }},
+      why = {{ (error if reopen else notice or '')|tojson }};
+  if (failed && at && open(at, why)) {  // the reason is in the window now, not twice
+    ['top-notice', 'top-error'].forEach(function (id) { var x = document.getElementById(id); if (x) x.hidden = true; });
+  } else if (location.hash.length > 1) {
+    try { open(decodeURIComponent(location.hash.slice(1))); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var tr = e.target.closest && e.target.closest('tr[data-href]');
+    if (!tr || e.target.closest('a, button, input, select, textarea, label, summary, form')) return;
+    if (window.getSelection && String(window.getSelection())) return;  // selecting text, not opening
+    if (e.metaKey || e.ctrlKey) window.open(tr.dataset.href, '_blank', 'noopener');
+    else location.href = tr.dataset.href;
+  });
+})();
+</script>

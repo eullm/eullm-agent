@@ -58,8 +58,13 @@
         {% if changing %}</details>{% endif %}
       {% endif %}
 
-      <details class="act" data-tone="green" {% if not r.customer %}open{% endif %}>
-        <summary><span class="ico" aria-hidden="true">€</span>{{ _('Dati di fatturazione') }}</summary>
+      {# The billing data in one line, the form behind it: open only while they are missing. #}
+      {% set town = [c.postal_code, c.city, ('(' ~ c.province ~ ')') if c.province else '']|select|join(' ') %}
+      {% set place = [c.address, town]|select|join(', ') %}
+      {% set fiscal = [(_('P.IVA {n}', n=c.vat_number) if c.vat_number else ''), (_('CF {n}', n=c.tax_code) if c.tax_code else ''), (_('SDI {n}', n=c.sdi_code) if c.sdi_code else ''), (_('PEC {n}', n=c.pec) if c.pec else '')]|select|join(' · ') %}
+      <details class="act" data-tone="green" id="billing-{{ r.tenant_id }}" {% if not r.customer %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">€</span>{% if r.customer %}{{ _('Dati di fatturazione') }}<span class="sub">{{ c.name }}{% if fiscal %} · {{ fiscal }}{% endif %}{% if place %} · {{ place }}{% endif %} · {{ c.email }}</span>{% else %}{{ _('Dati di fatturazione') }}<span class="sub">{{ _('da compilare prima di pagare') }}</span>{% endif %}</summary>
+        {% if r.customer and not (c.vat_number or c.tax_code) %}<p class="hint" style="margin: 0 14px;">{{ _('Per una fattura elettronica in Italia servono la partita IVA o il codice fiscale e il codice SDI o la PEC.') }}</p>{% endif %}
         <form method="post" action="/account/{{ r.tenant_id }}/customer" class="form-grid billing" style="margin-top: 8px;">
           {% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
           <label class="field">{{ _('Tipo') }}<select name="kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if c.kind == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
@@ -78,6 +83,32 @@
           <div class="wide"><button class="btn" type="submit">{{ _('Salva i dati') }}</button></div>
         </form>
       </details>
+
+      {# What was paid and refunded: the receipts of the newsroom. Checkouts
+         left halfway are not payments and stay out. #}
+      {% set pays = (r.payments or [])|rejectattr('status', 'in', ['open', 'canceled', 'expired'])|list %}
+      {% if pays %}
+      {% set what = {'first': _('primo pagamento'), 'recurring': _('rinnovo'), 'manual': _('pagamento registrato'), 'refund': _('rimborso'), 'credits': _('crediti')} %}
+      {% set state = {'paid': ('green', _('pagato')), 'refunded': ('', _('rimborsato')), 'failed': ('red', _('non riuscito')), 'queued': ('amber', _('in corso')), 'pending': ('amber', _('in corso')), 'processing': ('amber', _('in corso'))} %}
+      <h3 style="margin: 20px 0 6px;">{{ _('Pagamenti') }}</h3>
+      <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Cosa') }}</th><th>{{ _('Metodo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th></tr></thead>
+        <tbody>
+        {% for p in pays %}
+        {% set st = state.get(p.status, ('', p.status)) %}
+        <tr>
+          <td class="num">{{ (p.paid_at or p.created_at).strftime('%d/%m/%Y') if (p.paid_at or p.created_at) else '–' }}</td>
+          <td>{{ what.get(p.kind, p.kind) }}</td>
+          <td>{{ _('online') if p.provider == 'mollie' else _('bonifico') }}</td>
+          <td class="num">{{ '−' if p.kind == 'refund' }}{{ money(p.amount_cents, p.currency) }}</td>
+          <td><span class="chip {{ st[0] }}">{{ st[1] }}</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
 
       {% if sub and sub.status in ('active', 'past_due', 'trialing') and not r.reseller %}
       <details class="act" data-tone="red">

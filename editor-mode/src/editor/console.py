@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from . import accounts, backups, billing, commerce, credits, installs, newsrooms, repo, trials, updates, usage
 from . import models as m
@@ -38,6 +38,7 @@ INSTALLED = metadata.version("eullm-editor-mode")
 SITE_COOKIE = "editor_site"
 NOTICE_COOKIE = "editor_notice"
 NOTICE_AT_COOKIE = "editor_notice_at"  # the console section the notice belongs to
+NOTICE_KIND_COOKIE = "editor_notice_kind"  # "error" when the notice says something went wrong
 
 
 class LimitsIn(BaseModel):
@@ -302,6 +303,7 @@ def register(app, ctx) -> None:
         the newsroom shown in full (view "redazione")."""
         notice = request.cookies.get(NOTICE_COOKIE)
         notice_at = request.cookies.get(NOTICE_AT_COOKIE) if notice else None
+        notice_error = bool(notice) and request.cookies.get(NOTICE_KIND_COOKIE) == "error"
         from urllib.parse import unquote
         if room:  # a refund cancelled in Mollie's dashboard shows as cancelled here
             try:
@@ -311,13 +313,31 @@ def register(app, ctx) -> None:
         if view == "aggiornamenti" and (where := updates.folder(ctx.updates_dir)) is not None:
             updates.refresh(where, INSTALLED, updates.this_install())
         plans = billing.plans(admin)
+        subs = billing.subscriptions(admin)
+        rooms = newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db)
+        extra = {}
+        if view in ("redazioni", "pagamenti", "cliente"):
+            pays = billing.all_payments(admin)
+            extra["month"] = billing.month_numbers(pays, subs)
+            extra["all_pays"] = pays
+        if view == "redazioni":
+            extra["numbers"] = room_numbers(rooms, subs)
+        if view == "cliente":
+            cid = data.get("customer_id")
+            extra["the_customer"] = next((c for c in billing.customers(admin) if c["id"] == cid), None)
+            mine = {n["tenant_id"] for n in (extra["the_customer"] or {}).get("newsrooms", [])}
+            extra["all_pays"] = [x for x in extra["all_pays"] if x["tenant_id"] in mine]
+        if view == "redazione" and room:
+            extra["invited"] = accounts.pending_invites(admin, room)
+        if view == "nuova" and not data.get("form") and (pick := request.query_params.get("customer", "")).isdigit():
+            data["form"] = {"customer_mode": "existing", "customer_id": pick}  # from a customer's page
         resp = pages.TemplateResponse(request, "console.html.j2", {
-            "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
+            "view": view, "me": s, "rooms": rooms, "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),
             "roles": ROLES, "notice": unquote(notice) if notice else None, "notice_at": notice_at, "mine": accounts.memberships(admin, s.user_id),
             "customers": billing.customers(admin), "resellers": billing.resellers(admin), "plans": plans,
             "plan_names": {p["code"]: p["name"] for p in plans},
-            "subs": billing.subscriptions(admin), "payments": billing.payments_by_tenant(admin),
+            "subs": subs, "payments": billing.payments_by_tenant(admin),
             "single_room": room, "people": accounts.members(admin, room) if room else [],
             "work": room_work(room) if room and view == "redazione" else None,
             "room_customer": billing.customer_of(admin, room) if room else None,
@@ -327,35 +347,57 @@ def register(app, ctx) -> None:
             "refusals": refusals(), "trial_kinds": trials.LABELS,
             "updates": updates.state(updates.folder(ctx.updates_dir), INSTALLED), "installs": installs.summary(admin),
             "backups": backups.state(updates.folder(ctx.updates_dir)) if view == "backup" else None,
-            "new": None, **data},
+            "notice_error": notice_error, "new": None, "form": {}, "reopen": None, "q": "", **extra, **data},
             status_code=status_code)
         if notice:
             resp.delete_cookie(NOTICE_COOKIE)
             resp.delete_cookie(NOTICE_AT_COOKIE)
+            resp.delete_cookie(NOTICE_KIND_COOKIE)
         return resp
 
-    def back(notice: str, at: str = "") -> RedirectResponse:
+    def room_numbers(rooms: list[dict], subs: dict) -> dict:
+        """The top of the newsrooms page: what the plans bring in a month,
+        trials (and those ending within three days), newsrooms waiting for
+        a payment, the model's cost of the month."""
+        trial = [x for x in subs.values() if x["status"] == "trialing"]
+        cost = sum(float(((r.get("usage") or {}).get("llm_cost") or {}).get("used") or 0) for r in rooms)
+        mrr = sum(x.get("monthly_cents") or 0 for x in subs.values())
+        return {"mrr": mrr, "paying": sum(1 for x in subs.values() if x["status"] == "active"),
+                "trial": len(trial), "soon": sum(1 for x in trial if (x.get("days_left") or 0) <= 3),
+                "unpaid": sum(1 for r in rooms if r.get("hold") == "billing"
+                              or (subs.get(r["tenant_id"]) or {}).get("status") in ("expired", "past_due")),
+                "cost": cost, "margin": mrr / 100 - cost}
+
+    def back(notice: str, at: str = "", error: bool = False) -> RedirectResponse:
         """Back to the page of the console `at` belongs to (a newsroom
         r-<id>, a customer c-<id>, a reseller v-<id>, a plan p-<code>, or a
-        section), at that place, the notice shown in it."""
+        section), the notice shown at the top. `error`: something went
+        wrong, and the window it came from (`at`, when it is one) opens
+        again with the reason."""
         from urllib.parse import quote
-        resp = RedirectResponse(admin_page(at) + (f"#{at}" if at else ""), status_code=303)
+        resp = RedirectResponse(admin_page(at), status_code=303)
         resp.set_cookie(NOTICE_COOKIE, quote(notice), max_age=60, httponly=True, samesite="strict")
         if at:
             resp.set_cookie(NOTICE_AT_COOKIE, at, max_age=60, httponly=True, samesite="strict")
+        if error:
+            resp.set_cookie(NOTICE_KIND_COOKIE, "error", max_age=60, httponly=True, samesite="strict")
         return resp
 
     def admin_page(at: str) -> str:
         from urllib.parse import quote
         if at.startswith("r-"):
             return f"/admin/newsrooms/{quote(at[2:].split('--')[0])}"
-        for prefix, path in (("c-", "customers"), ("v-", "resellers"), ("p-", "plans")):
+        if at.startswith("c-") and at[2:].split("--")[0].isdigit():
+            return f"/admin/customers/{at[2:].split('--')[0]}"
+        for prefix, path in (("v-", "resellers"), ("p-", "plans"), ("k-", "plans")):
             if at.startswith(prefix):
                 return f"/admin/{path}"
-        return {"clienti": "/admin/customers", "rivenditori": "/admin/resellers", "piani": "/admin/plans",
-                "crediti": "/admin/plans",
-                "aggiornamenti": "/admin/updates", "backup": "/admin/backups", "operatori": "/admin/operators", "api": "/admin/keys",
-                "nuova": "/admin/new"}.get(at, "/admin")
+        return {"clienti": "/admin/customers", "nuovo-cliente": "/admin/customers/new", "rivenditori": "/admin/resellers",
+                "piani": "/admin/plans", "nuovo-piano": "/admin/plans", "crediti": "/admin/plans",
+                "nuovo-pacchetto": "/admin/plans", "nuovo-rivenditore": "/admin/resellers",
+                "aggiornamenti": "/admin/updates", "backup": "/admin/backups", "operatori": "/admin/operators",
+                "nuovo-amministratore": "/admin/operators", "api": "/admin/keys", "nuova-chiave": "/admin/keys",
+                "pagamenti": "/admin/payments", "nuova": "/admin/new"}.get(at, "/admin")
 
     def need_console(request: Request):
         s = console_user(request)
@@ -456,13 +498,102 @@ def register(app, ctx) -> None:
                        ("updates", "aggiornamenti"), ("backups", "backup")):
         app.get(f"/admin/{path}", response_class=HTMLResponse)(section(view))
 
+    @app.get("/admin/customers/new", response_class=HTMLResponse)
+    def console_new_customer(request: Request):
+        s = console_user(request)
+        if s is None:
+            return RedirectResponse("/login", status_code=303)
+        return page(request, s, view="nuovo-cliente")
+
+    @app.get("/admin/customers/{cid}", response_class=HTMLResponse)
+    def console_customer(request: Request, cid: int):
+        s = console_user(request)
+        if s is None:
+            return RedirectResponse("/login", status_code=303)
+        if billing.customer(admin, cid) is None:
+            return back(t("Cliente non trovato."), "clienti", error=True)
+        return page(request, s, view="cliente", customer_id=cid)
+
+    @app.get("/admin/payments", response_class=HTMLResponse)
+    def console_payments(request: Request):
+        s = console_user(request)
+        if s is None:
+            return RedirectResponse("/login", status_code=303)
+        return page(request, s, view="pagamenti")
+
+    @app.get("/admin/payments.csv")
+    def console_payments_csv(request: Request):
+        """Every payment for the accountant: semicolons and decimal commas,
+        as a spreadsheet in Italian opens them, with a BOM for the accents."""
+        import csv
+        import io
+        if console_user(request) is None:
+            raise HTTPException(403, "operator account required")
+        kinds = {"first": t("primo pagamento"), "recurring": t("rinnovo"), "manual": t("bonifico"),
+                 "refund": t("rimborso"), "credits": t("crediti")}
+        buf = io.StringIO()
+        w = csv.writer(buf, delimiter=";")
+        w.writerow([t("Data"), t("Redazione"), t("Id redazione"), t("Cliente"), t("P.IVA"), t("Codice fiscale"),
+                    t("Tipo"), t("Importo"), t("Valuta"), t("Stato"), t("Metodo"), t("Id pagamento"), t("Nota")])
+        for x in billing.all_payments(admin, 100000):
+            when = x["paid_at"] or x["created_at"]
+            cents = -x["amount_cents"] if x["kind"] == "refund" else x["amount_cents"]
+            w.writerow([when.strftime("%Y-%m-%d %H:%M") if when else "", x["newsroom"] or "", x["tenant_id"] or "",
+                        x["customer_name"] or "", x["customer_vat"] or "", x["customer_tax_code"] or "",
+                        kinds.get(x["kind"], x["kind"]), f"{cents / 100:.2f}".replace(".", ","), x["currency"],
+                        x["status"], "Mollie" if x["provider"] == "mollie" else t("bonifico") if x["provider"] == "manual"
+                        else x["provider"], x["provider_payment_id"] or "", x["note"] or ""])
+        day = datetime.now(UTC).date().isoformat()
+        return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="pagamenti-{day}.csv"'})
+
+    def search(q: str) -> dict:
+        """Newsrooms, customers and people whose name, id, email, VAT number,
+        tax code or city hold the words searched."""
+        q = " ".join(q.split()).lower()
+        if len(q) < 2:
+            return {"rooms": [], "customers": [], "people": []}
+        tn, c, u, ms = m.tenants, m.customers, m.users, m.memberships
+
+        def has(*cols):
+            return or_(*(func.lower(col).contains(q, autoescape=True) for col in cols))
+        with accounts._read(admin) as conn:
+            rooms = conn.execute(select(tn.c.tenant_id, tn.c.name, tn.c.active, tn.c.hold, tn.c.customer_id)
+                                 .where(tn.c.tenant_id != repo.ARCHIVE, has(tn.c.name, tn.c.tenant_id, tn.c.external_ref))
+                                 .order_by(tn.c.name).limit(50)).all()
+            customers = conn.execute(select(c).where(has(c.c.name, c.c.email, c.c.vat_number, c.c.tax_code, c.c.pec,
+                                                         c.c.city, c.c.phone, c.c.external_ref))
+                                     .order_by(c.c.name).limit(50)).all()
+            people = conn.execute(select(u.c.id, u.c.email, u.c.name, u.c.operator).where(has(u.c.email, u.c.name))
+                                  .order_by(u.c.email).limit(50)).all()
+            where = {}
+            for r in conn.execute(select(ms.c.user_id, ms.c.role, tn.c.tenant_id, tn.c.name)
+                                  .join(tn, tn.c.tenant_id == ms.c.tenant_id)
+                                  .where(ms.c.user_id.in_([p.id for p in people] or [0]))).all():
+                where.setdefault(r.user_id, []).append(dict(r._mapping))
+        return {"rooms": [dict(r._mapping) for r in rooms], "customers": [dict(r._mapping) for r in customers],
+                "people": [dict(p._mapping, rooms=where.get(p.id, [])) for p in people]}
+
+    @app.get("/admin/search", response_class=HTMLResponse)
+    def console_search(request: Request, q: str = ""):
+        s = console_user(request)
+        if s is None:
+            return RedirectResponse("/login", status_code=303)
+        found = search(q)
+        hits = [*found["rooms"], *found["customers"]]
+        if len(hits) == 1 and not found["people"]:  # one answer: straight to it
+            one = hits[0]
+            return RedirectResponse(f"/admin/newsrooms/{one['tenant_id']}" if "tenant_id" in one
+                                    else f"/admin/customers/{one['id']}", status_code=303)
+        return page(request, s, view="cerca", q=" ".join(q.split()), found=found)
+
     @app.get("/admin/newsrooms/{tenant_id}", response_class=HTMLResponse)
     def console_room(request: Request, tenant_id: str):
         s = console_user(request)
         if s is None:
             return RedirectResponse("/login", status_code=303)
         if not newsrooms.listing(admin, db, tenant_id):
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         return page(request, s, view="redazione", room=tenant_id)
 
     @app.get("/api/public/latest")
@@ -480,10 +611,10 @@ def register(app, ctx) -> None:
     def ui_updates_check(s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
         if where is None:
-            return back(t("Aggiornamenti dal pannello non attivi su questo server."), "aggiornamenti")
+            return back(t("Aggiornamenti dal pannello non attivi su questo server."), "aggiornamenti", error=True)
         found = updates.check(where, force=True, installed=INSTALLED, iid=updates.this_install())
         if found.get("error"):
-            return back(t("GitHub non ha risposto: {error}", error=found["error"]), "aggiornamenti")
+            return back(t("GitHub non ha risposto: {error}", error=found["error"]), "aggiornamenti", error=True)
         v = found.get("version") or ""
         if updates.newer(v, INSTALLED):
             return back(t("È disponibile la versione {version}.", version=v), "aggiornamenti")
@@ -506,21 +637,21 @@ def register(app, ctx) -> None:
                             target: str = Form(""), port: str = Form("22"), s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
         if where is None:
-            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+            return back(t("Backup dal pannello non attivi su questo server."), "backup", error=True)
         hour, _, minute = (time or "03:30").partition(":")
         try:
             backups.save(where, {"enabled": enabled, "frequency": frequency, "hour": hour, "minute": minute or "0",
                                  "weekday": weekday, "dir": dir, "keep": keep, "owner": owner, "name": name,
                                  "remote": remote, "target": target, "port": port}, s.email)
         except backups.Invalid as e:
-            return back(t(str(e)), "backup")
+            return back(t(str(e)), "backup", error=True)
         return back(t("Impostazioni dei backup salvate: il server le legge in pochi secondi."), "backup")
 
     @app.post("/admin/backups/now")
     def ui_backups_now(s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
         if where is None:
-            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+            return back(t("Backup dal pannello non attivi su questo server."), "backup", error=True)
         if backups.state(where)["pending"]:
             return back(t("Un backup è già in corso."), "backup")
         backups.ask_now(where, s.email)
@@ -530,11 +661,11 @@ def register(app, ctx) -> None:
     def ui_backups_delete(file: str = Form(...), s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
         if where is None:
-            return back(t("Backup dal pannello non attivi su questo server."), "backup")
+            return back(t("Backup dal pannello non attivi su questo server."), "backup", error=True)
         try:
             backups.ask_delete(where, file, s.email)
         except backups.Invalid as e:
-            return back(t(str(e)), "backup")
+            return back(t(str(e)), "backup", error=True)
         return back(t("Archivio {name} eliminato dal server.", name=file), "backup")
 
     @app.get("/admin/backups/state")
@@ -547,11 +678,11 @@ def register(app, ctx) -> None:
     def ui_updates_apply(version: str = Form(...), s=Depends(need_console)):
         where = updates.folder(ctx.updates_dir)
         if where is None:
-            return back(t("Aggiornamenti dal pannello non attivi su questo server."), "aggiornamenti")
+            return back(t("Aggiornamenti dal pannello non attivi su questo server."), "aggiornamenti", error=True)
         known = updates.state(where, INSTALLED)
         # Only the release GitHub announced, and only forward.
         if version != (known["available"] or {}).get("version") or not known["newer"]:
-            return back(t("Versione non disponibile."), "aggiornamenti")
+            return back(t("Versione non disponibile."), "aggiornamenti", error=True)
         if known["pending"] or (known["status"] or {}).get("state") == "running":
             return back(t("Un aggiornamento è già in corso."), "aggiornamenti")
         updates.request(where, version, s.email)
@@ -564,7 +695,33 @@ def register(app, ctx) -> None:
     def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(""), plan: str = Form(""),
                   max_sites: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
-                  credits_month: str = Form(""), customer: str = Form("new"), s=Depends(need_console)):
+                  credits_month: str = Form(""), customer: str = Form(""), customer_mode: str = Form(""),
+                  customer_id: str = Form(""), c_kind: str = Form("company"), c_name: str = Form(""),
+                  c_email: str = Form(""), c_phone: str = Form(""), c_vat_number: str = Form(""),
+                  c_tax_code: str = Form(""), c_address: str = Form(""), c_postal_code: str = Form(""),
+                  c_city: str = Form(""), c_province: str = Form(""), c_country: str = Form("IT"),
+                  c_sdi_code: str = Form(""), c_pec: str = Form(""), c_reseller: str = Form(""),
+                  s=Depends(need_console)):
+        """One step for a sale: the customer (a new one with its billing data,
+        an existing one, or none for an internal newsroom), the newsroom with
+        its director, the plan. Nothing is created until all of it is right;
+        a mistake shows the form again with what was written."""
+        spec = {"kind": c_kind, "name": c_name, "email": c_email, "phone": c_phone, "vat_number": c_vat_number,
+                "tax_code": c_tax_code, "address": c_address, "postal_code": c_postal_code, "city": c_city,
+                "province": c_province, "country": c_country or "IT", "sdi_code": c_sdi_code, "pec": c_pec}
+        if not customer_id.strip() and customer.strip().isdigit():  # the form before 0.28.42
+            customer_id = customer.strip()
+        mode = customer_mode.strip() or ("existing" if customer_id.strip().isdigit()
+                                         else "new" if c_name.strip() or c_email.strip() else "none")
+        form = {"name": name, "owner_email": owner_email, "plan": plan, "max_sites": max_sites,
+                "max_active_sources": max_active_sources, "max_items_per_day": max_items_per_day,
+                "max_llm_cost_month": max_llm_cost_month, "max_drafts_month": max_drafts_month,
+                "max_languages": max_languages, "credits_month": credits_month, "customer_mode": mode,
+                "customer_id": customer_id.strip(), "c_reseller": c_reseller.strip(),
+                **{f"c_{k}": v for k, v in spec.items()}}
+
+        def again(error: str, status: int = 400, **more):
+            return page(request, s, status, view="nuova", error=error, form={**form, **more.pop("form", {})}, **more)
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
                       "max_items_per_day": _num(max_items_per_day),
@@ -572,45 +729,63 @@ def register(app, ctx) -> None:
                       "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
                       "credits_month": _num(credits_month)}
         except ValueError:
-            return page(request, s, 400, view="nuova", error=t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
-        if not owner_email.strip() and customer.strip().isdigit():
-            # An existing customer: the director is the customer, unless said otherwise.
-            owner_email = (billing.customer(admin, int(customer)) or {}).get("email") or ""
-        if not owner_email.strip():
-            return page(request, s, 400, view="nuova",
-                        error=t("Scrivi l'email del direttore, oppure scegli un cliente che ne ha una."))
+            return again(t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."))
         code = plan.strip().lower()
         chosen = next((p for p in billing.plans(admin) if p["code"] == code), None) if code else None
         if code and chosen is None:
-            return page(request, s, 400, view="nuova", error=t("piano sconosciuto: {code}", code=code))
-        spec = {"name": name, "owner_email": owner_email, "limits": limits}
+            return again(t("piano sconosciuto: {code}", code=code))
+        cid, email_of = None, ""
+        if mode == "existing":
+            found = billing.customer(admin, int(customer_id)) if customer_id.strip().isdigit() else None
+            if found is None:
+                return again(t("Scegli il cliente dall'elenco, oppure inseriscine uno nuovo."))
+            cid, email_of = found["id"], found["email"]
+        elif mode == "new":
+            try:
+                data = billing.clean_customer(spec)
+                with accounts._read(admin) as conn:
+                    twin = billing.twin_customer(conn, data)
+            except (billing.BillingError, accounts.AccountError) as e:
+                return again(t("Dati del cliente da correggere: {error}.", error=e))
+            if twin is not None:
+                # Already a customer: the form comes back with it chosen, nothing lost.
+                row, message = twin
+                return again(t(message, name=row.name) + " " + t("L'ho scelto in «Cliente esistente»: controlla e crea la redazione."),
+                             form={"customer_mode": "existing", "customer_id": str(row.id)})
+            email_of = data["email"]
+        if not owner_email.strip():
+            owner_email = email_of  # the director is the customer, unless said otherwise
+        if not owner_email.strip():
+            return again(t("Scrivi l'email del direttore, oppure scegli un cliente che ne ha una."))
         try:
-            res = newsrooms.create(admin, spec, s.email, ctx.core)
+            res = newsrooms.create(admin, {"name": name, "owner_email": owner_email, "limits": limits}, s.email, ctx.core)
         except (newsrooms.NewsroomError, accounts.AccountError) as e:
-            return page(request, s, 400, view="nuova", error=t("Redazione non creata: {error}.", error=e))
-        new = {"what": t("Redazione {name} creata (id {tenant})", name=name.strip(), tenant=res["tenant_id"]),
-               "warning": res["warning"]}
+            return again(t("Redazione non creata: {error}.", error=e))
+        tid = res["tenant_id"]
+        new = {"what": t("Redazione {name} creata (id {tenant})", name=name.strip(), tenant=tid), "warning": res["warning"]}
         if res["invite"]:
             new["link"] = send(request, res["invite"], "invite", res["owner_email"], name.strip(), s.email)
         else:
             new["note"] = t("{email} ha già un account: la trova fra le sue redazioni.", email=res["owner_email"])
-        tid = res["tenant_id"]
-        if customer.strip().isdigit():
+        if mode == "new":
             try:
-                billing.link_customer(admin, tid, int(customer))
+                cid = billing.create_customer(admin, spec, int(c_reseller) if c_reseller.strip().isdigit() else None)
+            except billing.BillingError as e:
+                new["warning"] = t("Cliente non creato: {error}. Crealo dalla scheda della redazione.", error=e)
+        if cid is not None:
+            try:
+                billing.link_customer(admin, tid, cid)
             except (billing.BillingError, LookupError) as e:
                 new["warning"] = t("Cliente non collegato: {error}.", error=e)
         if chosen is not None:
             # The plan's limits and subscription; the numbers written by hand win over the plan's.
             try:
-                billing.start(admin, tid, chosen["code"], int(customer) if customer.strip().isdigit() else None,
-                              core=ctx.core)
+                billing.start(admin, tid, chosen["code"], cid, core=ctx.core)
                 if own := {k: v for k, v in limits.items() if v is not None}:
                     newsrooms.update_newsroom(admin, tid, {"limits": own}, ctx.core)
             except (ValueError, LookupError) as e:
                 new["warning"] = t("Piano non applicato: {error}.", error=e)
-        # The newsroom's card next, with its customer to create (a new one) or linked.
-        return page(request, s, view="redazione", room=tid, new=new, open_customer=not customer.strip().isdigit())
+        return page(request, s, view="redazione", room=tid, new=new)
 
     @app.post("/admin/newsrooms/{tenant_id}")
     def ui_update(tenant_id: str, name: str = Form(""), plan: str = Form(""), max_sites: str = Form(""),
@@ -627,9 +802,9 @@ def register(app, ctx) -> None:
                 {"plan": plan.strip()[:60]} if plan.strip() else {}) | (
                 {"name": name.strip()} if name.strip() else {}), ctx.core)
         except ValueError:
-            return back(t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."), f"r-{tenant_id}--edit")
+            return back(t("I limiti sono numeri di zero o più; vuoto vuol dire senza limite."), f"r-{tenant_id}--edit", error=True)
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         return back(t("Redazione {tenant} aggiornata.", tenant=tenant_id)
                     + (" " + t("Attenzione: {warning}", warning=res["warning"]) if res["warning"] else ""),
                     f"r-{tenant_id}--edit")
@@ -640,7 +815,7 @@ def register(app, ctx) -> None:
         try:
             newsrooms.update_newsroom(admin, tenant_id, {"active": on})
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         return back(t("Redazione {tenant} riattivata.", tenant=tenant_id) if on else
                     t("Redazione {tenant} sospesa: le persone non entrano e il lavoro programmato si ferma, i dati restano.",
                       tenant=tenant_id), f"r-{tenant_id}")
@@ -650,7 +825,7 @@ def register(app, ctx) -> None:
                   s=Depends(need_console)):
         rows = newsrooms.listing(admin, db, tenant_id)
         if not rows:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         try:
             token = accounts.create_invite(admin, email, s.email, tenant_id=tenant_id, role=role)
         except accounts.AccountError as e:
@@ -660,15 +835,67 @@ def register(app, ctx) -> None:
                                                        email=email.strip().lower()),
                                      "link": send(request, token, "invite", email.strip().lower(), rows[0]["name"], s.email)})
 
+    @app.post("/admin/newsrooms/{tenant_id}/people/{uid}/role")
+    def ui_person_role(tenant_id: str, uid: int, role: str = Form(...), s=Depends(need_console)):
+        try:
+            accounts.change_role(admin, tenant_id, uid, role)
+        except accounts.AccountError as e:
+            return back(t("Ruolo non cambiato: {e}.", e=e), f"r-{tenant_id}", error=True)
+        return back(t("Ruolo aggiornato."), f"r-{tenant_id}")
+
+    @app.post("/admin/newsrooms/{tenant_id}/people/{uid}/remove")
+    def ui_person_remove(tenant_id: str, uid: int, s=Depends(need_console)):
+        try:
+            accounts.remove_member(admin, tenant_id, uid)
+        except accounts.AccountError as e:
+            return back(t("Persona non rimossa: {e}.", e=e), f"r-{tenant_id}", error=True)
+        return back(t("Persona rimossa dalla redazione: non entra più."), f"r-{tenant_id}")
+
+    def resend(request: Request, s, tenant_id: str, email: str, role: str):
+        """A new invite for someone who has not come in yet: the links sent
+        before, perhaps expired, stop working."""
+        rows = newsrooms.listing(admin, db, tenant_id)
+        if not rows:
+            return back(t("Redazione non trovata."), error=True)
+        old = [i.token_sha256 for i in accounts.pending_invites(admin, tenant_id) if i.email == email]
+        token = accounts.create_invite(admin, email, s.email, tenant_id=tenant_id, role=role)
+        for sha in old:
+            accounts.revoke_invite(admin, tenant_id, sha)
+        return page(request, s, view="redazione", room=tenant_id,
+                    new={"what": t("Nuovo invito a {newsroom} per {email}", newsroom=rows[0]["name"], email=email),
+                         "link": send(request, token, "invite", email, rows[0]["name"], s.email)})
+
+    @app.post("/admin/newsrooms/{tenant_id}/people/{uid}/resend", response_class=HTMLResponse)
+    def ui_person_resend(request: Request, tenant_id: str, uid: int, s=Depends(need_console)):
+        who = next((x for x in accounts.members(admin, tenant_id) if x.id == uid), None)
+        if who is None:
+            return back(t("Persona non trovata in questa redazione."), f"r-{tenant_id}", error=True)
+        if who.active:
+            return back(t("{email} è già entrato: per una nuova password usa Amministratori › Chi non riesce a entrare.",
+                          email=who.email), f"r-{tenant_id}", error=True)
+        return resend(request, s, tenant_id, who.email, who.role)
+
+    @app.post("/admin/newsrooms/{tenant_id}/invites/{sha}/resend", response_class=HTMLResponse)
+    def ui_invite_resend(request: Request, tenant_id: str, sha: str, s=Depends(need_console)):
+        i = next((x for x in accounts.pending_invites(admin, tenant_id) if x.token_sha256 == sha), None)
+        if i is None:
+            return back(t("Invito già usato o scaduto."), f"r-{tenant_id}", error=True)
+        return resend(request, s, tenant_id, i.email, i.role or "editor")
+
+    @app.post("/admin/newsrooms/{tenant_id}/invites/{sha}/revoke")
+    def ui_invite_revoke(tenant_id: str, sha: str, s=Depends(need_console)):
+        n = accounts.revoke_invite(admin, tenant_id, sha)
+        return back(t("Invito annullato.") if n else t("Invito già usato o scaduto."), f"r-{tenant_id}", error=not n)
+
     @app.post("/admin/newsrooms/{tenant_id}/delete")
     def ui_delete(tenant_id: str, confirm: str = Form(""), s=Depends(need_console)):
         if confirm.strip() != tenant_id:
             return back(t("Per cancellare scrivi l'id della redazione ({tenant}): niente è stato cancellato.", tenant=tenant_id),
-                        f"r-{tenant_id}--delete")
+                        f"r-{tenant_id}--delete", error=True)
         try:
             newsrooms.delete(admin, tenant_id)
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         return back(t("Redazione {tenant} cancellata con tutti i suoi dati.", tenant=tenant_id))
 
     @app.get("/admin/enter/{tenant_id}")
@@ -677,7 +904,7 @@ def register(app, ctx) -> None:
         if s is None:
             return RedirectResponse("/login", status_code=303)
         if not newsrooms.listing(admin, db, tenant_id):
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         token = accounts.start_session(admin, s.user_id, tenant_id)
         accounts.end_session(admin, request.cookies.get(COOKIE))
         resp = RedirectResponse("/", status_code=303)
@@ -699,9 +926,9 @@ def register(app, ctx) -> None:
         try:
             email = accounts.remove_operator(admin, uid, s.user_id)
         except LookupError:
-            return back(t("Amministratore non trovato."), "operatori")
+            return back(t("Amministratore non trovato."), "operatori", error=True)
         except accounts.AccountError as e:
-            return back(t("Amministratore non tolto: {e}.", e=e), "operatori")
+            return back(t("Amministratore non tolto: {e}.", e=e), "operatori", error=True)
         return back(t("{email} non è più amministratore: le sue redazioni restano.", email=email), "operatori")
 
     @app.post("/admin/invites/{sha}/revoke")

@@ -101,3 +101,9 @@ def test_the_box_follows_the_site_chosen_in_the_menu(db, tenant):
         assert "Proposte di articoli" not in page, path
     c.get(f"/switch?site={other}&back=/", follow_redirects=False)
     assert "Proposte di articoli" in c.get("/ui/activity?mode=desk").text
+
+
+def test_a_new_cover_for_an_article_online_says_how_it_gets_there():
+    lines, link, label = activity._result("image", {"draft_id": 4, "title": "Bari", "online": 2}, None, str)
+    assert lines[0] == "Immagine pronta per «Bari»." and "Aggiorna sul sito" in lines[1] and link == "/drafts/4"
+    assert len(activity._result("image", {"draft_id": 4, "title": "Bari", "online": 0}, None, str)[0]) == 1

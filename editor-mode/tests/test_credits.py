@@ -204,38 +204,41 @@ def test_the_console_ties_an_old_newsroom_to_a_customer(db, admin, tenant):
     c.post("/login", data={"email": op, "password": "password lunga"})
     assert tenant in c.get("/admin/customers").text  # among the newsrooms without a customer
     page = c.get(f"/admin/newsrooms/{tenant}").text
-    assert "Persone e cliente" in page and owner in page and "invito non ancora accettato" in page
+    assert "Persone" in page and owner in page and "Invito non accettato" in page
+    assert "Collega o crea il cliente" in page and f'id="r-{tenant}--customer"' in page
     r = c.post(f"/admin/newsrooms/{tenant}/customer", data={"kind": "person", "name": "Capo", "email": owner,
                                                            "tax_code": "VRDMRA80A01H501U"}, follow_redirects=False)
     assert r.status_code == 303
     cust = billing.customer_of(admin, tenant)
-    assert cust["name"] == "Capo" and f"#c-{cust['id']}" in c.get(f"/admin/newsrooms/{tenant}").text
+    assert cust["name"] == "Capo" and f'href="/admin/customers/{cust["id"]}"' in c.get(f"/admin/newsrooms/{tenant}").text
     c.post(f"/admin/newsrooms/{tenant}/customer/link", data={"customer_id": ""})
     assert billing.customer_of(admin, tenant) is None
     c.post(f"/admin/newsrooms/{tenant}/customer/link", data={"customer_id": str(cust["id"])})
     assert billing.customer_of(admin, tenant)["id"] == cust["id"]
 
 
-def test_a_new_newsroom_opens_on_its_new_customer_or_takes_an_existing_one(db, admin):
+def test_a_new_newsroom_without_customer_opens_on_the_way_to_link_one(db, admin):
     c, _ = client(db)
     op = f"{unique('op')}@example.com"
     accounts.create_user(admin, op, "Operatore", "password lunga", operator=True)
     c.post("/login", data={"email": op, "password": "password lunga"})
-    assert 'option value="new" selected' in c.get("/admin/new").text
-    r = c.post("/admin/newsrooms", data={"name": unique("Nuova"), "owner_email": f"{unique('d')}@example.com"})
-    assert r.status_code == 200 and "Crea il cliente e collegalo" in r.text and "--customer\" open" in r.text
+    assert 'value="new" checked' in c.get("/admin/new").text
+    r = c.post("/admin/newsrooms", data={"customer_mode": "none", "name": unique("Nuova"),
+                                         "owner_email": f"{unique('d')}@example.com"})
+    assert r.status_code == 200 and "Collega o crea il cliente" in r.text
     tid = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
     c.post(f"/admin/newsrooms/{tid}/customer", data={"kind": "person", "name": "Capo", "email": "capo@example.com",
                                                     "tax_code": "VRDMRA80A01H501U"})
     cid = billing.customer_of(admin, tid)["id"]
     if db.sqlite:  # one newsroom per local installation: the second one is a server matter
         return
-    assert "Scrivi l&#39;email del direttore" in c.post("/admin/newsrooms", data={"name": unique("Senza")}).text
-    # An existing customer: its email is the director's when none is written.
+    assert "Scrivi l&#39;email del direttore" in c.post("/admin/newsrooms", data={"name": unique("Senza"),
+                                                                               "customer_mode": "none"}).text
+    # An existing customer (the form of before 0.28.42 too): its email is the director's when none is written.
     r = c.post("/admin/newsrooms", data={"name": unique("Seconda"), "customer": str(cid)})
     second = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
     assert "capo@example.com" in r.text
-    assert billing.customer_of(admin, second)["id"] == cid and "--customer\" open" not in r.text
+    assert billing.customer_of(admin, second)["id"] == cid and "Collega o crea il cliente" not in r.text
 
 
 def test_a_new_newsroom_starts_on_the_plan_chosen_from_the_menu(db, admin):
@@ -245,15 +248,15 @@ def test_a_new_newsroom_starts_on_the_plan_chosen_from_the_menu(db, admin):
     c.post("/login", data={"email": op, "password": "password lunga"})
     pro = next(p for p in billing.plans(admin) if p["code"] == "pro")
     form = c.get("/admin/new").text
-    assert '<option value="pro">' + pro["name"] in form and "Limiti su misura" in form
+    assert 'name="plan" value="pro"' in form and pro["name"] in form and "Limiti su misura" in form
     assert "piano sconosciuto" in c.post("/admin/newsrooms", data={
         "name": unique("Ignoto"), "owner_email": f"{unique('d')}@example.com", "plan": "nessuno"}).text
     r = c.post("/admin/newsrooms", data={"name": unique("Pro"), "owner_email": f"{unique('d')}@example.com",
-                                         "plan": "pro", "max_sites": "7"})
+                                         "customer_mode": "none", "plan": "pro", "max_sites": "7"})
     tid = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
     assert billing.subscription(admin, tid)["plan_code"] == "pro"
     with admin.engine.begin() as conn:
         row = conn.execute(select(m.tenants).where(m.tenants.c.tenant_id == tid)).first()
     # The plan's limits, but the number written by hand wins.
     assert row.plan == "pro" and row.max_drafts_month == pro["max_drafts_month"] and row.max_sites == 7
-    assert f"piano {pro['name']}" in c.get(f"/admin/newsrooms/{tid}").text
+    assert f"{pro['name']} · Attivo" in c.get(f"/admin/newsrooms/{tid}").text

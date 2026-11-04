@@ -297,6 +297,15 @@ def fits_language(target, language: str | None) -> bool:
     return not want or want == (language or "")[:2].lower()
 
 
+def cover_changed(image, pub) -> bool:
+    """Whether the cover was made after the article last went to its site
+    (published or updated): then an update has to send it too."""
+    if image is None:
+        return False
+    sent, made = pub.updated_at or pub.published_at, getattr(image, "created_at", None)
+    return sent is None or made is None or made > sent
+
+
 def build_payload(s, d) -> dict:
     """What a site receives for a draft: text, HTML and search fields."""
     body = d.body_md
@@ -449,7 +458,7 @@ class Publisher:
             if (pub.payload or {}).get("slug"):  # the address stays the same
                 payload["slug"] = pub.payload["slug"]
             image = s.execute(select(m.draft_images.c.mime, m.draft_images.c.content, m.draft_images.c.alt,
-                                     m.draft_images.c.token)
+                                     m.draft_images.c.token, m.draft_images.c.created_at)
                               .where(m.draft_images.c.draft_id == d.id)).first()
         result = self._change(db, tenant_id, pub, target, "update", payload, image)
         if result["status"] == "failed":
@@ -512,9 +521,13 @@ class Publisher:
         check_public_url(base, self.resolver)
         if not pub.external_id:
             raise PublishError("the post's id on WordPress is unknown: change it from WordPress")
-        r = self.http.post(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}",
-                           auth=(target.config["user"], _need(secret, target)),
-                           json=self._wordpress_post(target, payload, pub.mode))
+        auth = (target.config["user"], _need(secret, target))
+        post = self._wordpress_post(target, payload, pub.mode)
+        if cover_changed(image, pub):
+            # A cover made after the last send goes up with the text; an
+            # unchanged one is not uploaded again at every update.
+            post["featured_media"] = self._wordpress_media(base, auth, payload.get("slug"), image)
+        r = self.http.post(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}", auth=auth, json=post)
         _ensure_no_redirect(r, base, self.resolver)
         r.raise_for_status()
         return r.json().get("link")
@@ -532,13 +545,16 @@ class Publisher:
             r.raise_for_status()
         return None
 
-    def _webhook_event(self, target, pub, payload, secret, event: str):
+    def _webhook_event(self, target, pub, payload, secret, event: str, image=None):
         url = target.config["url"]
         check_public_url(url, self.resolver)
         data = {"event": event, "mode": pub.mode, "publication_id": pub.id, "url": pub.external_url}
         if event == "update":
             data |= {k: payload.get(k) for k in ("title", "subtitle", "markdown", "html", "language", "slug", "section",
                                                  "seo_title", "meta_description", "keyphrase", "jsonld")}
+            # The cover as on publishing: the receiver replaces its own when the link changes.
+            data["image"] = ({"url": f"{self.public_url}/media/{image.token}", "alt": image.alt, "type": image.mime}
+                             if image is not None and self.public_url else None)
         else:
             data["slug"] = payload.get("slug")
         raw = json.dumps(data, ensure_ascii=False).encode()
@@ -549,7 +565,7 @@ class Publisher:
         return None
 
     def _webhook_update(self, target, pub, payload, secret, image=None):
-        return self._webhook_event(target, pub, payload, secret, "update")
+        return self._webhook_event(target, pub, payload, secret, "update", image)
 
     def _webhook_withdraw(self, target, pub, payload, secret, image=None):
         return self._webhook_event(target, pub, payload, secret, "withdraw")
@@ -595,23 +611,26 @@ class Publisher:
         auth = (target.config["user"], _need(secret, target))
         post = self._wordpress_post(target, pub.payload, pub.mode)
         if image is not None:
-            # The cover image to the media library first, then as the post's featured image.
-            ext = "png" if image.mime == "image/png" else "jpg"
-            slug = pub.payload.get("slug") or "cover"
-            r = self.http.post(f"{base}/wp-json/wp/v2/media", auth=auth, content=image.content, headers={
-                "Content-Type": image.mime, "Content-Disposition": f'attachment; filename="{slug}.{ext}"'})
-            _ensure_no_redirect(r, base, self.resolver)
-            r.raise_for_status()
-            media = r.json()["id"]
-            if image.alt:
-                r = self.http.post(f"{base}/wp-json/wp/v2/media/{media}", auth=auth, json={"alt_text": image.alt})
-                _ensure_no_redirect(r, base, self.resolver)
-            post["featured_media"] = media
+            post["featured_media"] = self._wordpress_media(base, auth, pub.payload.get("slug"), image)
         r = self.http.post(f"{base}/wp-json/wp/v2/posts", auth=auth, json=post)
         _ensure_no_redirect(r, base, self.resolver)
         r.raise_for_status()
         body = r.json()
         return str(body["id"]), body.get("link")
+
+    def _wordpress_media(self, base: str, auth, slug: str | None, image) -> int:
+        """The cover image to the media library, with its alternative text:
+        its id, for the post's featured image."""
+        ext = "png" if image.mime == "image/png" else "jpg"
+        r = self.http.post(f"{base}/wp-json/wp/v2/media", auth=auth, content=image.content, headers={
+            "Content-Type": image.mime, "Content-Disposition": f'attachment; filename="{slug or "cover"}.{ext}"'})
+        _ensure_no_redirect(r, base, self.resolver)
+        r.raise_for_status()
+        media = r.json()["id"]
+        if image.alt:
+            r = self.http.post(f"{base}/wp-json/wp/v2/media/{media}", auth=auth, json={"alt_text": image.alt})
+            _ensure_no_redirect(r, base, self.resolver)
+        return media
 
     @staticmethod
     def _wordpress_post(target, payload: dict, mode: str) -> dict:

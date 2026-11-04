@@ -168,12 +168,13 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     assert tid in c.get("/admin").text
     assert "Nome e limiti" in c.get(f"/admin/newsrooms/{tid}").text
     assert "Aggiungi un piano" in c.get("/admin/plans").text
-    assert "Modifica o elimina Rossi Media srl" in c.get("/admin/customers").text
+    cid = next(x["id"] for x in billing.customers(admin) if any(n["tenant_id"] == tid for n in x["newsrooms"]))
+    assert f'data-href="/admin/customers/{cid}"' in c.get("/admin/customers").text
+    assert "Modifica o elimina Rossi Media srl" in c.get(f"/admin/customers/{cid}").text
 
     c.post(f"/admin/newsrooms/{tid}", data={"name": "Rossi Notizie", "plan": ""})
     assert next(r for r in billing.customers(admin) for r in r["newsrooms"] if r["tenant_id"] == tid)["name"] == "Rossi Notizie"
 
-    cid = next(x["id"] for x in billing.customers(admin) if any(n["tenant_id"] == tid for n in x["newsrooms"]))
     r = c.post(f"/admin/customers/{cid}", data={"kind": "company", "name": "Rossi Media spa", "email": "a@rossi.it",
                                                "vat_number": "IT01234567890", "address": "Via Po 2", "postal_code": "00100",
                                                "city": "Roma", "country": "IT", "sdi_code": "ABC1234"})

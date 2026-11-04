@@ -185,3 +185,60 @@ def test_the_draft_page_gives_the_director_the_controls(db, tenant, monkeypatch)
     with db.tenant(tenant) as s:
         job = s.execute(select(m.jobs.c.kind, m.jobs.c.args).where(m.jobs.c.kind == "change")).one()
     assert (job.args if isinstance(job.args, dict) else json.loads(job.args))["op"] == "withdraw"
+
+
+def test_a_cover_made_after_publishing_goes_online_with_the_update(db, tenant, monkeypatch):
+    """A cover redrawn once the article is online: its page says so, and
+    «Aggiorna sul sito» sends it as the featured image; an unchanged cover is
+    not uploaded again at every update."""
+    from fastapi.testclient import TestClient
+
+    from editor import auth, work
+    from editor.api import create_app
+    from test_images import fake_bfl, imager
+    did, site_id, pid = _wordpress(db, tenant, monkeypatch)
+    with respx.mock() as router:
+        fake_bfl(router)
+        done = work.handlers(db, imager=imager())["image"](tenant, f"draft {did}", {"draft_id": did, "site_id": site_id})
+    assert done["online"] == 1  # Activity tells to update it on the site
+    c = TestClient(create_app(db))
+    c.post("/login", data={"token": auth.create_token(db, tenant, "dir", "owner")}, follow_redirects=False)
+    assert "La copertina è cambiata dopo la pubblicazione" in c.get(f"/drafts/{did}").text
+    publisher = pub.Publisher(resolver=public_resolver)
+    with respx.mock() as router:
+        media = router.post("https://blog.example/wp-json/wp/v2/media").mock(return_value=httpx.Response(201, json={"id": 9}))
+        router.post("https://blog.example/wp-json/wp/v2/media/9").mock(return_value=httpx.Response(200, json={"id": 9}))
+        put = router.post("https://blog.example/wp-json/wp/v2/posts/77").mock(
+            return_value=httpx.Response(200, json={"id": 77, "link": "https://blog.example/bari/"}))
+        assert publisher.update(db, tenant, pid, "francesco")["status"] == "updated"
+    assert media.called and json.loads(put.calls[0].request.content)["featured_media"] == 9
+    assert "La copertina è cambiata dopo la pubblicazione" not in c.get(f"/drafts/{did}").text
+    with respx.mock(assert_all_called=False) as router:
+        media = router.post("https://blog.example/wp-json/wp/v2/media").mock(return_value=httpx.Response(201, json={"id": 10}))
+        put = router.post("https://blog.example/wp-json/wp/v2/posts/77").mock(
+            return_value=httpx.Response(200, json={"id": 77, "link": "https://blog.example/bari/"}))
+        publisher.update(db, tenant, pid, "francesco")
+    assert not media.called and "featured_media" not in json.loads(put.calls[0].request.content)
+
+
+def test_a_webhook_update_carries_the_cover_of_now(db, tenant, monkeypatch):
+    from editor import images
+    from test_images import fake_bfl, imager
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "HOOK"), "s3cret")
+    hook = pub.add_target(db, tenant, site_id, "webhook", "sito", {"url": "https://hooks.example/in"}, "HOOK")
+    pid = pub.request(db, tenant, did, hook, "publish", "r")
+    pub.decide(db, tenant, pid, True, "francesco")
+    publisher = pub.Publisher(resolver=public_resolver, public_url="https://editor.example.com")
+    with respx.mock() as router:
+        router.post("https://hooks.example/in").mock(return_value=httpx.Response(200))
+        publisher.run(db, tenant, pid)
+    with respx.mock() as router:
+        fake_bfl(router)
+        token = images.make(db, tenant, did, imager(), None)
+    with respx.mock() as router:
+        hook_in = router.post("https://hooks.example/in").mock(return_value=httpx.Response(200))
+        assert publisher.update(db, tenant, pid, "francesco")["status"] == "updated"
+    sent = json.loads(hook_in.calls[0].request.content)
+    assert sent["event"] == "update" and sent["image"]["url"] == f"https://editor.example.com/media/{token}"

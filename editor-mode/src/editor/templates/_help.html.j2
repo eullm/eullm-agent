@@ -1,6 +1,6 @@
 {# What a page is for, what to expect from it and what to check: the
-   pipeline of the newsroom, one page at a time. Open until closed; the
-   browser remembers it closed. #}
+   pipeline of the newsroom, one page at a time. Open on the first visit,
+   then as the person left it: the browser remembers. #}
 {% set HELP = {
   'today': [
     _('Il punto da cui tieni sotto controllo tutta la redazione, tutti i siti insieme. "Attività" mostra i lavori passo per passo e cosa hanno prodotto; la tabella dice a che punto è ogni sito e cosa aspetta; "Da decidere" raccoglie ciò che aspetta il tuo sì.'),
@@ -51,24 +51,33 @@
   'console': [
     _('La console di chi gestisce il servizio: redazioni, clienti, rivenditori, piani e chiavi API per il sito di vendita.'),
     _('Le iscrizioni dal sito arrivano qui come redazioni in prova, con l\'anagrafica del cliente. Le prove scadute e i pagamenti mancati fermano la redazione da soli, senza cancellare i dati.'),
-    _('Lo stato dell\'abbonamento di ogni redazione e i pagamenti ricevuti. Un bonifico lo registri tu dal modulo "Abbonamento" della redazione.'),
+    _('Lo stato dell\'abbonamento di ogni redazione e i pagamenti ricevuti. Un bonifico lo registri tu con «Registra un pagamento» nella pagina della redazione.'),
   ],
 } %}
 {% set h = HELP.get(page) %}
 {% if h %}
-<details class="card help" id="help-{{ page }}" open>
+<details class="card help" id="help-{{ page }}">
   <summary><strong>{{ _('Come funziona questa pagina') }}</strong> <a href="/guide" class="hint">{{ _('Guida completa') }}</a></summary>
   <div class="help-cols">
     <div><h3>{{ _('Cosa fa') }}</h3><p>{{ h[0] }}</p></div>
     <div><h3>{{ _('Cosa aspettarsi') }}</h3><p>{{ h[1] }}</p></div>
-    <div><h3>{{ _('Cosa controllare') }}</h3><p>{{ h[2] }}</p></div>
+    <div><h3>{{ _('Cosa controllare') }}</h3><p>{{ h[2] }}</p>{% if h|length > 3 %}<p>{{ h[3] }}</p>{% endif %}</div>
   </div>
 </details>
 <script>
 (function () {
-  var d = document.getElementById('help-{{ page }}'), k = 'editor-help-{{ page }}';
-  try { if (localStorage.getItem(k) === 'closed') d.removeAttribute('open'); } catch (e) {}
-  d.addEventListener('toggle', function () { try { localStorage.setItem(k, d.open ? 'open' : 'closed'); } catch (e) {} });
+  /* Open on the first visit of the page, then as the person left it. */
+  var d = document.getElementById('help-{{ page }}'), k = 'editor-help2-{{ page }}', v = null, auto = false;
+  try {
+    v = localStorage.getItem(k);
+    if (v === null && localStorage.getItem('editor-help-{{ page }}') === 'closed') v = 'closed';
+    if (v === null) localStorage.setItem(k, 'seen');
+  } catch (e) {}
+  if (v === null || v === 'open') { auto = true; d.open = true; }
+  d.addEventListener('toggle', function () {
+    if (auto) { auto = false; return; }
+    try { localStorage.setItem(k, d.open ? 'open' : 'closed'); } catch (e) {}
+  });
 })();
 </script>
 {% endif %}

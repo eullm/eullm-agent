@@ -24,15 +24,14 @@
 <div class="shell">
 {% include "_admin_nav.html.j2" %}
 <main class="main">
-  <div class="topbar">{% include "_lang.html.j2" %}</div>
+  {% include "_admin_top.html.j2" %}
   {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
-  <header class="head">
-    <div>
-      <span class="kicker">{{ _('Amministrazione') }}</span>
+  <header class="page-head">
+    <div class="ph-text">
       <h1>{{ _('Consumi del modello') }}</h1>
-      <p class="hint" style="margin: 4px 0 0;">{{ _("Ogni chiamata al modello è registrata quando avviene, anche se il lavoro poi fallisce: redazione, sito, articolo, passo, modello che ha risposto, token in entrata e in uscita, durata ed errore. Il costo registrato è quello dei prezzi in core.yaml (0 per un modello gratuito); il costo stimato usa i prezzi di riferimento qui sotto.") }}</p>
+      <p class="ph-sub">{{ _("Ogni chiamata al modello è registrata quando avviene, anche se il lavoro poi fallisce: redazione, sito, articolo, passo, modello che ha risposto, token in entrata e in uscita, durata ed errore. Il costo registrato è quello dei prezzi in core.yaml (0 per un modello gratuito); il costo stimato usa i prezzi di riferimento qui sotto.") }}</p>
     </div>
-    <div class="row">
+    <div class="ph-actions">
       {% for d in (1, 7, 30, 90) %}<a class="btn sm{% if d == r.days %} pri{% endif %}" href="/admin/usage?days={{ d }}">{{ _('{n} giorni', n=d) if d > 1 else _('Ultime 24 ore') }}</a>{% endfor %}
       <a class="btn sm" href="/admin/usage.csv?days={{ r.days }}">{{ _('Scarica CSV') }}</a>
     </div>

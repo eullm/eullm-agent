@@ -129,17 +129,17 @@
           </form>
         </td>
         <td>{{ when(p.created_at, 'day') }}</td>
-        <td style="text-align: right;">{% if p.id != caller.user_id %}<form class="inline" method="post" action="/ui/people/{{ p.id }}/remove"><button class="btn sm" type="submit">{{ _('Rimuovi') }}</button></form>{% endif %}</td>
+        <td style="text-align: right;">{% if not p.active %}<form class="inline" method="post" action="/ui/people/{{ p.id }}/resend"><button class="btn sm" type="submit" title="{{ _('Manda un nuovo link: il vecchio smette di valere.') }}">{{ _('Rimanda') }}</button></form> {% endif %}{% if p.id != caller.user_id %}<form class="inline" method="post" action="/ui/people/{{ p.id }}/remove"><button class="btn sm" type="submit">{{ _('Rimuovi') }}</button></form>{% endif %}</td>
       </tr>
       {% else %}
       <tr><td colspan="4" class="hint">{{ _('Nessuna persona con un account: invita qualcuno qui sotto.') }}</td></tr>
       {% endfor %}
-      {% for i in invited %}
+      {% for i in invited|rejectattr('email', 'in', people|map(attribute='email')|list) %}
       <tr>
         <td>{{ i.email }} <span class="chip">{{ _('Invitato') }}</span></td>
         <td>{{ {'owner': _('Direttore'), 'editor': _('Redattore'), 'viewer': _('Lettura')}.get(i.role, i.role) }}</td>
         <td>{{ _('scade {date}', date=when(i.expires_at, 'day')) }}</td>
-        <td style="text-align: right;"><form class="inline" method="post" action="/ui/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form></td>
+        <td style="text-align: right;"><form class="inline" method="post" action="/ui/invites/{{ i.token_sha256 }}/resend"><button class="btn sm" type="submit" title="{{ _('Manda un nuovo link: il vecchio smette di valere.') }}">{{ _('Rimanda') }}</button></form> <form class="inline" method="post" action="/ui/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form></td>
       </tr>
       {% endfor %}
       </tbody>

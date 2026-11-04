@@ -1,0 +1,89 @@
+{# Console › Rivenditori: who sells for us with their own API key. #}
+{% from "_admin_macros.html.j2" import dlg_head, dlg_foot with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Rivenditori') }}</h1>
+    <p class="ph-sub">{{ _('Un rivenditore iscrive e gestisce i suoi clienti con la sua chiave API e li fattura lui: vede solo i suoi.') }}</p>
+  </div>
+  <div class="ph-actions"><button class="btn pri" type="button" command="show-modal" commandfor="nuovo-rivenditore">+ {{ _('Nuovo rivenditore') }}</button></div>
+</header>
+
+<section class="card" id="rivenditori" aria-label="{{ _('Elenco dei rivenditori') }}">
+  {% if resellers %}
+  <div class="scroll">
+  <table class="tbl cards">
+    <thead><tr><th>{{ _('Rivenditore') }}</th><th class="num">{{ _('Sconto') }}</th><th class="num">{{ _('Clienti') }}</th><th class="num">{{ _('Redazioni') }}</th><th class="num">{{ _('Al mese a listino') }}</th><th>{{ _('Stato') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+    <tbody>
+    {% for x in resellers %}
+    {% set theirs = customers|selectattr('reseller_id', 'equalto', x.id)|map(attribute='newsrooms')|sum(start=[]) %}
+    {% set income = namespace(cents=0, trial=0) %}
+    {% for n in theirs %}{% set sb = subs.get(n.tenant_id) %}{% if sb %}{% set income.cents = income.cents + (sb.monthly_cents or 0) %}{% if sb.status == 'trialing' %}{% set income.trial = income.trial + 1 %}{% endif %}{% endif %}{% endfor %}
+    <tr {% if not x.active %}class="faded"{% endif %}>
+      <td data-label="{{ _('Rivenditore') }}"><strong>{{ x.name }}</strong><small>{{ x.email }}</small></td>
+      <td class="num" data-label="{{ _('Sconto') }}">{{ (x.discount_pct|num(0) ~ '%') if x.discount_pct else '–' }}</td>
+      <td class="num" data-label="{{ _('Clienti') }}">{{ x.customers }}</td>
+      <td class="num" data-label="{{ _('Redazioni') }}">{{ theirs|length }}{% if income.trial %}<small>{{ _('{n} in prova', n=income.trial) }}</small>{% endif %}</td>
+      <td class="num" data-label="{{ _('Al mese a listino') }}">{{ money(income.cents) }}</td>
+      <td data-label="{{ _('Stato') }}">{% if x.active %}<span class="chip green">{{ _('Attivo') }}</span>{% else %}<span class="chip">{{ _('Disattivato') }}</span>{% endif %}</td>
+      <td class="end"><span class="row">
+        <button class="btn sm" type="button" command="show-modal" commandfor="v-{{ x.id }}">{{ _('Modifica') }}</button>
+        {% if x.active %}<form class="inline" method="post" action="/admin/resellers/{{ x.id }}/key"><button class="btn sm" type="submit">{{ _('Nuova chiave') }}</button></form>{% endif %}
+        <form class="inline" method="post" action="/admin/resellers/{{ x.id }}/active"><input type="hidden" name="active" value="{{ '0' if x.active else '1' }}"><button class="btn sm" type="submit">{{ _('Disattiva') if x.active else _('Riattiva') }}</button></form>
+      </span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h2>{{ _('Nessun rivenditore') }}</h2>
+    <p class="hint">{{ _('Aggiungine uno: riceve la sua chiave API per iscrivere i suoi clienti.') }}</p>
+    <div class="row"><button class="btn pri" type="button" command="show-modal" commandfor="nuovo-rivenditore">+ {{ _('Nuovo rivenditore') }}</button></div>
+  </div>
+  {% endif %}
+</section>
+
+{% for x in resellers %}
+<dialog id="v-{{ x.id }}" class="modal" aria-labelledby="v-{{ x.id }}-title">
+  <form method="post" action="/admin/resellers/{{ x.id }}">
+    {{ dlg_head('v-' ~ x.id, _('Modifica o elimina {name}', name=x.name)) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Nome') }}<input name="name" value="{{ x.name }}" required maxlength="100" autofocus></label>
+        <label class="field span-2">{{ _('Email') }}<input name="email" type="email" value="{{ x.email }}" required></label>
+        <label class="field">{{ _('Sconto (%)') }}<input name="discount" inputmode="decimal" value="{{ x.discount_pct|num(0) if x.discount_pct else '0' }}"></label>
+      </div>
+      {% if x.customers %}<p class="hint">{{ _('Ha dei clienti: si può solo disattivare.') }}</p>{% endif %}
+    </div>
+    <footer class="dlg-foot">
+      {% if not x.customers %}<button class="btn danger left" type="button" command="show-modal" commandfor="v-{{ x.id }}--delete">{{ _('Elimina il rivenditore') }}</button>{% endif %}
+      <button class="btn" type="button" command="close" commandfor="v-{{ x.id }}">{{ _('Annulla') }}</button>
+      <button class="btn pri" type="submit">{{ _('Salva') }}</button>
+    </footer>
+  </form>
+</dialog>
+{% if not x.customers %}
+<dialog id="v-{{ x.id }}--delete" class="modal" aria-labelledby="v-{{ x.id }}--delete-title" closedby="any">
+  <form method="post" action="/admin/resellers/{{ x.id }}/delete">
+    {{ dlg_head('v-' ~ x.id ~ '--delete', _('Eliminare {name} e le sue chiavi API?', name=x.name)) }}
+    <div class="dlg-body"><p>{{ _('Non ha clienti. Le sue chiavi smettono subito di valere.') }}</p></div>
+    {{ dlg_foot('v-' ~ x.id ~ '--delete', _('Elimina il rivenditore'), 'danger', safe=True) }}
+  </form>
+</dialog>
+{% endif %}
+{% endfor %}
+
+<dialog id="nuovo-rivenditore" class="modal" aria-labelledby="nuovo-rivenditore-title">
+  <form method="post" action="/admin/resellers">
+    {{ dlg_head('nuovo-rivenditore', _('Nuovo rivenditore'), _('Riceve subito la sua chiave API, che vedi una volta sola.')) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Nome') }}<input name="name" required maxlength="100" autofocus></label>
+        <label class="field span-2">{{ _('Email') }}<input name="email" type="email" required></label>
+        <label class="field">{{ _('Sconto (%)') }}<input name="discount" inputmode="decimal" value="0"></label>
+      </div>
+    </div>
+    {{ dlg_foot('nuovo-rivenditore', _('Aggiungi rivenditore')) }}
+  </form>
+</dialog>

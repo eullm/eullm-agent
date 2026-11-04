@@ -1,0 +1,66 @@
+{# Console › Cerca: newsrooms, customers and people found with the box at the top. #}
+{% from "_admin_macros.html.j2" import room_chips with context %}
+{% set f = found or {'rooms': [], 'customers': [], 'people': []} %}
+{% set total = f.rooms|length + f.customers|length + f.people|length %}
+{% set roles_names = {'owner': _('Direttore'), 'editor': _('Redattore'), 'viewer': _('Lettura')} %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{% if q %}{{ _('Risultati per «{q}»', q=q) }}{% else %}{{ _('Cerca') }}{% endif %}</h1>
+    <p class="ph-sub">{% if q|length < 2 %}{{ _('Scrivi almeno due lettere: nome, id, email, partita IVA, codice fiscale, città o telefono.') }}{% elif total %}{{ _('1 risultato') if total == 1 else _('{n} risultati', n=total) }}{% else %}{{ _('Nessun risultato: prova con una parte del nome o dell\'email.') }}{% endif %}</p>
+  </div>
+</header>
+
+{% if f.rooms %}
+<section class="card" aria-labelledby="h-found-rooms">
+  <div class="card-head"><h2 id="h-found-rooms">{{ _('Redazioni') }}</h2><span class="hint">{{ f.rooms|length }}</span></div>
+  <div class="scroll">
+  <table class="tbl cards">
+    <tbody>
+    {% for r in f.rooms %}
+    <tr data-href="/admin/newsrooms/{{ r.tenant_id }}">
+      <td data-label="{{ _('Redazione') }}"><a class="room-name" href="/admin/newsrooms/{{ r.tenant_id }}">{{ r.name }}</a><small class="num">{{ r.tenant_id }}</small></td>
+      <td data-label="{{ _('Abbonamento') }}">{{ room_chips(r, subs.get(r.tenant_id)) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if f.customers %}
+<section class="card" aria-labelledby="h-found-customers">
+  <div class="card-head"><h2 id="h-found-customers">{{ _('Clienti') }}</h2><span class="hint">{{ f.customers|length }}</span></div>
+  <div class="scroll">
+  <table class="tbl cards">
+    <tbody>
+    {% for c in f.customers %}
+    <tr data-href="/admin/customers/{{ c.id }}">
+      <td data-label="{{ _('Cliente') }}"><a class="room-name" href="/admin/customers/{{ c.id }}">{{ c.name }}</a><small>{{ c.email }}</small></td>
+      <td class="hint" data-label="{{ _('Fiscale') }}">{% if c.vat_number %}{{ _('P.IVA') }} <span class="num">{{ c.vat_number }}</span>{% elif c.tax_code %}{{ _('CF') }} <span class="num">{{ c.tax_code }}</span>{% endif %}</td>
+      <td class="hint" data-label="{{ _('Città') }}">{{ c.city or '' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if f.people %}
+<section class="card" aria-labelledby="h-found-people">
+  <div class="card-head"><h2 id="h-found-people">{{ _('Persone') }}</h2><span class="hint">{{ f.people|length }}</span></div>
+  <div class="scroll">
+  <table class="tbl cards">
+    <tbody>
+    {% for p in f.people %}
+    <tr>
+      <td data-label="{{ _('Persona') }}">{{ p.email }}{% if p.name %}<small>{{ p.name }}</small>{% endif %}</td>
+      <td data-label="{{ _('Redazioni') }}">{% if p.operator %}<span class="chip dark">{{ _('amministratore') }}</span> {% endif %}{% for x in p.rooms %}<div class="room-line"><a href="/admin/newsrooms/{{ x.tenant_id }}">{{ x.name }}</a> <span class="hint">{{ roles_names.get(x.role, x.role) }}</span></div>{% else %}{% if not p.operator %}<span class="hint">{{ _('nessuna redazione') }}</span>{% endif %}{% endfor %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}

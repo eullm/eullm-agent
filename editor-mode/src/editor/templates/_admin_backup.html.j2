@@ -1,0 +1,93 @@
+{# Console › Backup: archives of the database and configuration, made on the server. #}
+{% set b = backups %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Backup') }}</h1>
+    <p class="ph-sub">{{ _('Database e configurazione del server, in archivi da conservare anche altrove.') }}</p>
+  </div>
+  {% if b.enabled %}<div class="ph-actions"><form class="inline" method="post" action="/admin/backups/now"><button class="btn pri" type="submit" {% if b.pending %}disabled{% endif %}>{{ _('Backup adesso') }}</button></form></div>{% endif %}
+</header>
+  {% set c = b.settings %}
+  {% set res = b.status.get('result') or {} %}
+  <section class="card pad" id="backup" aria-labelledby="h-backup">
+    <h2 id="h-backup" class="sr">{{ _('Backup del server') }}</h2>
+    {% if not b.enabled %}
+    <p class="hint">{{ _('Per i backup da qui serve lo script update.sh sul server, lo stesso degli aggiornamenti: vedi deploy/server/README.md, "Updating from the console".') }}</p>
+    {% else %}
+    <p class="lead">{{ _('Ogni archivio contiene il database e i file di configurazione con tutte le chiavi: basta a rimettere in piedi il servizio qui o su un altro server. Il backup gira sul server, anche mentre tutto lavora.') }}</p>
+    {% if b.status.get('bad') %}<p class="error">{{ _('Il server ha rifiutato queste impostazioni ({what}): i backup programmati sono fermi finché non le correggi.', what={'folder': _('cartella'), 'owner': _('proprietario'), 'name': _('nome dei file'), 'target': _('server remoto'), 'numbers': _('numeri')}.get(b.status.bad, b.status.bad)) }}</p>{% endif %}
+    {% if b.stale %}<p class="error">{{ _('Il backup chiesto aspetta da più di 5 minuti: sul server lo script update.sh non è aggiornato o non gira. Con la versione 0.28.17 o successiva si aggiorna da solo.') }}</p>
+    {% elif b.pending %}<p class="notice" role="status" id="backup-wait">{{ _('Backup in corso: la pagina si aggiorna da sola quando finisce.') }}</p>{% endif %}
+    {% if res.at %}
+      {% if res.ok %}<p class="hint">{{ _('Ultimo backup: {file}, {size}, il {date}.', file=res.file, size=((res.size or 0) / 1048576)|round(1) ~ ' MB', date=res.at[8:10] ~ '/' ~ res.at[5:7] ~ ' ' ~ res.at[11:16] ~ ' UTC') }}
+        {% if res.remote == 'done' %}{{ _('Copiato sul server remoto.') }}{% elif res.remote == 'failed' %}<span class="error">{{ _('Copia sul server remoto non riuscita: guarda il registro.') }}</span>{% endif %}</p>
+      {% elif res.why == 'settings' %}<p class="error">{{ _('Ultimo backup non fatto: le impostazioni non sono valide.') }}</p>
+      {% else %}<p class="error">{{ _('Ultimo backup non riuscito, il {date}: guarda il registro.', date=res.at[8:10] ~ '/' ~ res.at[5:7] ~ ' ' ~ res.at[11:16] ~ ' UTC') }}</p>{% endif %}
+    {% endif %}
+
+    <form method="post" action="/admin/backups/settings" class="form-stack">
+      <fieldset class="group">
+        <legend>{{ _('Backup automatico') }}</legend>
+        <label class="check"><input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>{{ _('Backup automatico acceso') }}</label>
+        <div class="row fields">
+          <label class="field">{{ _('Frequenza') }}<select name="frequency"><option value="daily" {% if c.frequency == 'daily' %}selected{% endif %}>{{ _('Ogni giorno') }}</option><option value="weekly" {% if c.frequency == 'weekly' %}selected{% endif %}>{{ _('Ogni settimana') }}</option></select></label>
+          <label class="field">{{ _('Giorno (settimanale)') }}<select name="weekday">{% for n, d in [(1, _('lunedì')), (2, _('martedì')), (3, _('mercoledì')), (4, _('giovedì')), (5, _('venerdì')), (6, _('sabato')), (7, _('domenica'))] %}<option value="{{ n }}" {% if c.weekday == n %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+          <label class="field">{{ _('Ora del server') }}<input type="time" name="time" value="{{ '%02d:%02d'|format(c.hour, c.minute) }}"></label>
+          <label class="field">{{ _('Giorni da tenere') }}<input type="number" name="keep" min="1" max="3650" value="{{ c.keep }}"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Dove si salvano') }}</legend>
+        <label class="field">{{ _('Cartella sul server') }}<input name="dir" value="{{ c.dir }}" placeholder="{{ b.status.get('dir') or '/opt/eullm-server/backup' }}"></label>
+        <p class="hint">{{ _('Vuota: la cartella backup dell\'installazione. Deve stare sotto /home, /var/backups, /backup, /backups, /mnt, /media, /srv o /opt, mai in una cartella pubblicata dal web server. Con Virtualmin, una cartella nella home di un dominio (per esempio /home/app/backup) entra anche nei suoi backup.') }}</p>
+        <div class="row fields">
+          <label class="field">{{ _('Nome dei file') }}<input name="name" value="{{ c.name }}"></label>
+          <label class="field">{{ _('Proprietario (facoltativo)') }}<input name="owner" value="{{ c.owner }}" placeholder="app:app"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Copia su un altro server') }}</legend>
+        <label class="check"><input type="checkbox" name="remote" value="1" {% if c.remote %}checked{% endif %}>{{ _('Copia remota accesa') }}</label>
+        <div class="row fields">
+          <label class="field wide">{{ _('Server remoto') }}<input name="target" value="{{ c.target }}" placeholder="backup@nas.esempio.it:/backup/redazia"></label>
+          <label class="field">{{ _('Porta SSH') }}<input type="number" name="port" min="1" max="65535" value="{{ c.port }}"></label>
+        </div>
+        <p class="hint">{{ _('Dopo ogni backup gli archivi si copiano con rsync via SSH sul server che indichi, che deve avere rsync. Lì restano gli stessi archivi di qui: quelli eliminati qui si eliminano anche lì.') }}</p>
+        {% if b.pubkey %}
+        <p class="hint">{{ _('Sul server remoto aggiungi questa chiave a ~/.ssh/authorized_keys dell\'utente indicato. È la chiave pubblica: quella privata resta su questo server.') }}</p>
+        <div class="token" style="word-break: break-all;">{{ b.pubkey }}</div>
+        {% elif c.target %}<p class="hint">{{ _('La chiave da copiare sul server remoto compare qui pochi secondi dopo il salvataggio.') }}</p>{% endif %}
+      </fieldset>
+      <div><button class="btn pri" type="submit">{{ _('Salva') }}</button></div>
+    </form>
+
+    <h3>{{ _('Archivi sul server') }}</h3>
+    {% if b.archives %}
+    <table class="tbl">
+      <thead><tr><th>{{ _('Archivio') }}</th><th class="num">{{ _('Dimensione') }}</th><th>{{ _('Data') }}</th><th></th></tr></thead>
+      <tbody>
+      {% for a in b.archives %}
+      <tr><td class="num">{{ a.name }}</td><td class="num">{{ ((a.size or 0) / 1048576)|round(1) }} MB</td><td class="num">{{ a.at[8:10] ~ '/' ~ a.at[5:7] ~ ' ' ~ a.at[11:16] }}</td>
+        <td><form method="post" action="/admin/backups/delete" onsubmit='return confirm({{ _('Eliminare {name}? Non si può annullare.', name=a.name)|string|tojson }})'><input type="hidden" name="file" value="{{ a.name }}"><button class="btn sm" type="submit">{{ _('Elimina') }}</button></form></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="hint">{{ _('Nessun archivio ancora.') }}</p>{% endif %}
+    {% if b.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ b.log }}</pre></details>{% endif %}
+    {% if b.pending and not b.stale %}
+    <script>
+    /* While a backup runs: reload when it has finished. */
+    (function () {
+      var at = {{ (res.at or '')|tojson }};
+      function poll() {
+        fetch('/admin/backups/state', {cache: 'no-store', credentials: 'same-origin'})
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (s) { if (s && !s.pending && s.at !== at) location.replace('/admin/backups?t=' + Date.now() + '#backup'); else setTimeout(poll, 3000); })
+          .catch(function () { setTimeout(poll, 3000); });
+      }
+      setTimeout(poll, 3000);
+    })();
+    </script>
+    {% endif %}
+    {% endif %}
+  </section>

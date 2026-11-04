@@ -1,0 +1,69 @@
+{# Pieces shared by the pages of the console: the head and foot of a
+   window (<dialog>), the billing fields of a customer, the state of a
+   newsroom, the kind and state of a payment, an amount in euro. #}
+
+{% macro dlg_head(id, title, sub='') -%}
+<header class="dlg-head">
+  <div><h2 id="{{ id }}-title">{{ title }}</h2>{% if sub %}<p class="hint">{{ sub }}</p>{% endif %}</div>
+  <button class="dlg-x" type="button" command="close" commandfor="{{ id }}" aria-label="{{ _('Chiudi') }}">×</button>
+</header>
+{%- endmacro %}
+
+{% macro dlg_foot(id, label, tone='pri', safe=False) -%}
+<footer class="dlg-foot">
+  <button class="btn" type="button" command="close" commandfor="{{ id }}" {% if safe %}autofocus{% endif %}>{{ _('Annulla') }}</button>
+  <button class="btn {{ tone }}" type="submit">{{ label }}</button>
+</footer>
+{%- endmacro %}
+
+{# `v` holds what was written (a customer, or a form sent back with a
+   mistake), its keys with `prefix`. No field is required here: the
+   server checks them, and a hidden required field would block the form. #}
+{% macro customer_fields(v, prefix='', resellers=[], reseller_name='', required=False, focus=False) -%}
+{% set req = 'required' if required else '' %}
+<div class="form-grid billing">
+  <label class="field">{{ _('Tipo') }}<select name="{{ prefix }}kind"><option value="company">{{ _('Azienda o professionista') }}</option><option value="person" {% if v.get(prefix ~ 'kind') == 'person' %}selected{% endif %}>{{ _('Privato') }}</option></select></label>
+  <label class="field span-2">{{ _('Ragione sociale o nome') }}<input name="{{ prefix }}name" value="{{ v.get(prefix ~ 'name') or '' }}" maxlength="200" autocomplete="off" {{ req }} {% if focus %}autofocus{% endif %}></label>
+  <label class="field">{{ _('Email per le fatture') }}<input name="{{ prefix }}email" type="email" value="{{ v.get(prefix ~ 'email') or '' }}" maxlength="200" autocomplete="off" {{ req }}></label>
+  <label class="field">{{ _('Telefono') }}<input name="{{ prefix }}phone" type="tel" value="{{ v.get(prefix ~ 'phone') or '' }}" maxlength="40" autocomplete="off"></label>
+  <label class="field">{{ _('PEC') }}<input name="{{ prefix }}pec" type="email" value="{{ v.get(prefix ~ 'pec') or '' }}" maxlength="200" autocomplete="off"></label>
+  <label class="field">{{ _('Partita IVA') }}<input name="{{ prefix }}vat_number" value="{{ v.get(prefix ~ 'vat_number') or '' }}" maxlength="40" autocomplete="off"></label>
+  <label class="field">{{ _('Codice fiscale') }}<input name="{{ prefix }}tax_code" value="{{ v.get(prefix ~ 'tax_code') or '' }}" maxlength="40" autocomplete="off"></label>
+  <label class="field">{{ _('Codice destinatario SDI') }}<input name="{{ prefix }}sdi_code" value="{{ v.get(prefix ~ 'sdi_code') or '' }}" maxlength="7" autocomplete="off"></label>
+  <label class="field span-2">{{ _('Indirizzo') }}<input name="{{ prefix }}address" value="{{ v.get(prefix ~ 'address') or '' }}" maxlength="200" autocomplete="off"></label>
+  <label class="field">{{ _('CAP') }}<input name="{{ prefix }}postal_code" value="{{ v.get(prefix ~ 'postal_code') or '' }}" maxlength="20" autocomplete="off"></label>
+  <label class="field">{{ _('Città') }}<input name="{{ prefix }}city" value="{{ v.get(prefix ~ 'city') or '' }}" maxlength="100" autocomplete="off"></label>
+  <label class="field">{{ _('Provincia') }}<input name="{{ prefix }}province" value="{{ v.get(prefix ~ 'province') or '' }}" maxlength="10" autocomplete="off"></label>
+  <label class="field">{{ _('Paese') }}<input name="{{ prefix }}country" value="{{ v.get(prefix ~ 'country') or 'IT' }}" maxlength="2" autocomplete="off"></label>
+  {% if resellers and reseller_name %}
+  <label class="field">{{ _('Rivenditore') }}<select name="{{ reseller_name }}"><option value="">{{ _('Nessuno: cliente diretto') }}</option>{% for x in resellers if x.active %}<option value="{{ x.id }}" {% if (v.get(reseller_name) or '')|string == x.id|string %}selected{% endif %}>{{ x.name }}</option>{% endfor %}</select></label>
+  {% endif %}
+</div>
+<p class="hint">{{ _('Servono il nome e l\'email; per una fattura elettronica in Italia anche partita IVA o codice fiscale e il codice SDI o la PEC.') }}</p>
+{%- endmacro %}
+
+{# The state of a newsroom in one chip (or two: stopped and its plan). #}
+{% macro room_chips(r, sub) -%}
+{% if r.active is sameas false %}<span class="chip red" title="{{ _('Le persone non entrano e il lavoro programmato è fermo; i dati restano.') }}">{{ _('Sospesa') }}</span>
+{% elif r.hold == 'billing' %}<span class="chip amber" title="{{ _('Lavora di nuovo appena il piano è pagato.') }}">{{ _('Ferma: da pagare') }}</span>{% endif %}
+{% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}{% if sub.status == 'trialing' and sub.days_left is not none %} · {{ _('{n} gg', n=sub.days_left) }}{% endif %}</span>
+{% elif r.active is not sameas false and r.hold != 'billing' %}<span class="chip">{{ _('Nessun abbonamento') }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro pay_kind(k) -%}
+{{ {'first': _('primo pagamento'), 'recurring': _('rinnovo'), 'manual': _('bonifico'), 'refund': _('rimborso'), 'credits': _('crediti')}.get(k, k) }}
+{%- endmacro %}
+
+{% macro pay_status(p) -%}
+{% set label = {'paid': _('pagato'), 'open': _('in attesa'), 'queued': _('in coda'), 'pending': _('in corso'), 'processing': _('in corso'), 'refunded': _('rimborsato'), 'canceled': _('annullato'), 'failed': _('non riuscito'), 'expired': _('scaduto')}.get(p.status, p.status) %}
+<span class="chip {{ 'green' if p.status == 'paid' and p.kind != 'refund' else 'red' if p.status in ('failed', 'expired') else 'amber' if p.status in ('open', 'queued', 'pending', 'processing') else '' }}">{{ label }}</span>
+{%- endmacro %}
+
+{# An amount in euro that can be negative (a margin). #}
+{% macro eur(x) -%}
+{{ '−' if x < 0 else '' }}{{ money(((x|abs) * 100)|round|int) }}
+{%- endmacro %}
+
+{% macro when(d, hours=True) -%}
+{% if d %}{{ d.strftime('%d/%m/%Y %H:%M' if hours else '%d/%m/%Y') }}{% else %}–{% endif %}
+{%- endmacro %}

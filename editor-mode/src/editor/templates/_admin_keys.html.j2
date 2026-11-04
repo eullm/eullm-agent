@@ -1,0 +1,54 @@
+{# Console › Chiavi API: the programs that work in our place (the sales
+   site, the resellers), each with its key. #}
+{% from "_admin_macros.html.j2" import dlg_head, dlg_foot with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Chiavi API') }}</h1>
+    <p class="ph-sub">{{ _("Una chiave API fa lavorare un altro programma al posto tuo: crea redazioni, aggiorna il piano, le sospende, senza passare da qui. La usano il sito di vendita (redazia.com, per le iscrizioni e le prove) e i rivenditori, ognuno con la sua. Revocarla ferma subito il programma che la usa.") }}</p>
+  </div>
+  <div class="ph-actions"><button class="btn pri" type="button" command="show-modal" commandfor="nuova-chiave">+ {{ _('Nuova chiave') }}</button></div>
+</header>
+
+<section class="card" id="api" aria-label="{{ _('Chiavi API') }}">
+  {% if keys %}
+  <div class="scroll">
+  <table class="tbl cards">
+    <thead><tr><th>{{ _('Chiave') }}</th><th>{{ _('Cosa può fare') }}</th><th>{{ _('Creata') }}</th><th>{{ _('Ultimo uso') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+    <tbody>
+    {% for k in keys %}
+    {% set seller = reseller_names.get(k.reseller_id) if k.reseller_id else None %}
+    <tr{% if k.revoked_at %} class="faded"{% endif %}>
+      <td data-label="{{ _('Chiave') }}"><strong style="font-weight: 500;">{{ k.name }}</strong></td>
+      <td data-label="{{ _('Cosa può fare') }}">{% if k.reseller_id %}{{ _('Rivenditore {name}: solo i suoi clienti', name=seller or ('#' ~ k.reseller_id)) }}{% else %}{{ _('Tutte le redazioni e i clienti') }}<small>{{ _('per esempio il sito di vendita') }}</small>{% endif %}</td>
+      <td class="num" data-label="{{ _('Creata') }}">{{ k.created_at.strftime('%d/%m/%Y') if k.created_at else '' }}</td>
+      <td data-label="{{ _('Ultimo uso') }}">{% if k.last_used_at %}<span class="num">{{ k.last_used_at.strftime('%d/%m/%Y %H:%M') }}</span> <small class="hint" style="display: inline;">UTC</small>{% else %}<span class="hint">{{ _('mai usata') }}</span>{% endif %}</td>
+      <td class="end">{% if k.revoked_at %}<span class="chip">{{ _('Revocata il {date}', date=k.revoked_at.strftime('%d/%m/%Y')) }}</span>{% else %}
+        {% if k.reseller_id %}{% set why = _('Il rivenditore {name} non potrà più iscrivere né gestire i suoi clienti finché non gli dai una nuova chiave.', name=seller or '') %}{% else %}{% set why = _('Se è la chiave del sito redazia.com, le iscrizioni dal sito si fermano finché non metti la nuova chiave su Vercel (REDAZIA_OPERATOR_KEY).') %}{% endif %}
+        <form class="inline" method="post" action="/admin/keys/{{ k.id }}/revoke" onsubmit='return confirm({{ (_('Revocare la chiave «{name}»?', name=k.name) ~ ' ' ~ why)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Revoca') }}</button></form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h2>{{ _('Nessuna chiave') }}</h2>
+    <p class="hint">{{ _('Nessuna chiave: il sito di vendita non può ancora iscrivere clienti.') }}</p>
+    <div class="row"><button class="btn pri" type="button" command="show-modal" commandfor="nuova-chiave">+ {{ _('Nuova chiave') }}</button></div>
+  </div>
+  {% endif %}
+  <p class="hint foot-note">{{ _('La chiave si vede una volta sola, subito dopo averla creata: copiala dove serve. Per sostituirne una, crea la nuova, mettila nel programma e poi revoca la vecchia.') }}</p>
+</section>
+
+<dialog id="nuova-chiave" class="modal" aria-labelledby="nuova-chiave-title">
+  <form method="post" action="/admin/keys">
+    {{ dlg_head('nuova-chiave', _('Nuova chiave'), _('Si vede una volta sola, subito dopo averla creata.')) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Nome, per riconoscerla') }}<input name="name" required maxlength="100" placeholder="{{ _('sito redazia.com') }}" autofocus></label>
+        <label class="field span-2">{{ _('Per chi') }}<select name="reseller_id"><option value="">{{ _('Tutte le redazioni (sito di vendita)') }}</option>{% for r in resellers %}<option value="{{ r.id }}">{{ _('Rivenditore {name}', name=r.name) }}</option>{% endfor %}</select></label>
+      </div>
+    </div>
+    {{ dlg_foot('nuova-chiave', _('Crea chiave')) }}
+  </form>
+</dialog>

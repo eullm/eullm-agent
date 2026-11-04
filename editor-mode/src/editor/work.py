@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from . import autopilot, delivery, drafts, images, models as m, picks, profile as prof, proposals, sources, translate as tr
 from .i18n import N_
@@ -133,10 +133,19 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             # Translations written before the image take it too. Their old
             # alternative text described the old image: until it is translated
             # again, each one takes its own title, in its own language.
+            family = [args["draft_id"]]
             for tid, title in s.execute(select(m.drafts.c.id, m.drafts.c.title)
                                         .where(m.drafts.c.translation_of == args["draft_id"])).all():
                 images.copy(s, tenant, args["draft_id"], tid, title)
-        return {"draft_id": args["draft_id"], "title": d.title if d else "", "site_id": d.site_id if d else None}
+                family.append(tid)
+            # Already online: the new cover is not there until «Aggiorna sul sito».
+            p, tg = m.publications.c, m.publish_targets.c
+            online = s.execute(select(func.count()).select_from(m.publications.join(
+                m.publish_targets, tg.id == p.target_id)).where(
+                p.draft_id.in_(family), p.status == "published", p.mode == "publish", p.withdrawn_at.is_(None),
+                tg.kind != "telegram_channel")).scalar() or 0
+        return {"draft_id": args["draft_id"], "title": d.title if d else "", "site_id": d.site_id if d else None,
+                "online": online}
 
     def translation(tenant: str, subject: str, args: dict) -> dict:
         did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"),

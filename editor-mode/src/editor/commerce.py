@@ -402,6 +402,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             rooms.append({"tenant_id": x.tenant_id, "name": x.name, "active": x.active,
                           "subscription": billing.subscription(admin, x.tenant_id),
                           "customer": billing.customer_of(admin, x.tenant_id),
+                          "payments": billing.payments_of(admin, x.tenant_id, 24),
                           "reseller": billing.reseller_of_tenant(admin, x.tenant_id) is not None})
         notice = request.cookies.get(NOTICE_COOKIE)
         resp = pages.TemplateResponse(request, "account.html.j2", {
@@ -507,7 +508,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             billing.save_plan(admin, code, fields)
         except ValueError as e:
             return back(t("Piano non salvato: {error}.",
-                          error=e if isinstance(e, billing.BillingError) else t("numeri di zero o più")), f"p-{code}")
+                          error=e if isinstance(e, billing.BillingError) else t("numeri di zero o più")), f"p-{code}", error=True)
         return back(t("Piano {name} salvato. Le redazioni già su questo piano prendono i nuovi limiti al prossimo pagamento.",
                       name=name.strip()), f"p-{code}")
 
@@ -516,7 +517,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             code = billing.create_plan(admin, code, name)
         except billing.BillingError as e:
-            return back(t("Piano non creato: {error}.", error=e), "piani")
+            return back(t("Piano non creato: {error}.", error=e), "nuovo-piano", error=True)
         return back(t("Piano {name} creato, non ancora sul sito: imposta prezzi e limiti e scegli \"Sul sito: Sì\".",
                       name=name.strip()), f"p-{code}")
 
@@ -525,9 +526,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = billing.delete_plan(admin, code)
         except LookupError:
-            return back(t("Piano non trovato."), "piani")
+            return back(t("Piano non trovato."), "piani", error=True)
         except billing.BillingError as e:
-            return back(t("Piano non eliminato: {error}.", error=e), "piani")
+            return back(t("Piano non eliminato: {error}.", error=e), "piani", error=True)
         return back(t("Piano {name} eliminato.", name=name), "piani")
 
     # --- credits: price list, packs, credits of a newsroom ----------------------------
@@ -541,7 +542,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             credits.set_prices(admin, values)
         except ValueError as e:
             return back(t("Listino non salvato: {error}.",
-                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti", error=True)
         return back(t("Listino dei crediti salvato."), "crediti")
 
     @app.post("/admin/credits/packs")
@@ -551,7 +552,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             credits.create_pack(admin, code, name, _int(credits_n) or 0, _cents(price) or 0)
         except ValueError as e:
             return back(t("Pacchetto non creato: {error}.",
-                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti", error=True)
         return back(t("Pacchetto {name} creato.", name=name.strip()), "crediti")
 
     @app.post("/admin/credits/packs/{code}")
@@ -562,7 +563,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                               _int(sort) or 0)
         except ValueError as e:
             return back(t("Pacchetto non salvato: {error}.",
-                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti")
+                          error=e if isinstance(e, credits.CreditsError) else t("numeri di zero o più")), "crediti", error=True)
         return back(t("Pacchetto {name} salvato.", name=name.strip()), "crediti")
 
     @app.post("/admin/credits/packs/{code}/delete")
@@ -570,7 +571,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = credits.delete_pack(admin, code)
         except LookupError:
-            return back(t("Pacchetto non trovato."), "crediti")
+            return back(t("Pacchetto non trovato."), "crediti", error=True)
         return back(t("Pacchetto {name} eliminato: i crediti già comprati restano.", name=name), "crediti")
 
     @app.post("/admin/newsrooms/{tenant_id}/customer")
@@ -586,9 +587,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             billing.set_tenant_customer(admin, tenant_id, spec)
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         except (billing.BillingError, accounts.AccountError) as e:
-            return back(t("Dati non salvati: {error}.", error=e), at)
+            return back(t("Dati non salvati: {error}.", error=e), at, error=True)
         return back(t("Dati di fatturazione salvati."), at)
 
     @app.post("/admin/newsrooms/{tenant_id}/customer/link")
@@ -597,9 +598,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             billing.link_customer(admin, tenant_id, int(customer_id) if customer_id.strip() else None)
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         except (billing.BillingError, ValueError) as e:
-            return back(t("Dati non salvati: {error}.", error=e), at)
+            return back(t("Dati non salvati: {error}.", error=e), at, error=True)
         return back(t("Cliente collegato.") if customer_id.strip() else t("Cliente scollegato."), at)
 
     @app.post("/admin/newsrooms/{tenant_id}/credits")
@@ -611,16 +612,54 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             cents = _cents(amount) or 0
             billing.record_credits(admin, tenant_id, n, cents, s.email, note.strip()[:200])
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         except (credits.CreditsError, billing.BillingError) as e:
-            return back(t("Crediti non registrati: {error}.", error=e), at)
+            return back(t("Crediti non registrati: {error}.", error=e), at, error=True)
         except ValueError:
-            return back(t("Crediti non registrati: {error}.", error=t("i crediti sono un numero intero diverso da zero")), at)
+            return back(t("Crediti non registrati: {error}.", error=t("i crediti sono un numero intero diverso da zero")), at, error=True)
         if n > 0:
             msg = t("{n} crediti aggiunti a {tenant}.", n=n, tenant=tenant_id)
         else:
             msg = t("{n} crediti tolti a {tenant}.", n=-n, tenant=tenant_id)
         return back(msg + (" " + t("Pagamento di {amount} registrato.", amount=billing.money(cents)) if cents else ""), at)
+
+    @app.post("/admin/customers", response_class=HTMLResponse)
+    def ui_new_customer(request: Request, kind: str = Form("company"), name: str = Form(""), email: str = Form(""),
+                        phone: str = Form(""), vat_number: str = Form(""), tax_code: str = Form(""),
+                        address: str = Form(""), postal_code: str = Form(""), city: str = Form(""),
+                        province: str = Form(""), country: str = Form("IT"), sdi_code: str = Form(""),
+                        pec: str = Form(""), reseller: str = Form(""), then: str = Form(""), room: str = Form(""),
+                        s=Depends(need_console)):
+        """A customer entered by hand: from Clienti, or from the page of a
+        newsroom that has none (`room`), which it is then tied to. A mistake
+        shows the form again with what was written."""
+        spec = {"kind": kind, "name": name, "email": email, "phone": phone, "vat_number": vat_number,
+                "tax_code": tax_code, "address": address, "postal_code": postal_code, "city": city,
+                "province": province, "country": country or "IT", "sdi_code": sdi_code, "pec": pec}
+        form = {**spec, "reseller": reseller.strip()}
+        room = room.strip()
+        if room and not newsrooms.listing(admin, db, room):
+            return back(t("Redazione non trovata."), error=True)
+        try:
+            cid = billing.create_customer(admin, spec, int(reseller) if reseller.strip().isdigit() else None)
+        except billing.DuplicateCustomer as e:
+            if room:  # the window comes back with that customer chosen
+                return page(request, s, 400, view="redazione", room=room, reopen=f"r-{room}--customer",
+                            error=str(e) + " " + t("L'ho scelto in «Cliente esistente»: premi Collega."),
+                            form={**form, "customer_mode": "existing", "customer_id": str(e.customer_id)})
+            return page(request, s, 400, view="nuovo-cliente", form=form, error=str(e), twin=e.customer_id)
+        except (billing.BillingError, accounts.AccountError) as e:
+            error = t("Cliente non creato: {error}.", error=e)
+            if room:
+                return page(request, s, 400, view="redazione", room=room, reopen=f"r-{room}--customer", error=error,
+                            form={**form, "customer_mode": "new"})
+            return page(request, s, 400, view="nuovo-cliente", form=form, error=error)
+        if room:
+            billing.link_customer(admin, room, cid)
+            return back(t("Cliente {name} creato e collegato alla redazione.", name=name.strip()), f"r-{room}")
+        if then == "room":  # straight on to its newsroom
+            return RedirectResponse(f"/admin/new?customer={cid}", status_code=303)
+        return back(t("Cliente {name} creato. Ora puoi creargli la redazione.", name=name.strip()), f"c-{cid}")
 
     @app.post("/admin/customers/{cid}")
     def ui_customer(cid: int, kind: str = Form("company"), name: str = Form(""), email: str = Form(""),
@@ -634,9 +673,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             billing.clean_customer(spec)
             billing.update_customer(admin, cid, spec)
         except LookupError:
-            return back(t("Cliente non trovato."), "clienti")
+            return back(t("Cliente non trovato."), "clienti", error=True)
         except (billing.BillingError, accounts.AccountError) as e:
-            return back(t("Cliente non aggiornato: {error}.", error=e), f"c-{cid}")
+            return back(t("Cliente non aggiornato: {error}.", error=e), f"c-{cid}--edit", error=True)
         return back(t("Cliente {name} aggiornato.", name=name.strip()), f"c-{cid}")
 
     @app.post("/admin/customers/{cid}/delete")
@@ -644,9 +683,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = billing.delete_customer(admin, cid)
         except LookupError:
-            return back(t("Cliente non trovato."), "clienti")
+            return back(t("Cliente non trovato."), "clienti", error=True)
         except billing.BillingError as e:
-            return back(t("Cliente non eliminato: {error}.", error=e), f"c-{cid}")
+            return back(t("Cliente non eliminato: {error}.", error=e), f"c-{cid}--delete", error=True)
         return back(t("Cliente {name} eliminato.", name=name), "clienti")
 
     @app.post("/admin/resellers/{rid}")
@@ -661,9 +700,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                 raise billing.BillingError(t("lo sconto è una percentuale da 0 a 100")) from None
             billing.update_reseller(admin, rid, {"name": name.strip()[:100], "email": email, "discount_pct": pct})
         except LookupError:
-            return back(t("Rivenditore non trovato."), "rivenditori")
+            return back(t("Rivenditore non trovato."), "rivenditori", error=True)
         except (ValueError, accounts.AccountError) as e:
-            return back(t("Rivenditore non aggiornato: {error}.", error=e), f"v-{rid}")
+            return back(t("Rivenditore non aggiornato: {error}.", error=e), f"v-{rid}", error=True)
         return back(t("Rivenditore {name} aggiornato.", name=name.strip()), f"v-{rid}")
 
     @app.post("/admin/resellers/{rid}/delete")
@@ -671,9 +710,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             name = billing.delete_reseller(admin, rid)
         except LookupError:
-            return back(t("Rivenditore non trovato."), "rivenditori")
+            return back(t("Rivenditore non trovato."), "rivenditori", error=True)
         except billing.BillingError as e:
-            return back(t("Rivenditore non eliminato: {error}.", error=e), f"v-{rid}")
+            return back(t("Rivenditore non eliminato: {error}.", error=e), f"v-{rid}", error=True)
         return back(t("Rivenditore {name} eliminato con le sue chiavi.", name=name), "rivenditori")
 
     @app.post("/admin/resellers", response_class=HTMLResponse)
@@ -691,7 +730,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
     def ui_reseller_key(request: Request, rid: int, s=Depends(need_console)):
         r = billing.reseller(admin, rid)
         if r is None or not r.active:
-            return back(t("Rivenditore non trovato o disattivato."), "rivenditori")
+            return back(t("Rivenditore non trovato o disattivato."), "rivenditori", error=True)
         key = accounts.create_operator_token(admin, f"rivenditore {r.name}", rid)
         return page(request, s, view="rivenditori", new={"what": t("Nuova chiave API per {name}", name=r.name), "key": key})
 
@@ -700,13 +739,17 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         try:
             billing.update_reseller(admin, rid, {"active": active == "1"})
         except LookupError:
-            return back(t("Rivenditore non trovato."), "rivenditori")
+            return back(t("Rivenditore non trovato."), "rivenditori", error=True)
         return back(t("Rivenditore riattivato.") if active == "1" else
                     t("Rivenditore disattivato: le sue chiavi non valgono più, i suoi clienti restano."), f"v-{rid}")
 
     @app.post("/admin/subscriptions/{tenant_id}")
     def ui_subscription(tenant_id: str, plan: str = Form(...), interval: str = Form("month"),
-                        paid_until: str = Form(""), amount: str = Form(""), s=Depends(need_console)):
+                        paid_until: str = Form(""), amount: str = Form(""), dialog: str = Form(""),
+                        s=Depends(need_console)):
+        at = f"r-{tenant_id}--{dialog if dialog in ('plan', 'record', 'trial') else 'sub'}"
+        if dialog == "record" and not amount.strip():
+            return back(t("Pagamento non registrato: scrivi l'importo ricevuto."), at, error=True)
         try:
             until = billing.paid_until_date(paid_until)
             cents = _cents(amount)
@@ -721,24 +764,48 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                 billing.start(admin, tenant_id, plan, billing_customer(tenant_id), provider, interval, until, ctx.core,
                               gateway=gateway)
         except LookupError:
-            return back(t("Redazione non trovata."))
+            return back(t("Redazione non trovata."), error=True)
         except ValueError as e:
-            return back(t("Abbonamento non cambiato: {error}.", error=e), f"r-{tenant_id}--sub")
-        return back(t("Abbonamento di {tenant} aggiornato.", tenant=tenant_id), f"r-{tenant_id}--sub")
+            return back(t("Abbonamento non cambiato: {error}.", error=e), at, error=True)
+        name = room_name(tenant_id)
+        if dialog == "record":
+            return back(t("Pagamento di {amount} registrato: {tenant} è attiva.", amount=billing.money(cents),
+                          tenant=name), f"r-{tenant_id}")
+        if dialog == "trial":
+            return back(t("Prova ridata a {tenant}.", tenant=name), f"r-{tenant_id}")
+        return back(t("Abbonamento di {tenant} aggiornato.", tenant=name), f"r-{tenant_id}")
 
+    def room_name(tenant_id: str) -> str:
+        return (newsrooms.listing(admin, db, tenant_id) or [{"name": tenant_id}])[0]["name"]
+
+    @app.post("/admin/newsrooms/{tenant_id}/cancel")
+    def ui_cancel(tenant_id: str, s=Depends(need_console)):
+        """No more renewals, no refund: the newsroom works until the end of
+        the period already paid (a trial until its end), then stops."""
+        try:
+            sub = billing.cancel(admin, tenant_id, gateway)
+        except LookupError:
+            return back(t("Questa redazione non ha un abbonamento."), f"r-{tenant_id}", error=True)
+        except Exception as e:  # the gateway did not answer: nothing changed
+            log.exception("renewals of %s not stopped", tenant_id)
+            return back(t("Rinnovi non fermati: {error}.", error=e), f"r-{tenant_id}--cancel", error=True)
+        end, name = sub.get("current_period_end"), room_name(tenant_id)
+        return back(t("Rinnovi fermati: {tenant} lavora fino al {date}, poi si ferma.", tenant=name,
+                      date=end.strftime("%d/%m/%Y")) if end else t("Rinnovi fermati per {tenant}.", tenant=name),
+                    f"r-{tenant_id}")
 
     @app.post("/admin/payments/{pid}/refund")
     def ui_refund(request: Request, pid: int, amount: str = Form(""), then: str = Form("none"),
                   confirm: str = Form(""), s=Depends(need_console)):
-        at = f"r-{billing.payment_tenant(admin, pid)}--pay"
+        at = f"r-{billing.payment_tenant(admin, pid)}--refund-{pid}"
         if confirm != "1":
-            return back(t("Rimborso non fatto: spunta la conferma."), at)
+            return back(t("Rimborso non fatto: spunta la conferma."), at, error=True)
         try:
             done = billing.refund(admin, gateway, pid, _cents(amount), s.email, then)
         except LookupError:
-            return back(t("Pagamento non trovato."))
+            return back(t("Pagamento non trovato."), error=True)
         except ValueError as e:
-            return back(t("Rimborso non fatto: {error}.", error=e), at)
+            return back(t("Rimborso non fatto: {error}.", error=e), at, error=True)
         room = (newsrooms.listing(admin, db, done["tenant_id"]) or [{"name": done["tenant_id"]}])[0]
         amount_text = billing.money(done["amount_cents"], done["currency"])
         after = {"none": t("l'abbonamento resta com'è"),

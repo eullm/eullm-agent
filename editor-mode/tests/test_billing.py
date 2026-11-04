@@ -419,10 +419,12 @@ def test_the_console_shows_customers_resellers_and_plans(db, admin):
     c.post("/login", data={"email": op, "password": "password operatore"})
     page = c.get("/admin")
     assert page.status_code == 200 and "Prova · In prova" in page.text
-    for path, words in (("/admin/customers", ("Clienti", "Rossi Media srl", f"P.IVA {ids['vat_number']}",
-                                              "Seconde prove negate", "SDI ABC1234")),
+    cid = billing.customer_of(admin, tid)["id"]
+    for path, words in (("/admin/customers", ("Clienti", "Rossi Media srl", ids["vat_number"], "Seconde prove negate",
+                                              f'data-href="/admin/customers/{cid}"')),
+                        (f"/admin/customers/{cid}", ("Rossi Media srl", "Codice destinatario SDI", "ABC1234", tid)),
                         ("/admin/resellers", ("Rivenditori",)), ("/admin/plans", ("Piani", "Aggiungi un piano")),
-                        (f"/admin/newsrooms/{tid}", ("Abbonamento", "Nome e limiti"))):
+                        (f"/admin/newsrooms/{tid}", ("Abbonamento", "Nome e limiti", "Registra un pagamento"))):
         page = c.get(path)
         for w in words:
             assert w in page.text, (path, w)
@@ -648,10 +650,11 @@ def test_the_console_refunds_an_online_payment(db, admin):
     # Part of it: the subscription stays; the console hears of it.
     r = c.post(f"/admin/payments/{pid}/refund", data={"amount": "5,00", "then": "none", "confirm": "1"},
                follow_redirects=False)
-    # Back to the payments of that newsroom, open, with the result inside the card.
-    assert r.headers["location"] == f"/admin/newsrooms/{tid}#r-{tid}--pay"
+    # Back to the page of that newsroom, with the result on top and the refund among its payments.
+    assert r.headers["location"] == f"/admin/newsrooms/{tid}"
     page = c.get(f"/admin/newsrooms/{tid}").text
-    assert f'id="r-{tid}--pay" open' in page and page.index("Rimborsati") > page.index(f'id="r-{tid}"')
+    assert page.index('id="top-notice"') < page.index(f'id="r-{tid}"') and "Rimborsati" in page
+    assert page.index("rimborso") > page.index(f'id="r-{tid}--pay"')
     assert fake.refunds == [(first, 500)] and billing.subscription(admin, tid)["status"] == "active"
     assert any(to == op and "Rimborso" in subject for to, subject, _ in c.told)
     # More than what is left is refused.

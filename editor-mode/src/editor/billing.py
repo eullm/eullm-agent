@@ -249,6 +249,53 @@ def upsert_customer(conn, spec: dict, reseller_id: int | None = None) -> tuple[i
     return new, True
 
 
+class DuplicateCustomer(BillingError):
+    """A customer the console already has: its id, for a link to it."""
+
+    def __init__(self, message: str, customer_id: int):
+        super().__init__(message)
+        self.customer_id = customer_id
+
+
+TWINS = (("vat_number", N_("C'è già un cliente con questa partita IVA: {name}.")),
+         ("tax_code", N_("C'è già un cliente con questo codice fiscale: {name}.")),
+         ("email", N_("C'è già un cliente con questa email: {name}.")))
+
+
+def twin_customer(conn, data: dict, but: int | None = None):
+    """The customer with the same VAT number or tax code (or, for someone
+    who has neither, the same email), and what they share: (row, message)
+    or None. Two companies may share an accountant's email, not a VAT number."""
+    c = m.customers
+    for key, message in TWINS:
+        if not data.get(key) or key == "email" and (data.get("vat_number") or data.get("tax_code")):
+            continue
+        q = select(c.c.id, c.c.name).where(c.c[key] == data[key])
+        if but is not None:
+            q = q.where(c.c.id != but)
+        row = conn.execute(q.order_by(c.c.id).limit(1)).first()
+        if row is not None:
+            return row, message
+    return None
+
+
+def create_customer(admin, spec: dict, reseller_id: int | None = None) -> int:
+    """A customer written by hand in the console, before or without a
+    newsroom: checked like the site's, refused when its VAT number, tax
+    code or email already belong to a customer (DuplicateCustomer)."""
+    data = clean_customer(spec)
+    with admin.engine.begin() as conn:
+        if reseller_id is not None and conn.execute(select(m.resellers.c.id).where(
+                m.resellers.c.id == reseller_id)).first() is None:
+            raise BillingError(t("rivenditore sconosciuto"))
+        twin = twin_customer(conn, data)
+        if twin is not None:
+            row, message = twin
+            raise DuplicateCustomer(t(message, name=row.name), row.id)
+        return conn.execute(insert(m.customers).values(**data, reseller_id=reseller_id)
+                            .returning(m.customers.c.id)).scalar_one()
+
+
 def update_customer(admin, customer_id: int, spec: dict, reseller_id: int | None = None) -> dict:
     data = clean_customer(spec, partial=True)
     with admin.engine.begin() as conn:
@@ -931,6 +978,50 @@ def payments_by_tenant(admin, per_tenant: int = 12) -> dict[str, list[dict]]:
             d["refundable_cents"] = max(0, r.amount_cents - refunded.get(r.provider_payment_id, 0))
         items.append(d)
     return out
+
+
+def all_payments(admin, limit: int = 2000) -> list[dict]:
+    """Every payment and refund, newest first, with its newsroom and the
+    newsroom's customer (the console's Payments page)."""
+    p, tn, c = m.payments, m.tenants, m.customers
+    with accounts._read(admin) as conn:
+        rows = conn.execute(
+            select(p, tn.c.name.label("newsroom"), c.c.id.label("customer_id"), c.c.name.label("customer_name"),
+                   c.c.vat_number.label("customer_vat"), c.c.tax_code.label("customer_tax_code"))
+            .select_from(p.outerjoin(tn, tn.c.tenant_id == p.c.tenant_id).outerjoin(c, c.c.id == tn.c.customer_id))
+            .order_by(p.c.created_at.desc(), p.c.id.desc()).limit(limit)).all()
+    return [dict(r._mapping) for r in rows]
+
+
+def payments_of(admin, tenant_id: str, limit: int = 60) -> list[dict]:
+    """A newsroom's payments and refunds, newest first (what its director
+    sees in the plan page)."""
+    p = m.payments
+    with accounts._read(admin) as conn:
+        rows = conn.execute(select(p).where(p.c.tenant_id == tenant_id)
+                            .order_by(p.c.created_at.desc(), p.c.id.desc()).limit(limit)).all()
+    return [dict(r._mapping) for r in rows]
+
+
+def month_numbers(payments: list[dict], subs: dict, now: datetime | None = None) -> dict:
+    """The month so far: cents paid and refunded, payments that failed, and
+    what the active plans bring in a month at list price."""
+    now = _now(now)
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    paid = refunded = failed = 0
+    for x in payments:
+        when = x.get("paid_at") or x.get("created_at")
+        if when is None or (when.replace(tzinfo=UTC) if when.tzinfo is None else when) < start:
+            continue
+        if x["kind"] == "refund":
+            refunded += x["amount_cents"] if x["status"] not in ("failed", "canceled") else 0
+        elif x["status"] == "paid":
+            paid += x["amount_cents"]
+        elif x["status"] in ("failed", "expired", "canceled"):
+            failed += 1
+    return {"paid": paid, "refunded": refunded, "net": paid - refunded, "failed": failed,
+            "mrr": sum(s.get("monthly_cents") or 0 for s in subs.values()),
+            "paying": sum(1 for s in subs.values() if s["status"] == "active")}
 
 
 def payment_tenant(admin, payment_row_id: int) -> str:
