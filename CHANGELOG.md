@@ -9,6 +9,9 @@
   teneva l'ultima release di GitHub per dieci minuti, e "Controlla adesso"
   riceveva quella vecchia. Ora la tiene due minuti, e "Controlla adesso" la
   rilegge da GitHub (al più ogni 15 secondi).
+- **Il controllo automatico degli aggiornamenti era ogni 6 ore**: ora è ogni
+  ora, e aprire la pagina Aggiornamenti controlla da sé se l'ultimo
+  controllo ha più di dieci minuti (con un'attesa massima di 5 secondi).
 
 ## 0.28.36
 

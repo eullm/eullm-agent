@@ -159,3 +159,12 @@ def _no_primary_search(monkeypatch, request):
     from editor import primary
 
     monkeypatch.setattr(primary, "look", lambda *a, **k: [])
+
+
+@pytest.fixture(autouse=True)
+def _no_update_checks(monkeypatch):
+    """Opening the console's page of updates asks app.redazia.com: no test
+    reaches the network (test_updates replaces it with a fake answer)."""
+    from editor import updates
+
+    monkeypatch.setattr(updates, "refresh", lambda *a, **k: None)

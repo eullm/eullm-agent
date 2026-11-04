@@ -1,8 +1,8 @@
 """Updates of the server installation, from the console.
 
 The backoffice never touches Docker: it has no socket and no root. It reads
-the latest release from GitHub (every six hours from the worker, and on
-"Controlla adesso"), and when an operator asks for an update it leaves a
+the latest release from GitHub (every hour from the worker, when the page
+of updates is opened and on "Controlla adesso"), and when an operator asks for an update it leaves a
 request in a folder shared with the host (EDITOR_UPDATES_DIR). On the host,
 deploy/server/update.sh, run every minute by root's cron, takes the request,
 makes a backup, pulls the images of that version, restarts and writes how it
@@ -39,7 +39,8 @@ log = logging.getLogger(__name__)
 RELEASES = "https://api.github.com/repos/eullm/eullm-agent/releases/latest"
 LATEST = "https://app.redazia.com/api/public/latest"
 VERSION = re.compile(r"^\d{1,4}\.\d{1,4}\.\d{1,4}$")
-CHECK_EVERY = timedelta(hours=6)
+CHECK_EVERY = timedelta(minutes=50)  # the worker's hourly round always finds it due
+ON_PAGE = timedelta(minutes=10)  # opening the page of updates checks again past this
 STALE_REQUEST = timedelta(minutes=5)  # a request nobody took: the script is not installed
 INSTALL_ID = re.compile(r"^[0-9a-f]{24}$")
 _memory: dict = {}  # what check() knows on an installation without the shared folder
@@ -114,15 +115,15 @@ def _write(path: Path, data: dict) -> None:
 
 
 def check(where: Path | None, http=None, now: datetime | None = None, force: bool = False,
-          installed: str = "", iid: str = "") -> dict | None:
-    """The latest release, read at most every six hours (or now, with force).
+          installed: str = "", iid: str = "", every: timedelta = CHECK_EVERY) -> dict | None:
+    """The latest release, read at most once in `every` (or now, with force).
     A failed read keeps what was known and says why. Without the shared
     folder it is kept in memory: the installation is still counted."""
     now = now or datetime.now(UTC)
     path = where / "available.json" if where is not None else None
     known = (_read(path) if path else _memory.get("known")) or {}
     checked = known.get("checked_at")
-    if not force and checked and now - datetime.fromisoformat(checked) < CHECK_EVERY:
+    if not force and checked and now - datetime.fromisoformat(checked) < every:
         return known
     try:
         client = http or httpx.Client(timeout=15, follow_redirects=True)
@@ -137,6 +138,16 @@ def check(where: Path | None, http=None, now: datetime | None = None, force: boo
     else:
         _memory["known"] = known
     return known
+
+
+def refresh(where: Path, installed: str, iid: str, http=None) -> dict | None:
+    """Opening the page of updates checks again when the last check is
+    older than ten minutes, with a short wait: a release out an hour ago is
+    shown without pressing anything."""
+    if http is not None:
+        return check(where, http, installed=installed, iid=iid, every=ON_PAGE)
+    with httpx.Client(timeout=5, follow_redirects=True) as quick:
+        return check(where, quick, installed=installed, iid=iid, every=ON_PAGE)
 
 
 def request(where: Path, version: str, by: str, now: datetime | None = None) -> None:

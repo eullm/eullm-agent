@@ -271,6 +271,8 @@ def register(app, ctx) -> None:
                 billing.sync_refunds(admin, ctx.gateway, room)
             except Exception:
                 log.exception("refunds of %s not synced", room)
+        if view == "aggiornamenti" and (where := updates.folder(ctx.updates_dir)) is not None:
+            updates.refresh(where, INSTALLED, updates.this_install())
         resp = pages.TemplateResponse(request, "console.html.j2", {
             "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),

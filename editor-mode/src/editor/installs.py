@@ -1,7 +1,7 @@
 """The installations of Redazia, counted on app.redazia.com.
 
 Every installation asks GET /api/public/latest for the latest release every
-six hours (updates.py) with a random identifier and its version. The answer
+hour (updates.py) with a random identifier and its version. The answer
 is GitHub's latest release, read here at most every two minutes; the
 question is recorded, so the console can say how many installations run and
 on which version. Nothing else is sent or kept: no address, no newsroom.
