@@ -674,22 +674,43 @@
   {% endif %}
 
   {% if view == 'api' %}
-  <div class="cols">
-    <section class="card pad col-side" id="api" aria-labelledby="h-keys">
-      <h2 id="h-keys">{{ _('Chiavi API') }}</h2>
-      <p class="hint">{{ _('Per il sistema di pagamento: con una chiave crea, aggiorna e sospende le redazioni da <code>/api/operator/tenants</code>.') }}</p>
+  <section class="card" id="api" aria-label="{{ _('Chiavi API') }}">
+    <div class="pad">
+      <p class="lead">{{ _("Una chiave API fa lavorare un altro programma al posto tuo: crea redazioni, aggiorna il piano, le sospende, senza passare da qui. La usano il sito di vendita (redazia.com, per le iscrizioni e le prove) e i rivenditori, ognuno con la sua. Revocarla ferma subito il programma che la usa.") }}</p>
+    </div>
+    {% if keys %}
+    <div class="scroll" style="padding: 0 10px;">
+    <table class="tbl">
+      <thead><tr><th>{{ _('Chiave') }}</th><th>{{ _('Cosa può fare') }}</th><th>{{ _('Creata') }}</th><th>{{ _('Ultimo uso') }}</th><th></th></tr></thead>
+      <tbody>
       {% for k in keys %}
-      <div class="list-row">
-        <span>{{ k.name }} <span class="hint">{{ k.created_at.strftime('%d/%m/%Y') if k.created_at else '' }}</span></span>
-        {% if k.revoked_at %}<span class="chip">{{ _('Revocata') }}</span>{% else %}<form class="inline" method="post" action="/admin/keys/{{ k.id }}/revoke"><button class="btn sm" type="submit">{{ _('Revoca') }}</button></form>{% endif %}
-      </div>
+      {% set seller = reseller_names.get(k.reseller_id) if k.reseller_id else None %}
+      <tr{% if k.revoked_at %} class="faded"{% endif %}>
+        <td><strong style="font-weight: 500;">{{ k.name }}</strong></td>
+        <td>{% if k.reseller_id %}{{ _('Rivenditore {name}: solo i suoi clienti', name=seller or ('#' ~ k.reseller_id)) }}{% else %}{{ _('Tutte le redazioni e i clienti') }}<small>{{ _('per esempio il sito di vendita') }}</small>{% endif %}</td>
+        <td class="num">{{ k.created_at.strftime('%d/%m/%Y') if k.created_at else '' }}</td>
+        <td class="num">{% if k.last_used_at %}{{ k.last_used_at.strftime('%d/%m/%Y %H:%M') }}<small>UTC</small>{% else %}<span class="hint">{{ _('mai usata') }}</span>{% endif %}</td>
+        <td style="text-align: right;">{% if k.revoked_at %}<span class="chip">{{ _('Revocata il {date}', date=k.revoked_at.strftime('%d/%m/%Y')) }}</span>{% else %}
+          {% if k.reseller_id %}{% set why = _('Il rivenditore {name} non potrà più iscrivere né gestire i suoi clienti finché non gli dai una nuova chiave.', name=seller or '') %}{% else %}{% set why = _('Se è la chiave del sito redazia.com, le iscrizioni dal sito si fermano finché non metti la nuova chiave su Vercel (REDAZIA_OPERATOR_KEY).') %}{% endif %}
+          <form class="inline" method="post" action="/admin/keys/{{ k.id }}/revoke" onsubmit='return confirm({{ (_('Revocare la chiave «{name}»?', name=k.name) ~ ' ' ~ why)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Revoca') }}</button></form>{% endif %}</td>
+      </tr>
       {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="pad"><p class="hint">{{ _('Nessuna chiave: il sito di vendita non può ancora iscrivere clienti.') }}</p></div>
+    {% endif %}
+    <div class="pad">
+      <h2 style="font-size: 15px;">{{ _('Nuova chiave') }}</h2>
       <form method="post" action="/admin/keys" class="form-grid">
-        <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('pagamenti') }}"></label>
+        <label class="field">{{ _('Nome, per riconoscerla') }}<input name="name" required maxlength="100" placeholder="{{ _('sito redazia.com') }}"></label>
+        <label class="field">{{ _('Per chi') }}<select name="reseller_id"><option value="">{{ _('Tutte le redazioni (sito di vendita)') }}</option>{% for r in resellers %}<option value="{{ r.id }}">{{ _('Rivenditore {name}', name=r.name) }}</option>{% endfor %}</select></label>
         <div><button class="btn" type="submit">{{ _('Crea chiave') }}</button></div>
       </form>
-    </section>
-  </div>
+      <p class="hint">{{ _('La chiave si vede una volta sola, subito dopo averla creata: copiala dove serve. Per sostituirne una, crea la nuova, mettila nel programma e poi revoca la vecchia.') }}</p>
+    </div>
+  </section>
   {% endif %}
 </main>
 </div>

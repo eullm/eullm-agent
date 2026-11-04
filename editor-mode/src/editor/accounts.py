@@ -479,14 +479,27 @@ def create_operator_token(admin, name: str, reseller_id: int | None = None) -> s
     return token
 
 
-def operator_key(admin, token: str | None):
-    """The key's name and reseller (None: the operator's own key)."""
+KEY_USE_EVERY = timedelta(minutes=5)  # the last use of a key is written at most this often
+
+
+def operator_key(admin, token: str | None, now: datetime | None = None):
+    """The key's name and reseller (None: the operator's own key). Its last
+    use is remembered, so the console can say which keys are in use."""
     if not token or not token.startswith("edo_"):
         return None
     o = m.operator_tokens
+    now = _now(now)
     with _read(admin) as conn:
-        return conn.execute(select(o.c.name, o.c.reseller_id)
-                            .where(o.c.token_sha256 == digest(token), o.c.revoked_at.is_(None))).first()
+        key = conn.execute(select(o.c.id, o.c.name, o.c.reseller_id, o.c.last_used_at)
+                           .where(o.c.token_sha256 == digest(token), o.c.revoked_at.is_(None))).first()
+    if key is not None:
+        last = key.last_used_at
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)
+        if last is None or now - last >= KEY_USE_EVERY:
+            with admin.engine.begin() as conn:
+                conn.execute(update(o).where(o.c.id == key.id).values(last_used_at=now))
+    return key
 
 
 def resolve_operator_token(admin, token: str | None) -> str | None:
@@ -497,7 +510,7 @@ def resolve_operator_token(admin, token: str | None) -> str | None:
 def operator_tokens(admin) -> list:
     o = m.operator_tokens
     with _read(admin) as conn:
-        return conn.execute(select(o.c.id, o.c.name, o.c.created_at, o.c.revoked_at, o.c.reseller_id)
+        return conn.execute(select(o.c.id, o.c.name, o.c.created_at, o.c.revoked_at, o.c.reseller_id, o.c.last_used_at)
                             .order_by(o.c.revoked_at.is_not(None), o.c.created_at)).all()
 
 

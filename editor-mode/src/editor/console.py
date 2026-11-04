@@ -669,9 +669,12 @@ def register(app, ctx) -> None:
                                      "link": send(request, token, "reset", e, None, s.email)})
 
     @app.post("/admin/keys", response_class=HTMLResponse)
-    def ui_new_key(request: Request, name: str = Form(...), s=Depends(need_console)):
+    def ui_new_key(request: Request, name: str = Form(...), reseller_id: str = Form(""), s=Depends(need_console)):
         try:
-            key = accounts.create_operator_token(admin, name)
+            seller = int(reseller_id) if reseller_id.strip().isdigit() else None
+            if reseller_id.strip() and (seller is None or billing.reseller(admin, seller) is None):
+                raise accounts.AccountError(t("rivenditore non trovato"))
+            key = accounts.create_operator_token(admin, name, reseller_id=seller)
         except accounts.AccountError as e:
             return page(request, s, 400, view="api", error=f"{e}.")
         return page(request, s, view="api", new={"what": t("Chiave API «{name}» creata", name=name.strip()), "key": key})

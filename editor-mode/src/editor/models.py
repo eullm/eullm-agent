@@ -647,6 +647,7 @@ operator_tokens = Table(
     Column("created_at", _ts()),
     Column("revoked_at", _ts()),
     Column("reseller_id", BigInteger),
+    Column("last_used_at", _ts()),
 )
 
 # Customers, resellers, plans, subscriptions, payments (owner connection
