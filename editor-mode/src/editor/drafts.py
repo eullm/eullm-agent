@@ -30,7 +30,7 @@ from . import credits, quotas, repo, seo, usage
 from .text import humanize
 from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
-from .i18n import N_
+from .i18n import N_, t
 from .progress import step
 from .site import RobotsCache
 from .normalize import normalize_text
@@ -122,20 +122,38 @@ def copied_run(claim: str, source: str, run: int = COPY_RUN) -> bool:
     return any(" " + " ".join(words[i : i + run]) + " " in src for i in range(len(words) - run + 1))
 
 
+# The sentence checks' findings, stored in English (the models read them too).
+NO_SOURCE = "no valid source"
+NUMBERS_MISSING = "numbers not found in the cited sources: "
+COPIED = "copies a passage of a source word for word"
+
+
 def check(article: Article, sources: dict[int, Source]) -> Article:
     for c in article.claims:
         c.flags = []
         cited = [sources[i] for i in c.sources if i in sources]
         if not cited:
-            c.flags.append("no valid source")
+            c.flags.append(NO_SOURCE)
             continue
         support = numbers(" ".join(s.text for s in cited))
         missing = sorted(n for n in numbers(c.text) if n not in support)
         if missing:
-            c.flags.append(f"numbers not found in the cited sources: {', '.join(missing)}")
+            c.flags.append(NUMBERS_MISSING + ", ".join(missing))
         if any(copied_run(c.text, s.text) for s in cited):
-            c.flags.append("copies a passage of a source word for word")
+            c.flags.append(COPIED)
     return article
+
+
+def flag_text(flag, lang: str | None = None) -> str:
+    """A sentence check's finding in the reader's language."""
+    flag = str(flag)
+    if flag == NO_SOURCE:
+        return t("nessuna fonte valida", lang)
+    if flag.startswith(NUMBERS_MISSING):
+        return t("numeri che non si trovano nelle fonti citate: {numbers}", lang, numbers=flag[len(NUMBERS_MISSING):])
+    if flag == COPIED:
+        return t("copia parola per parola un passaggio di una fonte", lang)
+    return flag
 
 
 def parse_article(value, allowed: set[int]) -> Article:

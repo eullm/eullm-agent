@@ -187,6 +187,16 @@ def export_response(db, tenant_id: str, as_zip: bool = True) -> Response:
                     headers={"Content-Disposition": f'attachment; filename="{tenant_id}-{day}.json"'})
 
 
+def language_name(code) -> str:
+    """A language by its own name ("it", "it-IT" → "Italiano"); anything
+    that is not a code is shown as it is."""
+    text = str(code or "").strip()
+    short = re.split(r"[-_]", text, maxsplit=1)[0].lower()
+    if len(text) <= 5 and short in tr.LANGUAGES:
+        return tr.LANGUAGES[short]
+    return text
+
+
 def register(app, ctx) -> None:
     """Add the dashboard routes. `ctx` carries db, pages, need, and the
     functions that queue background work (run_analysis, run_discovery,
@@ -200,6 +210,8 @@ def register(app, ctx) -> None:
     env.filters["problem"] = problem
     env.filters["s100"] = score100
     env.filters["plural"] = plural
+    env.filters["langname"] = language_name
+    env.filters["flag"] = drafts.flag_text
 
     def viewer(request: Request) -> auth.Caller:
         c = auth.resolve(db, request.cookies.get(COOKIE), admin)
@@ -988,7 +1000,26 @@ def register(app, ctx) -> None:
             "targets": count(m.publish_targets, pt.site_id == site.id, pt.enabled.is_not(False)),
             "cost": cost[0], "calls": cost[1],
             "discards": props.discards(s, site.id, month_ago),
+            "auto_month": auto_month(s, site.id),
         }
+
+    def auto_month(s, site_id: int) -> dict | None:
+        """The automatic newsroom's articles against the plan's drafts of
+        the month, which every site and translation of the newsroom shares."""
+        u = quotas.usage(s)
+        limit = u.plan.get("max_drafts_month") if u else None
+        if limit is None:
+            return None
+        per_day = {r.site_id: autopilot.settings_of(r.body) for r in s.execute(
+            select(m.editorial_profiles.c.site_id, m.editorial_profiles.c.body)
+            .where(m.editorial_profiles.c.status == "approved")).all()}
+        here = per_day.get(site_id)
+        others = sum(cfg["per_day"] for sid, cfg in per_day.items() if sid != site_id and cfg["enabled"])
+        mine = here["per_day"] if here and here["enabled"] else 0
+        left = max(0, int(limit - (u.used.get("drafts_month") or 0)))
+        total = mine + others
+        return {"limit": int(limit), "left": left, "mine": mine, "others": others, "month": total * 30,
+                "days": left // total if total else None, "credits": u.plan.get("credits_month") is not None}
 
     def site_page(request, c, s, sites, site, editing: bool = False, status_code: int = 200, error: str | None = None,
                   tab: str = "profile", confirm_delete: bool = False):

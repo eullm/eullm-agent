@@ -403,3 +403,25 @@ def test_the_invite_form_offers_the_email_as_the_login():
     form = (Path(accounts.__file__).parent / "templates" / "invite.html.j2").read_text()
     assert 'type="hidden" name="email"' not in form
     assert form.count('autocomplete="username" readonly') == 2
+
+
+def test_the_page_of_api_keys_says_what_each_key_is_for_and_when_it_was_used(db, tenant, admin):
+    from editor import billing
+
+    c, _ = app_for(db)
+    accounts.create_user(admin, "keys@example.com", password="password operatore", operator=True)
+    c.post("/login", data={"email": "keys@example.com", "password": "password operatore"})
+    seller = billing.create_reseller(admin, "Rivendo Srl", "rivendo@example.com", 10, "")
+    made = c.post("/admin/keys", data={"name": "sito redazia.com", "reseller_id": ""}).text
+    key = made.split('<div class="token">')[1].split("<")[0]
+    c.post("/admin/keys", data={"name": "rivendo.it", "reseller_id": str(seller)})
+    assert c.post("/admin/keys", data={"name": "x", "reseller_id": "999999"}).status_code == 400
+    def row(name):
+        return c.get("/admin/keys").text.split(f">{name}</strong>")[1].split("</tr>")[0]
+
+    assert "Rivenditore Rivendo Srl: solo i suoi clienti" in row("rivendo.it") and "mai usata" in row("rivendo.it")
+    assert "Tutte le redazioni e i clienti" in row("sito redazia.com") and "mai usata" in row("sito redazia.com")
+    # Used once by the site: the page says when; the revocation says what stops.
+    assert TestClient(c.app).get("/api/operator/tenants", headers={"Authorization": f"Bearer {key}"}).status_code == 200
+    assert "mai usata" not in row("sito redazia.com") and "UTC" in row("sito redazia.com")
+    assert "REDAZIA_OPERATOR_KEY" in row("sito redazia.com") and "Rivendo Srl non potr" in row("rivendo.it")

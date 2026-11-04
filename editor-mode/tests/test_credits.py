@@ -236,3 +236,24 @@ def test_a_new_newsroom_opens_on_its_new_customer_or_takes_an_existing_one(db, a
     second = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
     assert "capo@example.com" in r.text
     assert billing.customer_of(admin, second)["id"] == cid and "--customer\" open" not in r.text
+
+
+def test_a_new_newsroom_starts_on_the_plan_chosen_from_the_menu(db, admin):
+    c, _ = client(db)
+    op = f"{unique('op')}@example.com"
+    accounts.create_user(admin, op, "Operatore", "password lunga", operator=True)
+    c.post("/login", data={"email": op, "password": "password lunga"})
+    pro = next(p for p in billing.plans(admin) if p["code"] == "pro")
+    form = c.get("/admin/new").text
+    assert '<option value="pro">' + pro["name"] in form and "Limiti su misura" in form
+    assert "piano sconosciuto" in c.post("/admin/newsrooms", data={
+        "name": unique("Ignoto"), "owner_email": f"{unique('d')}@example.com", "plan": "nessuno"}).text
+    r = c.post("/admin/newsrooms", data={"name": unique("Pro"), "owner_email": f"{unique('d')}@example.com",
+                                         "plan": "pro", "max_sites": "7"})
+    tid = re.search(r'id="r-([a-z0-9-]+)--customer"', r.text).group(1)
+    assert billing.subscription(admin, tid)["plan_code"] == "pro"
+    with admin.engine.begin() as conn:
+        row = conn.execute(select(m.tenants).where(m.tenants.c.tenant_id == tid)).first()
+    # The plan's limits, but the number written by hand wins.
+    assert row.plan == "pro" and row.max_drafts_month == pro["max_drafts_month"] and row.max_sites == 7
+    assert f"piano {pro['name']}" in c.get(f"/admin/newsrooms/{tid}").text

@@ -59,7 +59,7 @@
             <input type="hidden" name="back" value="/start">
             <label class="field">{{ _('Contesto: di cosa parla il sito, per chi, con quale obiettivo') }}<textarea name="brief" rows="4" maxlength="4000" required placeholder="{{ _('Es.: notizie dal mondo per lettori italiani curiosi; obiettivo: più lettori possibili, titoli che invogliano senza ingannare.') }}">{{ thin.brief }}</textarea></label>
             <label class="field">{{ _('Rubriche, una per riga') }}<textarea name="sections" rows="3" placeholder="{{ profile.subtopics|join('\n') }}">{{ thin.sections|join('\n') }}</textarea></label>
-            <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if thin.language == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+            <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if thin.language == k %}selected{% endif %}>{{ k|langname }}</option>{% endfor %}</select></label>
             <div><button class="btn pri" type="submit">{{ _('Crea il profilo dal contesto') }}</button></div>
           </form>
           {% endif %}

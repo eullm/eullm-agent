@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.28.38
+
+Primo lotto dell'audit di amministrazione e redazione.
+
+### Changed
+
+- **Chiavi API spiegate** (Francesco: "cose buttate lì"): in cima alla pagina
+  c'è cosa fa una chiave e chi la usa (il sito di vendita, i rivenditori).
+  Ogni chiave dice cosa può fare (tutte le redazioni, oppure solo i clienti di
+  un rivenditore), quando è stata creata e quando è stata usata l'ultima
+  volta. Le revocate sono sbiadite, con la data della revoca. Prima di
+  revocare, la conferma dice cosa si ferma (le iscrizioni dal sito finché la
+  nuova chiave non è su Vercel, o il rivenditore). Una chiave nuova si crea
+  già per un rivenditore, scelto dal menu "Per chi". Migrazione `0041`
+  (`operator_tokens.last_used_at`, aggiornato al più ogni 5 minuti).
+- **Nuova redazione con il menu dei piani**: il piano si sceglie dal
+  catalogo (con prezzo e giorni di prova), la redazione parte con i suoi
+  limiti e il suo abbonamento. I limiti a mano stanno in "Limiti su misura",
+  chiuso: un numero scritto lì vince su quello del piano, e "Su misura" crea
+  la redazione solo con quei limiti, come prima. Nella scheda della
+  redazione "Nome, piano e limiti" diventa "Nome e limiti": il piano si
+  cambia in Abbonamento, il campo di testo libero non c'è più.
+- **Backup riordinato** in tre gruppi: backup automatico, dove si salvano,
+  copia su un altro server.
+- **Redazione automatica: articoli al giorno contro il piano**: sotto le
+  regole c'è quanti articoli fanno in 30 giorni, sommando gli altri siti,
+  contro le bozze al mese del piano e quelle rimaste. Se non bastano
+  l'avviso è arancione e dice dopo quanti giorni finiscono e cosa succede
+  (crediti, o stop fino al mese dopo).
+
+### Fixed
+
+- **Il costo del modello nel Desk lo vedeva anche il cliente**: la colonna
+  "Costo 30 giorni" ora è solo per gli amministratori.
+- **Codici al posto dei nomi**: le lingue si leggono per nome (Italiano, non
+  `it`) in Sito e profilo, Redazione automatica, Primi passi e Impostazioni;
+  i piani per nome nell'elenco delle redazioni, nella scheda e in Clienti,
+  che dice anche "1 cliente" invece di un numero solo.
+- **Controlli delle frasi in inglese**: "no valid source", "numbers not
+  found..." e "copies a passage..." nella bozza ora sono nella lingua del
+  pannello, e nei motivi della redazione automatica in quella della
+  redazione.
+- **Titoli doppi** in Clienti, Rivenditori, Piani, Backup, Aggiornamenti e
+  Amministratori: restano per i lettori di schermo, non si vedono più.
+
 ## 0.28.37
 
 ### Fixed

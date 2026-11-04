@@ -212,7 +212,7 @@
   <table class="sites">
     <thead><tr>
       <th>{{ _('Sito') }}</th><th>{{ _('Profilo') }}</th><th>{{ _('Fonti attive') }}</th><th>{{ _('Notizie 24 ore') }}</th>
-      <th>{{ _('Proposte') }}</th><th>{{ _('Bozze') }}</th><th>{{ _('Costo 30 giorni') }}</th><th>{{ _('Prossimo passo') }}</th>{% if caller.can('editor') %}<th>{{ _('Lancia') }}</th>{% endif %}
+      <th>{{ _('Proposte') }}</th><th>{{ _('Bozze') }}</th>{% if caller.operator %}<th>{{ _('Costo 30 giorni') }}</th>{% endif %}<th>{{ _('Prossimo passo') }}</th>{% if caller.can('editor') %}<th>{{ _('Lancia') }}</th>{% endif %}
     </tr></thead>
     <tbody>
     {% for x in desk %}
@@ -223,7 +223,7 @@
       <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/trends">{{ x.news }}</a></td>
       <td class="num">{% if x.proposals %}<a class="chip amber" href="#h-decide">{{ x.proposals }}</a>{% else %}0{% endif %}</td>
       <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/drafts">{{ x.drafts }}</a></td>
-      <td class="num">{{ x.cost|num(2) }}<small>{{ _('{n} chiamate', n=x.calls|tok) }}</small></td>
+      {% if caller.operator %}<td class="num">{{ x.cost|num(2) }}<small>{{ _('1 chiamata') if x.calls == 1 else _('{n} chiamate', n=x.calls|tok) }}</small></td>{% endif %}
       <td>{% if x.next %}<strong style="font-weight: 500;">{{ x.next.title }}</strong>{% if x.next.busy %} <span class="chip teal">{{ _('In attesa') }}</span>{% else %} <span class="chip amber">{{ _('Tocca a te') }}</span>{% endif %}<small>{{ x.next.wait if x.next.busy else x.next.todo }}</small>{% else %}<span class="hint">{{ _('Tutto avviato') }}</span>{% endif %}</td>
       {% if caller.can('editor') %}
       <td><div class="row" style="gap: 6px; flex-wrap: nowrap;">

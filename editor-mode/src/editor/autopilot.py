@@ -647,7 +647,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     fixable = []
     if d.status == "needs_review":
         fixable.append(t("alcune frasi non superano i controlli sulle fonti: {detail}", lang, detail="; ".join(
-            t("frase {n}: {problems}", lang, n=f.get("claim"), problems=", ".join(f.get("problems") or []))
+            t("frase {n}: {problems}", lang, n=f.get("claim"), problems=", ".join(drafts.flag_text(x, lang) for x in f.get("problems") or []))
             for f in (d.flags or [])))[:1500])
     if cited < cfg["min_sources"]:
         fixable.append(t("fonti diverse citate: {n}, ne servono almeno {min}", lang, n=cited, min=cfg["min_sources"]))

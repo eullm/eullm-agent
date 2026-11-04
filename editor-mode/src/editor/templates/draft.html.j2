@@ -68,7 +68,7 @@
       {% if flags %}
       <div class="dashed">
         <strong>{{ _('Frasi da rivedere') }}</strong>
-        {% for f in flags[:8] %}<span class="hint">«{{ f.text|truncate(90) }}»: {{ f.problems|join('; ') }}</span>{% endfor %}
+        {% for f in flags[:8] %}<span class="hint">«{{ f.text|truncate(90) }}»: {{ f.problems|map('flag')|join('; ') }}</span>{% endfor %}
       </div>
       {% endif %}
     </section>
