@@ -59,7 +59,7 @@
       <tr data-find="{{ (r.name ~ ' ' ~ r.tenant_id ~ ' ' ~ (sub.plan_name if sub else r.plan or '') ~ ' ' ~ (sub.label if sub else ''))|lower }}">
         <td><a class="room-name" href="/admin/newsrooms/{{ r.tenant_id }}">{{ r.name }}</a><br><span class="hint num">{{ r.tenant_id }}</span></td>
         <td>
-          {% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}</span>{% else %}<span class="hint">{{ r.plan or '–' }}</span>{% endif %}
+          {% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.plan_name }} · {{ sub.label }}</span>{% else %}<span class="hint">{{ plan_names.get(r.plan, r.plan) or '–' }}</span>{% endif %}
           {% if r.hold == 'billing' %}<span class="chip amber">{{ _('Ferma') }}</span>{% elif r.active is sameas false %}<span class="chip red">{{ _('Sospesa') }}</span>{% endif %}
         </td>
         {% set us = r.usage.get('sites') or {} %}{% set ud = r.usage.get('drafts') or {} %}{% set uc = r.usage.get('llm_cost') or {} %}
@@ -98,7 +98,7 @@
     <div class="card-head">
       <div style="display: flex; flex-direction: column; gap: 2px;">
         <h2 id="h-{{ r.tenant_id }}">{{ r.name }}</h2>
-        <span class="hint"><span class="num">{{ r.tenant_id }}</span> · {{ _('piano {plan}', plan=r.plan or '–') }} · {{ r.members }} {{ _('persona') if r.members == 1 else _('persone') }}{% if r.external_ref %} · {{ _('rif.') }} <span class="num">{{ r.external_ref }}</span>{% endif %} · {{ _('dal {date}', date=r.created_at.strftime('%d/%m/%Y') if r.created_at else '–') }}</span>
+        <span class="hint"><span class="num">{{ r.tenant_id }}</span> · {{ _('piano {plan}', plan=plan_names.get(r.plan, r.plan) or '–') }} · {{ r.members }} {{ _('persona') if r.members == 1 else _('persone') }}{% if r.external_ref %} · {{ _('rif.') }} <span class="num">{{ r.external_ref }}</span>{% endif %} · {{ _('dal {date}', date=r.created_at.strftime('%d/%m/%Y') if r.created_at else '–') }}</span>
       </div>
       <div class="row">
         {% set sub = subs.get(r.tenant_id) %}
@@ -220,14 +220,13 @@
         </form>
         <p class="hint">{{ _('Crediti extra: non scadono e si usano dopo quelli del mese. Con un importo resta anche il pagamento (un bonifico); un numero negativo corregge un errore.') }}</p>
         {% else %}
-        <p class="hint">{{ _('Questa redazione non usa i crediti: metti i crediti al mese in "Nome, piano e limiti" (anche 0) per attivarli.') }}</p>
+        <p class="hint">{{ _('Questa redazione non usa i crediti: metti i crediti al mese in "Nome e limiti" (anche 0) per attivarli.') }}</p>
         {% endif %}
       </details>
       <details class="act" id="{{ here }}--edit" {% if notice_at == here ~ '--edit' %}open{% endif %}>
-        <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Nome, piano e limiti') }}</summary>
+        <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Nome e limiti') }}</summary>
         <form method="post" action="/admin/newsrooms/{{ r.tenant_id }}" class="form-grid" style="margin-top: 8px;">
           <label class="field">{{ _('Nome') }}<input name="name" value="{{ r.name }}" maxlength="100" required></label>
-          <label class="field">{{ _('Piano') }}<input name="plan" value="{{ r.plan or '' }}" maxlength="60"></label>
           <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" value="{{ r.max_sites if r.max_sites is not none else '' }}"></label>
           <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" value="{{ r.max_active_sources if r.max_active_sources is not none else '' }}"></label>
           <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ r.max_items_per_day if r.max_items_per_day is not none else '' }}"></label>
@@ -237,7 +236,7 @@
           <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" value="{{ (r.max_llm_cost_month|string)|replace('.', ',') if r.max_llm_cost_month is not none else '' }}"></label>
           <div><button class="btn" type="submit">{{ _('Salva') }}</button></div>
         </form>
-        <p class="hint">{{ _('Vuoto vuol dire senza limite. Il costo del modello diventa anche il limite della redazione nel Core.') }}</p>
+        <p class="hint">{{ _('Vuoto vuol dire senza limite. Il costo del modello diventa anche il limite della redazione nel Core.') }} {{ _('Il piano si cambia in Abbonamento: i suoi limiti sostituiscono questi.') }}</p>
       </details>
       <details class="act" data-tone="teal" id="{{ here }}--invite" {% if notice_at == here ~ '--invite' %}open{% endif %}>
         <summary><span class="ico" aria-hidden="true">+</span>{{ _('Invita una persona') }}</summary>
@@ -262,20 +261,37 @@
 
   {% if view == 'nuova' %}
   <section class="card pad" id="nuova" aria-labelledby="h-create">
-    <h2 id="h-create" class="sr-only">{{ _('Nuova redazione') }}</h2>
+    <h2 id="h-create" class="sr">{{ _('Nuova redazione') }}</h2>
     <p class="hint">{{ _('Il direttore riceve un invito per scegliere la sua password (o se ha già un account la trova fra le sue redazioni).') }} {{ _('Con "Nuovo cliente" dopo la creazione si apre la scheda della redazione con i dati del cliente da compilare.') }}</p>
-    <form method="post" action="/admin/newsrooms" class="form-grid">
-      <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('Redazione i3k') }}"></label>
-      <label class="field">{{ _('Cliente') }}<select name="customer"><option value="new" selected>{{ _('Nuovo cliente') }}</option>{% for cu in customers %}<option value="{{ cu.id }}">{{ cu.name }} · {{ cu.email }}</option>{% endfor %}</select></label>
-      <label class="field">{{ _('Email del direttore') }}<input name="owner_email" type="email" placeholder="{{ _('vuota: l\'email del cliente scelto') }}"></label>
-      <label class="field">{{ _('Piano') }}<input name="plan" maxlength="60" placeholder="standard"></label>
-      <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
-      <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
-      <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
-      <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
-      <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" placeholder="{{ _('senza limite') }}"></label>
-      <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" placeholder="{{ _('senza crediti') }}"></label>
-      <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" placeholder="{{ _('senza limite') }}"></label>
+    <form method="post" action="/admin/newsrooms" class="form-stack">
+      <fieldset class="group">
+        <legend>{{ _('Redazione e cliente') }}</legend>
+        <div class="row fields">
+          <label class="field">{{ _('Nome') }}<input name="name" required maxlength="100" placeholder="{{ _('Redazione i3k') }}"></label>
+          <label class="field">{{ _('Cliente') }}<select name="customer"><option value="new" selected>{{ _('Nuovo cliente') }}</option>{% for cu in customers %}<option value="{{ cu.id }}">{{ cu.name }} · {{ cu.email }}</option>{% endfor %}</select></label>
+          <label class="field">{{ _('Email del direttore') }}<input name="owner_email" type="email" placeholder="{{ _('vuota: l\'email del cliente scelto') }}"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Piano e limiti') }}</legend>
+        <div class="row fields">
+          <label class="field wide">{{ _('Piano') }}<select name="plan">{% for p in plans %}<option value="{{ p.code }}">{{ p.name }}{% if p.price_month_cents %} · {{ money(p.price_month_cents, p.currency) }} {{ _('al mese') }}{% endif %}{% if p.trial_days %} · {{ _('{n} giorni di prova', n=p.trial_days) }}{% endif %}</option>{% endfor %}<option value="">{{ _('Su misura: solo i limiti scritti qui sotto') }}</option></select></label>
+        </div>
+        <p class="hint">{{ _('La redazione parte con i limiti del piano e il suo abbonamento, in prova se il piano ha giorni di prova. Un bonifico si registra poi in Abbonamento, nella scheda della redazione.') }}</p>
+        <details class="act sm">
+          <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Limiti su misura') }}<span class="sub">{{ _('vuoti: valgono quelli del piano') }}</span></summary>
+          <div class="form-grid" style="margin: 4px 14px 14px;">
+            <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" placeholder="{{ _('dal piano') }}"></label>
+            <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" placeholder="{{ _('dal piano') }}"></label>
+          </div>
+          <p class="hint" style="margin: 0 14px 14px;">{{ _('Un numero scritto qui sostituisce quello del piano. Con "Su misura" un campo vuoto vuol dire senza limite.') }}</p>
+        </details>
+      </fieldset>
       <div><button class="btn pri" type="submit">{{ _('Crea la redazione') }}</button></div>
     </form>
   </section>
@@ -283,7 +299,7 @@
 
   {% if view == 'clienti' %}
   <section class="card" id="clienti" aria-labelledby="h-customers">
-    <div class="card-head"><h2 id="h-customers">{{ _('Clienti') }}</h2><span class="hint">{{ customers|length }}</span></div>
+    <div class="card-head"><h2 id="h-customers" class="sr">{{ _('Clienti') }}</h2><span class="hint">{{ _('1 cliente') if customers|length == 1 else _('{n} clienti', n=customers|length) }}</span></div>
     {% if notice and notice_at == 'clienti' %}<p class="notice" role="status" style="margin: 12px 16px 0;">{{ notice }}</p>{% endif %}
     {% if customers %}
     <div class="pad" style="overflow-x: auto;">
@@ -295,7 +311,7 @@
         <td><strong>{{ c.name }}</strong><br><span class="hint">{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %}</span>{% if c.external_ref %}<br><span class="hint">{{ _('rif.') }} <span class="num">{{ c.external_ref }}</span></span>{% endif %}</td>
         <td class="hint">{% if c.vat_number %}{{ _('P.IVA') }} {{ c.vat_number }}<br>{% endif %}{% if c.tax_code %}{{ _('CF') }} {{ c.tax_code }}<br>{% endif %}{% if c.sdi_code %}SDI {{ c.sdi_code }}<br>{% endif %}{% if c.pec %}PEC {{ c.pec }}{% endif %}</td>
         <td class="hint">{{ c.address }}{% if c.city %}<br>{{ c.postal_code }} {{ c.city }}{% if c.province %} ({{ c.province }}){% endif %}{% endif %}<br>{{ c.country }}</td>
-        <td>{% for n in c.newsrooms %}<div>{{ n.name }} <span class="hint">{{ n.plan_code or '–' }} · {{ _(statuses[n.status]) if n.status in statuses else '–' }}</span></div>{% else %}<span class="hint">{{ _('nessuna') }}</span>{% endfor %}</td>
+        <td>{% for n in c.newsrooms %}<div>{{ n.name }} <span class="hint">{{ plan_names.get(n.plan_code, n.plan_code) or '–' }} · {{ _(statuses[n.status]) if n.status in statuses else '–' }}</span></div>{% else %}<span class="hint">{{ _('nessuna') }}</span>{% endfor %}</td>
         <td class="hint">{{ reseller_names.get(c.reseller_id) or _('diretto') }}</td>
       </tr>
       <tr><td colspan="5">
@@ -358,7 +374,7 @@
   {% if view == 'rivenditori' %}
   <div class="cols">
     <section class="card pad col-wide" id="rivenditori" aria-labelledby="h-resellers">
-      <h2 id="h-resellers">{{ _('Rivenditori') }}</h2>
+      <h2 id="h-resellers" class="sr">{{ _('Rivenditori') }}</h2>
       {% if notice and notice_at == 'rivenditori' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
       <p class="hint">{{ _('Un rivenditore iscrive e gestisce i suoi clienti con la sua chiave API e li fattura lui: vede solo i suoi.') }}</p>
       {% for x in resellers %}
@@ -402,7 +418,7 @@
 
   {% if view == 'piani' %}
   <section class="card" id="piani" aria-labelledby="h-plans">
-    <div class="card-head"><h2 id="h-plans">{{ _('Piani') }}</h2>
+    <div class="card-head"><h2 id="h-plans" class="sr">{{ _('Piani') }}</h2>
     {% if notice and notice_at == 'piani' %}<p class="notice" role="status" style="margin: 0 16px;">{{ notice }}</p>{% endif %}<span class="hint">{{ _('prezzi IVA esclusa') }}</span></div>
     <div class="pad">
     {% for p in plans %}
@@ -483,7 +499,7 @@
   {% set c = b.settings %}
   {% set res = b.status.get('result') or {} %}
   <section class="card pad" id="backup" aria-labelledby="h-backup">
-    <h2 id="h-backup">{{ _('Backup del server') }}</h2>
+    <h2 id="h-backup" class="sr">{{ _('Backup del server') }}</h2>
     {% if notice and notice_at == 'backup' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
     {% if not b.enabled %}
     <p class="hint">{{ _('Per i backup da qui serve lo script update.sh sul server, lo stesso degli aggiornamenti: vedi deploy/server/README.md, "Updating from the console".') }}</p>
@@ -500,33 +516,39 @@
     {% endif %}
     <form method="post" action="/admin/backups/now" style="margin: 8px 0 16px;"><button class="btn pri" type="submit" {% if b.pending %}disabled{% endif %}>{{ _('Backup adesso') }}</button></form>
 
-    <h3>{{ _('Quando e dove') }}</h3>
-    <form method="post" action="/admin/backups/settings" class="form-grid">
-      <label class="row" style="gap: 6px;"><input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>{{ _('Backup automatico acceso') }}</label>
-      <div class="row" style="gap: 12px; flex-wrap: wrap;">
-        <label class="field">{{ _('Frequenza') }}<select name="frequency"><option value="daily" {% if c.frequency == 'daily' %}selected{% endif %}>{{ _('Ogni giorno') }}</option><option value="weekly" {% if c.frequency == 'weekly' %}selected{% endif %}>{{ _('Ogni settimana') }}</option></select></label>
-        <label class="field">{{ _('Giorno (settimanale)') }}<select name="weekday">{% for n, d in [(1, _('lunedì')), (2, _('martedì')), (3, _('mercoledì')), (4, _('giovedì')), (5, _('venerdì')), (6, _('sabato')), (7, _('domenica'))] %}<option value="{{ n }}" {% if c.weekday == n %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
-        <label class="field">{{ _('Ora del server') }}<input type="time" name="time" value="{{ '%02d:%02d'|format(c.hour, c.minute) }}"></label>
-        <label class="field">{{ _('Giorni da tenere') }}<input type="number" name="keep" min="1" max="3650" value="{{ c.keep }}"></label>
-      </div>
-      <label class="field">{{ _('Cartella sul server') }}<input name="dir" value="{{ c.dir }}" placeholder="{{ b.status.get('dir') or '/opt/eullm-server/backup' }}"></label>
-      <p class="hint">{{ _('Vuota: la cartella backup dell\'installazione. Deve stare sotto /home, /var/backups, /backup, /backups, /mnt, /media, /srv o /opt, mai in una cartella pubblicata dal web server. Con Virtualmin, una cartella nella home di un dominio (per esempio /home/app/backup) entra anche nei suoi backup.') }}</p>
-      <div class="row" style="gap: 12px; flex-wrap: wrap;">
-        <label class="field">{{ _('Proprietario (facoltativo)') }}<input name="owner" value="{{ c.owner }}" placeholder="app:app"></label>
-        <label class="field">{{ _('Nome dei file') }}<input name="name" value="{{ c.name }}"></label>
-      </div>
-
-      <h3>{{ _('Copia su un altro server') }}</h3>
-      <p class="hint">{{ _('Dopo ogni backup gli archivi si copiano con rsync via SSH sul server che indichi, che deve avere rsync. Lì restano gli stessi archivi di qui: quelli eliminati qui si eliminano anche lì.') }}</p>
-      <label class="row" style="gap: 6px;"><input type="checkbox" name="remote" value="1" {% if c.remote %}checked{% endif %}>{{ _('Copia remota accesa') }}</label>
-      <div class="row" style="gap: 12px; flex-wrap: wrap;">
-        <label class="field" style="flex: 1 1 320px;">{{ _('Server remoto') }}<input name="target" value="{{ c.target }}" placeholder="backup@nas.esempio.it:/backup/redazia"></label>
-        <label class="field">{{ _('Porta SSH') }}<input type="number" name="port" min="1" max="65535" value="{{ c.port }}"></label>
-      </div>
-      {% if b.pubkey %}
-      <p class="hint">{{ _('Sul server remoto aggiungi questa chiave a ~/.ssh/authorized_keys dell\'utente indicato. È la chiave pubblica: quella privata resta su questo server.') }}</p>
-      <div class="token" style="word-break: break-all;">{{ b.pubkey }}</div>
-      {% elif c.target %}<p class="hint">{{ _('La chiave da copiare sul server remoto compare qui pochi secondi dopo il salvataggio.') }}</p>{% endif %}
+    <form method="post" action="/admin/backups/settings" class="form-stack">
+      <fieldset class="group">
+        <legend>{{ _('Backup automatico') }}</legend>
+        <label class="check"><input type="checkbox" name="enabled" value="1" {% if c.enabled %}checked{% endif %}>{{ _('Backup automatico acceso') }}</label>
+        <div class="row fields">
+          <label class="field">{{ _('Frequenza') }}<select name="frequency"><option value="daily" {% if c.frequency == 'daily' %}selected{% endif %}>{{ _('Ogni giorno') }}</option><option value="weekly" {% if c.frequency == 'weekly' %}selected{% endif %}>{{ _('Ogni settimana') }}</option></select></label>
+          <label class="field">{{ _('Giorno (settimanale)') }}<select name="weekday">{% for n, d in [(1, _('lunedì')), (2, _('martedì')), (3, _('mercoledì')), (4, _('giovedì')), (5, _('venerdì')), (6, _('sabato')), (7, _('domenica'))] %}<option value="{{ n }}" {% if c.weekday == n %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+          <label class="field">{{ _('Ora del server') }}<input type="time" name="time" value="{{ '%02d:%02d'|format(c.hour, c.minute) }}"></label>
+          <label class="field">{{ _('Giorni da tenere') }}<input type="number" name="keep" min="1" max="3650" value="{{ c.keep }}"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Dove si salvano') }}</legend>
+        <label class="field">{{ _('Cartella sul server') }}<input name="dir" value="{{ c.dir }}" placeholder="{{ b.status.get('dir') or '/opt/eullm-server/backup' }}"></label>
+        <p class="hint">{{ _('Vuota: la cartella backup dell\'installazione. Deve stare sotto /home, /var/backups, /backup, /backups, /mnt, /media, /srv o /opt, mai in una cartella pubblicata dal web server. Con Virtualmin, una cartella nella home di un dominio (per esempio /home/app/backup) entra anche nei suoi backup.') }}</p>
+        <div class="row fields">
+          <label class="field">{{ _('Nome dei file') }}<input name="name" value="{{ c.name }}"></label>
+          <label class="field">{{ _('Proprietario (facoltativo)') }}<input name="owner" value="{{ c.owner }}" placeholder="app:app"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>{{ _('Copia su un altro server') }}</legend>
+        <label class="check"><input type="checkbox" name="remote" value="1" {% if c.remote %}checked{% endif %}>{{ _('Copia remota accesa') }}</label>
+        <div class="row fields">
+          <label class="field wide">{{ _('Server remoto') }}<input name="target" value="{{ c.target }}" placeholder="backup@nas.esempio.it:/backup/redazia"></label>
+          <label class="field">{{ _('Porta SSH') }}<input type="number" name="port" min="1" max="65535" value="{{ c.port }}"></label>
+        </div>
+        <p class="hint">{{ _('Dopo ogni backup gli archivi si copiano con rsync via SSH sul server che indichi, che deve avere rsync. Lì restano gli stessi archivi di qui: quelli eliminati qui si eliminano anche lì.') }}</p>
+        {% if b.pubkey %}
+        <p class="hint">{{ _('Sul server remoto aggiungi questa chiave a ~/.ssh/authorized_keys dell\'utente indicato. È la chiave pubblica: quella privata resta su questo server.') }}</p>
+        <div class="token" style="word-break: break-all;">{{ b.pubkey }}</div>
+        {% elif c.target %}<p class="hint">{{ _('La chiave da copiare sul server remoto compare qui pochi secondi dopo il salvataggio.') }}</p>{% endif %}
+      </fieldset>
       <div><button class="btn pri" type="submit">{{ _('Salva') }}</button></div>
     </form>
 
@@ -564,7 +586,7 @@
 
   {% if view == 'aggiornamenti' %}
   <section class="card pad" id="aggiornamenti" aria-labelledby="h-updates">
-    <h2 id="h-updates">{{ _('Aggiornamenti') }}</h2>
+    <h2 id="h-updates" class="sr">{{ _('Aggiornamenti') }}</h2>
     {% if notice and notice_at == 'aggiornamenti' %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
     {% set st = updates.status or {} %}
     {% set av = updates.available or {} %}
@@ -654,7 +676,7 @@
   {% if view == 'operatori' %}
   <div class="cols">
     <section class="card pad col-wide" id="operatori" aria-labelledby="h-ops">
-      <h2 id="h-ops">{{ _('Amministratori') }}</h2>
+      <h2 id="h-ops" class="sr">{{ _('Amministratori') }}</h2>
       {% for o in operators %}
       <div class="list-row"><span>{{ o.name or o.email }}{% if o.name %} <span class="hint">{{ o.email }}</span>{% endif %}</span><span class="row">{% if not o.password_hash %}<span class="chip amber">{{ _('Invito non accettato') }}</span>{% endif %}{% if o.id != me.user_id %}<form class="inline" method="post" action="/admin/operators/{{ o.id }}/remove" onsubmit='return confirm({{ _('Togliere la console a {email}? Le sue redazioni restano.', email=o.email)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}</span></div>
       {% endfor %}
@@ -689,7 +711,7 @@
         <td><strong style="font-weight: 500;">{{ k.name }}</strong></td>
         <td>{% if k.reseller_id %}{{ _('Rivenditore {name}: solo i suoi clienti', name=seller or ('#' ~ k.reseller_id)) }}{% else %}{{ _('Tutte le redazioni e i clienti') }}<small>{{ _('per esempio il sito di vendita') }}</small>{% endif %}</td>
         <td class="num">{{ k.created_at.strftime('%d/%m/%Y') if k.created_at else '' }}</td>
-        <td class="num">{% if k.last_used_at %}{{ k.last_used_at.strftime('%d/%m/%Y %H:%M') }}<small>UTC</small>{% else %}<span class="hint">{{ _('mai usata') }}</span>{% endif %}</td>
+        <td>{% if k.last_used_at %}<span class="num">{{ k.last_used_at.strftime('%d/%m/%Y %H:%M') }}</span> <small class="hint">UTC</small>{% else %}<span class="hint">{{ _('mai usata') }}</span>{% endif %}</td>
         <td style="text-align: right;">{% if k.revoked_at %}<span class="chip">{{ _('Revocata il {date}', date=k.revoked_at.strftime('%d/%m/%Y')) }}</span>{% else %}
           {% if k.reseller_id %}{% set why = _('Il rivenditore {name} non potrà più iscrivere né gestire i suoi clienti finché non gli dai una nuova chiave.', name=seller or '') %}{% else %}{% set why = _('Se è la chiave del sito redazia.com, le iscrizioni dal sito si fermano finché non metti la nuova chiave su Vercel (REDAZIA_OPERATOR_KEY).') %}{% endif %}
           <form class="inline" method="post" action="/admin/keys/{{ k.id }}/revoke" onsubmit='return confirm({{ (_('Revocare la chiave «{name}»?', name=k.name) ~ ' ' ~ why)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Revoca') }}</button></form>{% endif %}</td>

@@ -30,7 +30,7 @@
     {% if usage %}
     <div class="list-row"><span>{{ _('Fuso orario') }}</span><span class="num">{{ usage.plan.get('timezone') or 'UTC' }}</span></div>
     <div class="list-row"><span>{{ _('Ora del briefing') }}</span><span class="num">{% if usage.plan.get('briefing_hour') is not none %}{{ '%02d'|format(usage.plan.get('briefing_hour')) }}:00{% else %}–{% endif %}</span></div>
-    <div class="list-row"><span>{{ _('Lingua') }}</span><span class="num">{{ usage.plan.get('language') or '–' }}</span></div>
+    <div class="list-row"><span>{{ _('Lingua') }}</span><span>{{ usage.plan.get('language')|langname or '–' }}</span></div>
     {% endif %}
     {% if caller.can('owner') and usage %}
     <details class="act">

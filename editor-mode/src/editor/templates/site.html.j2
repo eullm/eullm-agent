@@ -23,7 +23,7 @@
       <span class="chip">{{ _('{n} pagine lette', n=analysis.pages_fetched or 0) }} · {{ when(analysis.started_at) }}</span>
       {% set read_langs = (shown.body.get('languages') if shown else None) or {} %}
       {% if read_langs|length > 1 %}<span class="chip">{{ _('Lingue:') }} {% for k, v in read_langs.items() %}{{ k }} ({{ v }}){{ ', ' if not loop.last }}{% endfor %}</span>
-      {% elif site.language %}<span class="chip">{{ _('Lingua: {language}', language=site.language) }}</span>{% endif %}
+      {% elif site.language %}<span class="chip">{{ _('Lingua: {language}', language=site.language|langname) }}</span>{% endif %}
       <span class="chip">{{ _('robots.txt rispettato') }}</span>
     </div>
     {% endif %}
@@ -94,8 +94,18 @@
       <label class="field">{{ _('Dalle ore') }}<input name="start" type="number" min="0" max="23" value="{{ a.hours[0] }}" style="width: 5em;"></label>
       <label class="field">{{ _('Alle ore') }}<input name="end" type="number" min="1" max="24" value="{{ a.hours[1] }}" style="width: 5em;"></label>
       <label class="field">{{ _('Destinazione') }}<select name="target_id"><option value="">{{ _('La prima adatta') }}</option>{% for x in numbers.auto_targets %}<option value="{{ x.id }}" {% if a.target_id == x.id %}selected{% endif %}>{{ x.name }} ({{ x.kind }})</option>{% endfor %}</select></label>
-      <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (own_language or site.language or 'it')[:2] == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+      <label class="field">{{ _('Lingua del sito') }}<select name="language">{% for k in ['it', 'en', 'de', 'fr', 'es'] %}<option value="{{ k }}" {% if (own_language or site.language or 'it')[:2] == k %}selected{% endif %}>{{ k|langname }}</option>{% endfor %}</select></label>
     </div>
+    {% set am = numbers.auto_month %}
+    {% if am %}
+    {% if am.mine and am.month > am.limit %}
+    <p class="notice amber" role="note">{{ _('{n} articoli al giorno qui', n=am.mine) }}{% if am.others %}{{ _(' e {n} negli altri siti', n=am.others) }}{% endif %} {{ _('fanno circa {month} articoli in 30 giorni, ma il piano ne ha {limit} al mese per tutta la redazione, traduzioni comprese. Questo mese ne restano {left}: bastano per circa {days} giorni.', month=am.month, limit=am.limit, left=am.left, days=am.days) }} {{ _('Poi gli articoli si pagano con i crediti, finché ci sono.') if am.credits else _('Poi la redazione automatica si ferma fino al mese dopo.') }}</p>
+    {% elif am.mine %}
+    <p class="hint">{{ _('Circa {month} articoli in 30 giorni, con gli altri siti, su {limit} del piano al mese (traduzioni comprese). Questo mese ne restano {left}.', month=am.month, limit=am.limit, left=am.left) }}</p>
+    {% else %}
+    <p class="hint">{{ _('Il piano ha {limit} articoli al mese per tutta la redazione, traduzioni comprese. Questo mese ne restano {left}.', limit=am.limit, left=am.left) }}</p>
+    {% endif %}
+    {% endif %}
     <label class="field">{{ _('Se un articolo non passa i controlli o il caporedattore AI') }}<select name="on_problem">
       <option value="fix" {% if a.on_problem != 'hold' %}selected{% endif %}>{{ _('Lo riscrive una volta col modello più forte, poi lo scarta: tutto automatico') }}</option>
       <option value="hold" {% if a.on_problem == 'hold' %}selected{% endif %}>{{ _('Lo ferma e aspetta me') }}</option>
@@ -236,7 +246,7 @@
     <p class="lead" style="margin: 0;">{{ sm }}</p>
     {% else %}
     {% set nm = b.get('name') or site.domain %}
-    <p class="lead" style="margin: 0;">{% if pl|length > 1 %}{{ _('{name} pubblica in {languages}', name=nm, languages=pl.keys()|join(' ' ~ _('e') ~ ' ')) }}{% elif b.get('language') %}{{ _('{name} pubblica in {languages}', name=nm, languages=b.get('language')) }}{% else %}{{ _('{name} pubblica', name=nm) }}{% endif %}{% if an.get('posts_per_week') %}{{ _(', circa {n} articoli a settimana', n=an.get('posts_per_week')|num) }}{% endif %}{% if sty.get('typical_words') %} {{ _('di circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{% if subs %}{{ _(', soprattutto su {topics}', topics=subs|map(attribute='name')|join(', ')) }}{% endif %}.{% if b.get('site_keywords') %} {{ _('Si presenta con le parole chiave {keywords}.', keywords=b.get('site_keywords')|join(', ')) }}{% endif %}</p>
+    <p class="lead" style="margin: 0;">{% if pl|length > 1 %}{{ _('{name} pubblica in {languages}', name=nm, languages=pl.keys()|map('langname')|join(' ' ~ _('e') ~ ' ')) }}{% elif b.get('language') %}{{ _('{name} pubblica in {languages}', name=nm, languages=b.get('language')|langname) }}{% else %}{{ _('{name} pubblica', name=nm) }}{% endif %}{% if an.get('posts_per_week') %}{{ _(', circa {n} articoli a settimana', n=an.get('posts_per_week')|num) }}{% endif %}{% if sty.get('typical_words') %} {{ _('di circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{% if subs %}{{ _(', soprattutto su {topics}', topics=subs|map(attribute='name')|join(', ')) }}{% endif %}.{% if b.get('site_keywords') %} {{ _('Si presenta con le parole chiave {keywords}.', keywords=b.get('site_keywords')|join(', ')) }}{% endif %}</p>
     {% endif %}
     {% if thin %}
     <p style="margin: 0;"><span class="chip amber">{{ _('Profilo da completare') }}</span> {{ _('Il sito ha ancora pochi articoli da leggere: questo profilo è ricavato dalla home e dalle rubriche e non basta per proposte e articoli su misura. Scrivi il contesto in &quot;Redazione automatica&quot; qui sotto e premi &quot;Crea il profilo dal contesto&quot;.') }}</p>
@@ -250,7 +260,7 @@
       <li>{{ _('<strong>raccoglie le notizie</strong> ogni ora e tiene quelle vicine ai temi (pertinenza almeno {pct}%)', pct=((st.get('min_relevance', 0.15)) * 100)|round|int) }}{% if st.get('exclude') %}{{ _(', scartando {terms}', terms=st.get('exclude')|join(', ')) }}{% endif %};</li>
       <li>{{ _("<strong>misura i trend</strong> con due punteggi separati: Hype, quanto se ne parla in giro, e Opportunità, quanto il tema è vicino al sito e quanto non l'avete già coperto;") }}</li>
       <li>{{ _('<strong>propone {n} articoli al giorno</strong> nel piano, con le fonti; decidi tu quali scrivere;', n=st.get('proposals_per_day', 6)) }}</li>
-      <li>{{ _('<strong>scrive le bozze</strong> in {language}', language=b.get('language') or _('lingua del sito')) }}{% if sty.get('tone') %}{{ _(', tono {tone}', tone=sty.get('tone')) }}{% endif %}{% if sty.get('typical_words') %}{{ _(', circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{{ _(', con le fonti citate. Nulla si pubblica senza il tuo sì.') }}</li>
+      <li>{{ _('<strong>scrive le bozze</strong> in {language}', language=(b.get('language')|langname) or _('lingua del sito')) }}{% if sty.get('tone') %}{{ _(', tono {tone}', tone=sty.get('tone')) }}{% endif %}{% if sty.get('typical_words') %}{{ _(', circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{{ _(', con le fonti citate. Nulla si pubblica senza il tuo sì.') }}</li>
     </ul>
     {% endif %}
     {% if b.get('read_at') %}<p class="hint" style="margin: 0;">{{ _('{domain} porta a {target}: è stato letto quel sito.', domain=site.domain, target=b.get('read_at')) }}</p>{% endif %}

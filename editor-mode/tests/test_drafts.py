@@ -42,6 +42,16 @@ def test_numbers_and_copy_checks():
     assert not drafts.copied_run("A Bari la fibra arriva in molte case", src)
 
 
+
+def test_the_checks_findings_are_shown_in_the_readers_language():
+    found = drafts.NUMBERS_MISSING + "35, 3.5"
+    assert drafts.flag_text(found, "it") == "numeri che non si trovano nelle fonti citate: 35, 3.5"
+    assert drafts.flag_text(found, "en") == "numbers not found in the cited sources: 35, 3.5"
+    assert drafts.flag_text(drafts.NO_SOURCE, "de") != drafts.NO_SOURCE
+    assert drafts.flag_text(drafts.COPIED, "it") == "copia parola per parola un passaggio di una fonte"
+    assert drafts.flag_text("something else", "it") == "something else"
+
+
 def accepted_proposal(db, tenant):
     site_id = setup_site(db, tenant)
     ops = opp.score_site(db, tenant, site_id)

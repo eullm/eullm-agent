@@ -281,6 +281,14 @@ def test_the_switch_on_the_site_page(db, tenant):
     assert cfg["enabled"] and cfg["avoid"] == ["calcio", "politica"] and cfg["sections"] == ["Fibra", "Satellite"]
     page = c.get("/site?tab=auto").text
     assert "Ultimo giro" in page and "non ancora fatto" in page
+    assert ">Italiano</option>" in page and "Il piano ha" not in page  # no monthly limit, no warning
+    # The articles of the day against the plan's articles of the month.
+    set_plan(db, tenant, max_drafts_month=60)
+    page = c.get("/site?tab=auto").text
+    assert "4 articoli al giorno qui fanno circa 120 articoli in 30 giorni, ma il piano ne ha 60" in page
+    assert "ne restano 60: bastano per circa 15 giorni" in page and "si ferma fino al mese dopo" in page
+    set_plan(db, tenant, max_drafts_month=600)
+    assert "Circa 120 articoli in 30 giorni" in c.get("/site?tab=auto").text
     ap.remember(db, tenant, site_id, {"waiting": "hours"}, datetime(2026, 11, 2, 4, tzinfo=UTC))
     ap.remember(db, tenant, site_id, {"accepted": [], "wanted": 1}, datetime(2026, 11, 2, 9, tzinfo=UTC))
     page = c.get("/site?tab=auto").text

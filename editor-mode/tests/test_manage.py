@@ -166,7 +166,7 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     tid = signup(c, key(db), unique("web"), f"{unique('amm')}@rossi.it").json()["tenant"]["tenant_id"]
     c.post("/login", data={"email": op, "password": "password operatore"})
     assert tid in c.get("/admin").text
-    assert "Nome, piano e limiti" in c.get(f"/admin/newsrooms/{tid}").text
+    assert "Nome e limiti" in c.get(f"/admin/newsrooms/{tid}").text
     assert "Aggiungi un piano" in c.get("/admin/plans").text
     assert "Modifica o elimina Rossi Media srl" in c.get("/admin/customers").text
 

@@ -422,7 +422,7 @@ def test_the_console_shows_customers_resellers_and_plans(db, admin):
     for path, words in (("/admin/customers", ("Clienti", "Rossi Media srl", f"P.IVA {ids['vat_number']}",
                                               "Seconde prove negate", "SDI ABC1234")),
                         ("/admin/resellers", ("Rivenditori",)), ("/admin/plans", ("Piani", "Aggiungi un piano")),
-                        (f"/admin/newsrooms/{tid}", ("Abbonamento", "Nome, piano e limiti"))):
+                        (f"/admin/newsrooms/{tid}", ("Abbonamento", "Nome e limiti"))):
         page = c.get(path)
         for w in words:
             assert w in page.text, (path, w)

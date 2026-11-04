@@ -273,11 +273,13 @@ def register(app, ctx) -> None:
                 log.exception("refunds of %s not synced", room)
         if view == "aggiornamenti" and (where := updates.folder(ctx.updates_dir)) is not None:
             updates.refresh(where, INSTALLED, updates.this_install())
+        plans = billing.plans(admin)
         resp = pages.TemplateResponse(request, "console.html.j2", {
             "view": view, "me": s, "rooms": newsrooms.listing(admin, db, room) if room else newsrooms.listing(admin, db), "operators": accounts.operators(admin),
             "keys": accounts.operator_tokens(admin), "pending": accounts.pending_invites(admin, None),
             "roles": ROLES, "notice": unquote(notice) if notice else None, "notice_at": notice_at, "mine": accounts.memberships(admin, s.user_id),
-            "customers": billing.customers(admin), "resellers": billing.resellers(admin), "plans": billing.plans(admin),
+            "customers": billing.customers(admin), "resellers": billing.resellers(admin), "plans": plans,
+            "plan_names": {p["code"]: p["name"] for p in plans},
             "subs": billing.subscriptions(admin), "payments": billing.payments_by_tenant(admin),
             "single_room": room, "people": accounts.members(admin, room) if room else [],
             "room_customer": billing.customer_of(admin, room) if room else None,
@@ -538,7 +540,11 @@ def register(app, ctx) -> None:
         if not owner_email.strip():
             return page(request, s, 400, view="nuova",
                         error=t("Scrivi l'email del direttore, oppure scegli un cliente che ne ha una."))
-        spec = {"name": name, "owner_email": owner_email, "limits": limits} | ({"plan": plan.strip()[:60]} if plan.strip() else {})
+        code = plan.strip().lower()
+        chosen = next((p for p in billing.plans(admin) if p["code"] == code), None) if code else None
+        if code and chosen is None:
+            return page(request, s, 400, view="nuova", error=t("piano sconosciuto: {code}", code=code))
+        spec = {"name": name, "owner_email": owner_email, "limits": limits}
         try:
             res = newsrooms.create(admin, spec, s.email, ctx.core)
         except (newsrooms.NewsroomError, accounts.AccountError) as e:
@@ -555,6 +561,15 @@ def register(app, ctx) -> None:
                 billing.link_customer(admin, tid, int(customer))
             except (billing.BillingError, LookupError) as e:
                 new["warning"] = t("Cliente non collegato: {error}.", error=e)
+        if chosen is not None:
+            # The plan's limits and subscription; the numbers written by hand win over the plan's.
+            try:
+                billing.start(admin, tid, chosen["code"], int(customer) if customer.strip().isdigit() else None,
+                              core=ctx.core)
+                if own := {k: v for k, v in limits.items() if v is not None}:
+                    newsrooms.update_newsroom(admin, tid, {"limits": own}, ctx.core)
+            except (ValueError, LookupError) as e:
+                new["warning"] = t("Piano non applicato: {error}.", error=e)
         # The newsroom's card next, with its customer to create (a new one) or linked.
         return page(request, s, view="redazione", room=tid, new=new, open_customer=not customer.strip().isdigit())
 
