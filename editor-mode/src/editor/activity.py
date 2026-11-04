@@ -160,8 +160,11 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
             text += " " + t("Alcuni controlli non sono passati: rileggila con attenzione.")
         return [text], f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Leggi la traduzione")
     if kind == "image":
-        return [t("Immagine pronta per «{title}».", title=r.get("title", ""))], \
-            f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Vedi l'immagine")
+        out = [t("Immagine pronta per «{title}».", title=r.get("title", ""))]
+        if r.get("online"):
+            out.append(t("L'articolo è già online: per mettere anche lì la nuova copertina premi «Aggiorna sul sito» "
+                         "nella sua pagina (e in quella di ogni traduzione pubblicata)."))
+        return out, f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Vedi l'immagine")
     if kind == "deliver":
         link = f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts"
         if not r.get("sent"):

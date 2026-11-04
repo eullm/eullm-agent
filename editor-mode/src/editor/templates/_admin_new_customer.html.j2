@@ -1,0 +1,18 @@
+{# Console › Clienti › Nuovo cliente: a customer entered by hand, then (if
+   wished) straight on to its newsroom. #}
+{% from "_admin_macros.html.j2" import customer_fields with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <nav class="crumbs" aria-label="{{ _('Percorso') }}"><a href="/admin/customers">{{ _('Clienti') }}</a></nav>
+    <h1>{{ _('Nuovo cliente') }}</h1>
+    <p class="ph-sub">{{ _('I dati per le fatture. La redazione puoi crearla subito dopo, oppure più avanti dalla scheda del cliente.') }}</p>
+  </div>
+</header>
+<form method="post" action="/admin/customers" class="card pad">
+  {{ customer_fields(form, '', resellers, 'reseller', required=True, focus=True) }}
+  <div class="form-foot">
+    <a class="btn" href="/admin/customers">{{ _('Annulla') }}</a>
+    <button class="btn" type="submit" name="then" value="">{{ _('Crea il cliente') }}</button>
+    <button class="btn pri" type="submit" name="then" value="room">{{ _('Crea il cliente e la sua redazione') }}</button>
+  </div>
+</form>

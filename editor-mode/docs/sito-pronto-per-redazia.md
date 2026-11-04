@@ -136,7 +136,9 @@ firma prima di pubblicare.
 
 `mode` è `publish` (pubblica) o `draft` (salva come bozza). Se il direttore
 modifica l'articolo dopo la pubblicazione arriva lo stesso corpo con
-`"event": "update"` (stesso `slug`: va riscritto lo stesso file o articolo);
+`"event": "update"` (stesso `slug`: va riscritto lo stesso file o articolo),
+con la copertina attuale in `image`: un link diverso vuol dire una copertina
+nuova, `null` che è stata tolta;
 se lo ritira arriva `"event": "withdraw"` con `publication_id` e `slug`:
 l'articolo va tolto dal sito. Rispondi con
 un codice 2xx quando l'articolo è salvato; con un errore la pubblicazione

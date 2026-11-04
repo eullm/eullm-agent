@@ -1,0 +1,96 @@
+{# Console › Redazioni: the month in numbers, then every newsroom; a row opens its page. #}
+{% from "_admin_macros.html.j2" import room_chips, eur with context %}
+{% set n = numbers %}
+{% set cust_names = {} %}{% for cu in customers %}{% set _x = cust_names.update({cu.id: cu.name}) %}{% endfor %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Redazioni') }}</h1>
+    <p class="ph-sub">{{ _('1 redazione') if rooms|length == 1 else _('{n} redazioni', n=rooms|length) }} · {{ _('1 cliente') if customers|length == 1 else _('{n} clienti', n=customers|length) }}</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn" href="/admin/customers/new">+ {{ _('Nuovo cliente') }}</a>
+    <a class="btn pri" href="/admin/new">+ {{ _('Nuova redazione') }}</a>
+  </div>
+</header>
+
+<section class="kpis wrap" aria-label="{{ _('Il mese in numeri') }}">
+  <a class="card kpi" href="/admin/payments"><span class="label">{{ _('Incassato nel mese') }}</span><span class="value">{{ money(month.net) }}</span><span class="note">{% if month.refunded %}{{ _('{paid} meno {refunded} rimborsati', paid=money(month.paid), refunded=money(month.refunded)) }}{% else %}{{ _('dal 1° del mese, rimborsi tolti') }}{% endif %}</span></a>
+  <div class="card kpi"><span class="label">{{ _('Ricorrente al mese') }}</span><span class="value">{{ money(n.mrr) }}</span><span class="note">{{ _('1 redazione pagante') if n.paying == 1 else _('{n} redazioni paganti', n=n.paying) }}</span></div>
+  <a class="card kpi {{ 'warn' if n.soon }}" href="/admin?stato=trial"><span class="label">{{ _('In prova') }}</span><span class="value">{{ n.trial }}</span><span class="note">{% if n.soon %}{{ _('{n} finiscono entro 3 giorni', n=n.soon) }}{% else %}{{ _('nessuna finisce nei prossimi 3 giorni') }}{% endif %}</span></a>
+  <a class="card kpi {{ 'bad' if n.unpaid }}" href="/admin?stato=stopped"><span class="label">{{ _('Da pagare') }}</span><span class="value">{{ n.unpaid }}</span><span class="note">{{ _('ferme o con un pagamento non riuscito') if n.unpaid else _('nessuna in attesa di pagamento') }}</span></a>
+  <a class="card kpi {{ 'bad' if n.margin < 0 }}" href="/admin/usage"><span class="label">{{ _('Margine del mese') }}</span><span class="value">{{ eur(n.margin) }}</span><span class="note">{{ _('ricorrente meno il modello ({cost})', cost=eur(n.cost)) }}</span></a>
+</section>
+
+{% with page="console" %}{% include "_help.html.j2" %}{% endwith %}
+
+{% if rooms %}
+{% set states = {} %}
+{% for r in rooms %}{% set sub = subs.get(r.tenant_id) %}{% set _x = states.update({r.tenant_id: 'stopped' if r.active is sameas false or r.hold == 'billing' or (sub and sub.status in ('expired', 'past_due', 'canceled')) else 'none' if not sub else 'trial' if sub.status == 'trialing' else 'paying' if sub.status == 'active' else 'stopped'}) %}{% endfor %}
+<section class="card" aria-label="{{ _('Elenco delle redazioni') }}">
+  <div class="filters">
+    <input type="search" id="room-filter" class="search" placeholder="{{ _('Filtra per nome, id, cliente, piano o stato') }}" aria-label="{{ _('Filtra per nome, id, cliente, piano o stato') }}" autocomplete="off">
+    <nav class="tabs" id="room-states" aria-label="{{ _('Mostra') }}">
+      {% for key, label in [('', _('Tutte')), ('paying', _('Paganti')), ('trial', _('In prova')), ('stopped', _('Ferme o da pagare')), ('none', _('Senza abbonamento'))] %}
+      {% set k = states.values()|select('equalto', key)|list|length if key else rooms|length %}
+      {% if k or not key %}<a href="?stato={{ key }}" data-state="{{ key }}" {% if not key %}class="on" aria-current="true"{% endif %}>{{ label }} <span class="count">{{ k }}</span></a>{% endif %}
+      {% endfor %}
+    </nav>
+  </div>
+  <div class="scroll">
+  <table class="tbl rooms cards">
+    <thead><tr><th>{{ _('Redazione') }}</th><th>{{ _('Cliente') }}</th><th>{{ _('Abbonamento') }}</th><th class="num">{{ _('Siti') }}</th><th class="num">{{ _('Articoli del mese') }}</th><th class="num" title="{{ _('Prezzo del piano al mese, a listino, meno il costo del modello nel mese') }}">{{ _('Margine nel mese') }}</th><th>{{ _('Dal') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+    <tbody>
+    {% for r in rooms %}
+    {% set sub = subs.get(r.tenant_id) %}
+    {% set us = r.usage.get('sites') or {} %}{% set ud = r.usage.get('drafts') or {} %}{% set uc = r.usage.get('llm_cost') or {} %}
+    {% set cname = cust_names.get(r.customer_id) or '' %}
+    <tr data-href="/admin/newsrooms/{{ r.tenant_id }}" data-state="{{ states[r.tenant_id] }}" data-find="{{ (r.name ~ ' ' ~ r.tenant_id ~ ' ' ~ cname ~ ' ' ~ (sub.plan_name if sub else '') ~ ' ' ~ (sub.label if sub else ''))|lower }}">
+      <td data-label="{{ _('Redazione') }}"><a class="room-name" href="/admin/newsrooms/{{ r.tenant_id }}">{{ r.name }}</a><small class="num">{{ r.tenant_id }}</small></td>
+      <td data-label="{{ _('Cliente') }}">{% if r.customer_id %}<a href="/admin/customers/{{ r.customer_id }}">{{ cname }}</a>{% else %}<span class="hint">{{ _('nessuno') }}</span>{% endif %}</td>
+      <td data-label="{{ _('Abbonamento') }}">{{ room_chips(r, sub) }}{% if sub and sub.status == 'trialing' and sub.days_left is not none %}<small>{{ _('ancora {n} giorni', n=sub.days_left) if sub.days_left != 1 else _('ancora 1 giorno') }}</small>{% endif %}</td>
+      <td class="num" data-label="{{ _('Siti') }}">{{ (us.used or 0)|int }}{% if us.limit %} / {{ us.limit|int }}{% endif %}</td>
+      <td class="num" data-label="{{ _('Articoli del mese') }}">{{ (ud.used or 0)|int }}{% if ud.limit %} / {{ ud.limit|int }}{% endif %}</td>
+      {% set income = (sub.monthly_cents or 0) / 100 if sub else 0 %}{% set gain = income - (uc.used or 0) %}
+      <td class="num" data-label="{{ _('Margine nel mese') }}"><span {% if gain < 0 %}class="down"{% endif %}>{{ eur(gain) }}</span><small>{{ _('{income} − modello {cost}', income=eur(income), cost=eur(uc.used or 0)) }}</small></td>
+      <td class="hint num" data-label="{{ _('Dal') }}">{{ r.created_at.strftime('%d/%m/%Y') if r.created_at else '–' }}</td>
+      <td class="end"><a class="btn sm ghost" href="/admin/enter/{{ r.tenant_id }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="empty" id="room-none" hidden>{{ _('Nessuna redazione corrisponde alla ricerca.') }}</p>
+  <p class="hint foot-note">{{ _('Il margine è il prezzo del piano al mese, a listino (un piano annuale diviso per dodici, zero in prova), meno il costo del modello nel mese.') }}</p>
+</section>
+<script>
+(function () {
+  var box = document.getElementById('room-filter'), none = document.getElementById('room-none'), state = '';
+  var rows = Array.prototype.slice.call(document.querySelectorAll('table.rooms tbody tr'));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('#room-states a'));
+  function show() {
+    var q = box.value.trim().toLowerCase(), shown = 0;
+    rows.forEach(function (tr) {
+      var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!state || tr.dataset.state === state);
+      tr.hidden = !on; if (on) shown++;
+    });
+    none.hidden = shown > 0;
+  }
+  function pick(a) {
+    state = a.dataset.state;
+    tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+    show();
+  }
+  box.addEventListener('input', show);
+  tabs.forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); pick(a); }); });
+  var want = new URLSearchParams(location.search).get('stato');
+  var first = want && tabs.filter(function (a) { return a.dataset.state === want; })[0];
+  if (first) pick(first);
+})();
+</script>
+{% else %}
+<section class="card empty-state">
+  <h2>{{ _('Ancora nessuna redazione') }}</h2>
+  <p class="hint">{{ _("Creane una con il suo cliente, oppure lascia che arrivino dal sito di vendita: ogni iscrizione crea la redazione in prova con l'anagrafica del cliente.") }}</p>
+  <div class="row"><a class="btn pri" href="/admin/new">+ {{ _('Nuova redazione') }}</a></div>
+</section>
+{% endif %}

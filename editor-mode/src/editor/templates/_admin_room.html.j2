@@ -1,0 +1,417 @@
+{# Console › a newsroom: what it does and costs on the left, who pays and
+   how on the right; every change opens in a window (dialog). #}
+{% from "_admin_macros.html.j2" import dlg_head, dlg_foot, customer_fields, room_chips, pay_kind, pay_status, eur, when with context %}
+{% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'items': _('Notizie oggi'), 'drafts': _('Articoli del mese'), 'llm_cost': _('Costo modello nel mese')} %}
+{% set roles_names = {'owner': _('Direttore'), 'editor': _('Redattore'), 'viewer': _('Lettura')} %}
+{% for r in rooms %}
+{% set here = 'r-' ~ r.tenant_id %}
+{% set tid = r.tenant_id %}
+{% set sub = subs.get(tid) %}
+{% set c = room_customer %}
+{% set pays = payments.get(tid, []) %}
+{% set cr = credits.get(tid) %}
+{% set uc = r.usage.get('llm_cost') or {} %}
+{% set income = (sub.monthly_cents or 0) / 100 if sub else 0 %}
+{% set trial_plans = plans|selectattr('trial_days')|list %}
+{% set paid_plans = plans|rejectattr('code', 'equalto', 'trial')|list or plans %}
+{% set member_emails = people|map(attribute='email')|list %}
+<header class="page-head" id="{{ here }}">
+  <div class="ph-text">
+    <nav class="crumbs" aria-label="{{ _('Percorso') }}"><a href="/admin">{{ _('Redazioni') }}</a>{% if c %} <span aria-hidden="true">›</span> <a href="/admin/customers/{{ c.id }}">{{ c.name }}</a>{% endif %}</nav>
+    <h1>{{ r.name }}</h1>
+    <p class="ph-sub row">{{ room_chips(r, sub) }} <span><span class="num">{{ tid }}</span> · {{ _('dal {date}', date=r.created_at.strftime('%d/%m/%Y') if r.created_at else '–') }} · {{ r.members }} {{ _('persona') if r.members == 1 else _('persone') }}{% if r.external_ref %} · {{ _('rif.') }} <span class="num">{{ r.external_ref }}</span>{% endif %}</span></p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn ghost" href="/admin/enter/{{ tid }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a>
+    <button class="btn pri" type="button" command="show-modal" commandfor="{{ here }}--record">{{ _('Registra un pagamento') }}</button>
+  </div>
+</header>
+
+<div class="detail">
+<div class="detail-main">
+  <section class="card" aria-labelledby="h-use">
+    <div class="card-head"><h2 id="h-use">{{ _('Il mese') }}</h2><span class="hint">{{ _('Margine nel mese: € {gain} (piano € {income} meno modello € {cost}).', gain=(income - (uc.used or 0))|num, income=income|num, cost=(uc.used or 0)|num) }}</span></div>
+    <div class="pad">
+      {% for what, u in r.usage.items() %}
+      {% set pct = (100 * (u.used or 0) / u.limit)|round|int if u.limit else 0 %}
+      <div class="meter">
+        <span>{{ labels[what] }}</span>
+        {% if u.limit %}<div class="bar" role="img" aria-label="{{ pct }}%"><i {% if pct >= 90 %}class="hype"{% endif %} style="width: {{ [pct, 100]|min }}%"></i></div>
+        {% else %}<span class="hint">{{ _('senza limite') }}</span>{% endif %}
+        <span class="num" style="text-align: right;">{% if what == 'llm_cost' %}€ {{ (u.used or 0)|num }}{% if u.limit is not none %} / {{ u.limit|num(0) }}{% endif %}{% else %}{{ (u.used or 0)|int }}{% if u.limit is not none %} / {{ u.limit|int }}{% endif %}{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if work %}
+  <section class="card" aria-labelledby="h-sites">
+    <div class="card-head"><h2 id="h-sites">{{ _('Siti') }}</h2><span class="hint">{{ work.sites|length }}</span></div>
+    {% if work.sites %}
+    <div class="scroll">
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Sito') }}</th><th>{{ _('Profilo') }}</th><th>{{ _('Redazione automatica') }}</th><th class="num">{{ _('Oggi') }}</th></tr></thead>
+      <tbody>
+      {% for w in work.sites %}
+      <tr>
+        <td data-label="{{ _('Sito') }}">{{ w.name }}{% if w.name != w.domain %}<small>{{ w.domain }}</small>{% endif %}</td>
+        <td data-label="{{ _('Profilo') }}">{% if w.profile == 'approved' %}<span class="chip green">{{ _('Approvato') }}</span>{% elif w.profile == 'draft' %}<span class="chip amber">{{ _('Da approvare') }}</span>{% else %}<span class="chip">{{ _('Non ancora fatto') }}</span>{% endif %}</td>
+        <td data-label="{{ _('Redazione automatica') }}">{% if w.auto %}<span class="chip teal">{{ _('Accesa') }}</span> <span class="hint">{{ _('{n} articoli al giorno', n=w.per_day) }}</span>{% else %}<span class="hint">{{ _('Spenta') }}</span>{% endif %}</td>
+        <td class="num" data-label="{{ _('Oggi') }}">{% if w.auto %}{{ _('{p} pubblicati, {d} scartati, {h} fermati', p=w.published, d=w.discarded, h=w.held) }}{% else %}–{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _('Nessun sito: il direttore lo aggiunge da Primi passi.') }}</p>
+    {% endif %}
+    {% if work.failed %}
+    <div class="pad">
+      <h3>{{ _('Lavori falliti negli ultimi 7 giorni') }}</h3>
+      {% for j in work.failed %}
+      <div class="list-row"><span>{{ j.what }}{% if j.subject %} <span class="hint">{{ j.subject }}</span>{% endif %}<small class="down">{{ (j.error or '')|problem|truncate(160) }}</small></span><span class="hint num">{{ (j.finished_at or j.started_at).strftime('%d/%m %H:%M') if (j.finished_at or j.started_at) else '' }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="card" aria-labelledby="h-pays" id="{{ here }}--pay">
+    <div class="card-head"><h2 id="h-pays">{{ _('Pagamenti e rimborsi') }}</h2>
+      <span class="row">{% if pays %}<a class="hint" href="/admin/payments?q={{ tid }}">{{ _('Tutti i pagamenti') }}</a>{% endif %}<button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--record">+ {{ _('Registra un pagamento') }}</button></span></div>
+    {% if pays %}
+    <div class="scroll">
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Tipo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th><th>{{ _('ID Mollie') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+      <tbody>
+      {% for p in pays %}
+      <tr>
+        <td class="num" data-label="{{ _('Data') }}">{{ when(p.paid_at or p.created_at) }}</td>
+        <td data-label="{{ _('Tipo') }}">{{ pay_kind(p.kind) }}{% if p.note %}<small>{{ p.note }}</small>{% endif %}</td>
+        <td class="num" data-label="{{ _('Importo') }}">{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</td>
+        <td data-label="{{ _('Stato') }}">{{ pay_status(p) }}</td>
+        <td data-label="{{ _('ID Mollie') }}">{% if p.provider_payment_id %}<code>{{ p.provider_payment_id }}</code>{% else %}<span class="hint">–</span>{% endif %}</td>
+        <td class="end">{% if p.refundable_cents and online %}<button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--refund-{{ p.id }}">{{ _('Rimborsa') }}</button>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _('Nessun pagamento: un bonifico ricevuto lo registri con «Registra un pagamento».') }}</p>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="h-people" id="{{ here }}--people">
+    <div class="card-head"><h2 id="h-people">{{ _('Persone') }}</h2><button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--invite">+ {{ _('Invita una persona') }}</button></div>
+    {% set others = invited|rejectattr('email', 'in', member_emails)|list %}
+    {% if people or others %}
+    <div class="scroll">
+    <table class="tbl cards people">
+      <thead><tr><th>{{ _('Persona') }}</th><th>{{ _('Ruolo') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+      <tbody>
+      {% for x in people %}
+      <tr>
+        <td data-label="{{ _('Persona') }}"><span class="who-line">{{ x.email }} {% if not x.active %}<span class="chip amber">{{ _('Invito non accettato') }}</span>{% endif %}</span>{% if x.name %}<small>{{ x.name }}</small>{% endif %}</td>
+        <td data-label="{{ _('Ruolo') }}">
+          <form class="inline role" method="post" action="/admin/newsrooms/{{ tid }}/people/{{ x.id }}/role">
+            <select name="role" aria-label="{{ _('Ruolo di {email}', email=x.email) }}">{% for k, v in roles_names.items() %}<option value="{{ k }}" {% if x.role == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+            <button class="btn sm" type="submit">{{ _('Cambia') }}</button>
+          </form>
+        </td>
+        <td class="end"><span class="row">
+          {% if not x.active %}<form class="inline" method="post" action="/admin/newsrooms/{{ tid }}/people/{{ x.id }}/resend"><button class="btn sm" type="submit" title="{{ _('Manda un nuovo link: il vecchio smette di valere.') }}">{{ _('Rimanda') }}</button></form>{% endif %}
+          <form class="inline" method="post" action="/admin/newsrooms/{{ tid }}/people/{{ x.id }}/remove" onsubmit='return confirm({{ _('Togliere {email} da {newsroom}? Non entra più; il suo account resta.', email=x.email, newsroom=r.name)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>
+        </span></td>
+      </tr>
+      {% endfor %}
+      {% for i in others %}
+      <tr>
+        <td data-label="{{ _('Persona') }}"><span class="who-line">{{ i.email }} <span class="chip">{{ _('Invitato, scade {date}', date=i.expires_at.strftime('%d/%m')) }}</span></span></td>
+        <td data-label="{{ _('Ruolo') }}">{{ roles_names.get(i.role, i.role or '') }}</td>
+        <td class="end"><span class="row">
+          <form class="inline" method="post" action="/admin/newsrooms/{{ tid }}/invites/{{ i.token_sha256 }}/resend"><button class="btn sm" type="submit" title="{{ _('Manda un nuovo link: il vecchio smette di valere.') }}">{{ _('Rimanda') }}</button></form>
+          <form class="inline" method="post" action="/admin/newsrooms/{{ tid }}/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form>
+        </span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _('Nessuna persona.') }}</p>
+    {% endif %}
+    <p class="hint foot-note">{{ _('Chi non ha ancora scelto la password riceve un nuovo link con «Rimanda»: il vecchio smette di valere. Per chi è già entrato e non ricorda la password: Amministratori › Chi non riesce a entrare.') }}</p>
+  </section>
+</div>
+
+<aside class="detail-side">
+  <section class="card" aria-labelledby="h-sub" id="{{ here }}--sub">
+    <div class="card-head"><h2 id="h-sub">{{ _('Abbonamento') }}</h2>{% if sub %}<span class="chip {{ 'teal' if sub.status == 'trialing' else 'green' if sub.status == 'active' else 'amber' }}">{{ sub.label }}</span>{% endif %}</div>
+    <div class="pad">
+      {% if sub %}
+      <dl class="dl">
+        <div><dt>{{ _('Piano') }}</dt><dd>{{ sub.plan_name }}</dd></div>
+        <div><dt>{{ _('Rinnovo') }}</dt><dd>{{ _('Annuale') if sub.billing_interval == 'year' else _('Mensile') }}</dd></div>
+        {% if sub.status == 'trialing' and sub.trial_ends_at %}<div><dt>{{ _('Prova fino al') }}</dt><dd>{{ sub.trial_ends_at.strftime('%d/%m/%Y') }}{% if sub.days_left is not none %} <span class="hint">({{ _('ancora {n} giorni', n=sub.days_left) if sub.days_left != 1 else _('ancora 1 giorno') }})</span>{% endif %}</dd></div>{% endif %}
+        {% if sub.current_period_end %}<div><dt>{{ _('Pagato fino al') }}</dt><dd>{{ sub.current_period_end.strftime('%d/%m/%Y') }}</dd></div>{% elif sub.status == 'active' %}<div><dt>{{ _('Pagato fino al') }}</dt><dd class="hint">{{ _('senza scadenza') }}</dd></div>{% endif %}
+        <div><dt>{{ _('Paga con') }}</dt><dd>{% if sub.provider == 'mollie' %}Mollie{% if sub.provider_subscription_id %} <span class="hint">({{ _('rinnovo automatico') }})</span>{% endif %}{% elif sub.provider == 'reseller' %}{{ _('rivenditore') }}{% else %}{{ _('bonifico') }}{% endif %}</dd></div>
+        {% if sub.monthly_cents %}<div><dt>{{ _('Vale al mese') }}</dt><dd class="num">{{ money(sub.monthly_cents) }}</dd></div>{% endif %}
+        {% if sub.desired_plan and sub.desired_plan != sub.plan_code %}<div><dt>{{ _('Scelto dal cliente') }}</dt><dd>{{ plan_names.get(sub.desired_plan, sub.desired_plan) }}</dd></div>{% endif %}
+      </dl>
+      {% else %}
+      <p class="hint">{{ _('Nessun abbonamento: la redazione lavora con i limiti scritti a mano.') }}</p>
+      {% endif %}
+      <div class="row">
+        <button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--plan">{{ _('Cambia piano') }}</button>
+        {% if trial_plans and not (sub and sub.status == 'active') %}<button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--trial">{{ _('Ridai la prova') }}</button>{% endif %}
+        {% if sub and sub.status in ('active', 'trialing', 'past_due') %}<button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--cancel">{{ _('Ferma i rinnovi') }}</button>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-customer">
+    <div class="card-head"><h2 id="h-customer">{{ _('Cliente') }}</h2>{% if c %}<a class="hint" href="/admin/customers/{{ c.id }}">{{ _('Apri la scheda') }}</a>{% endif %}</div>
+    <div class="pad">
+      {% if c %}
+      <p><strong>{{ c.name }}</strong><small class="hint" style="display: block;">{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %}</small></p>
+      <dl class="dl">
+        {% if c.vat_number %}<div><dt>{{ _('P.IVA') }}</dt><dd class="num">{{ c.vat_number }}</dd></div>{% endif %}
+        {% if c.tax_code %}<div><dt>{{ _('CF') }}</dt><dd class="num">{{ c.tax_code }}</dd></div>{% endif %}
+        {% if c.sdi_code or c.pec %}<div><dt>{{ _('Fattura') }}</dt><dd>{% if c.sdi_code %}SDI <span class="num">{{ c.sdi_code }}</span>{% endif %}{% if c.sdi_code and c.pec %} · {% endif %}{% if c.pec %}PEC {{ c.pec }}{% endif %}</dd></div>{% endif %}
+        {% if c.city %}<div><dt>{{ _('Città') }}</dt><dd>{{ c.city }}{% if c.province %} ({{ c.province }}){% endif %}</dd></div>{% endif %}
+      </dl>
+      <div class="row"><button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--customer">{{ _('Cambia cliente') }}</button></div>
+      {% else %}
+      <p class="hint">{{ _('Nessun cliente collegato: senza, non si sa a chi intestare le fatture.') }}</p>
+      <div class="row"><button class="btn sm pri" type="button" command="show-modal" commandfor="{{ here }}--customer">{{ _('Collega o crea il cliente') }}</button></div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-credits" id="{{ here }}--credit">
+    <div class="card-head"><h2 id="h-credits">{{ _('Crediti') }}</h2>{% if cr and cr.enabled %}<button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--credits">+ {{ _('Aggiungi') }}</button>{% endif %}</div>
+    <div class="pad">
+      {% if cr and cr.enabled %}
+      <div class="trio">
+        <div><span class="num">{{ cr.month_left }}</span><small>{{ _('del mese, su {n}', n=cr.month) }}</small></div>
+        <div><span class="num">{{ cr.extra }}</span><small>{{ _('extra, non scadono') }}</small></div>
+      </div>
+      {% else %}
+      <p class="hint">{{ _('Questa redazione non usa i crediti: metti i crediti al mese in "Nome e limiti" (anche 0) per attivarli.') }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-limits">
+    <div class="card-head"><h2 id="h-limits">{{ _('Nome e limiti') }}</h2><button class="btn sm" type="button" command="show-modal" commandfor="{{ here }}--edit">{{ _('Modifica') }}</button></div>
+    <div class="pad">
+      {% set unlimited = _('senza limite') %}
+      <dl class="dl">
+        {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_items_per_day', _('Notizie al giorno')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese'))] %}
+        <div><dt>{{ label }}</dt><dd {% if r[key] is not none %}class="num"{% endif %}>{{ r[key] if r[key] is not none else unlimited }}</dd></div>
+        {% endfor %}
+        <div><dt>{{ _('Costo modello al mese') }}</dt><dd {% if r.max_llm_cost_month is not none %}class="num"{% endif %}>{{ ('€ ' ~ r.max_llm_cost_month|num) if r.max_llm_cost_month is not none else unlimited }}</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="card danger-zone" aria-labelledby="h-danger">
+    <div class="card-head"><h2 id="h-danger">{{ _('Sospendi o cancella') }}</h2></div>
+    <div class="danger-row">
+      <div><strong>{{ _('Riattiva la redazione') if r.active is sameas false else _('Sospendi la redazione') }}</strong><p class="hint">{{ _('Le persone non entrano e il lavoro programmato si ferma; i dati restano.') }}</p></div>
+      <form class="inline" method="post" action="/admin/newsrooms/{{ tid }}/active">
+        <input type="hidden" name="active" value="{{ '1' if r.active is sameas false else '0' }}">
+        <button class="btn sm" type="submit">{{ _('Riattiva') if r.active is sameas false else _('Sospendi') }}</button>
+      </form>
+    </div>
+    <div class="danger-row">
+      <div><strong>{{ _('Cancella la redazione') }}</strong><p class="hint">{{ _('Siti, articoli, bozze e persone: non si torna indietro.') }}</p></div>
+      <button class="btn sm danger" type="button" command="show-modal" commandfor="{{ here }}--delete">{{ _('Cancella') }}</button>
+    </div>
+  </section>
+</aside>
+</div>
+
+{# ---- the windows ---- #}
+{% set cur_plan = sub.plan_code if sub else '' %}
+<dialog id="{{ here }}--plan" class="modal" aria-labelledby="{{ here }}--plan-title">
+  <form method="post" action="/admin/subscriptions/{{ tid }}">
+    <input type="hidden" name="dialog" value="plan">
+    {{ dlg_head(here ~ '--plan', _('Cambia piano'), r.name) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field">{{ _('Piano') }}<select name="plan" autofocus>{% for p in plans %}<option value="{{ p.code }}" {% if cur_plan == p.code %}selected{% endif %}>{{ p.name }}{% if p.price_month_cents %} · {{ money(p.price_month_cents, p.currency) }} {{ _('al mese') }}{% endif %}</option>{% endfor %}</select></label>
+        <label class="field">{{ _('Rinnovo') }}<select name="interval"><option value="month">{{ _('Mensile') }}</option><option value="year" {% if sub and sub.billing_interval == 'year' %}selected{% endif %}>{{ _('Annuale') }}</option></select></label>
+        <label class="field">{{ _('Pagato fino al') }}<input name="paid_until" type="date" value="{{ sub.current_period_end.strftime('%Y-%m-%d') if sub and sub.current_period_end else '' }}"></label>
+      </div>
+      <p class="hint">{{ _('I limiti del piano sostituiscono quelli della redazione. Senza data il piano non scade; un piano con giorni di prova riparte in prova.') }}</p>
+      {% if sub and sub.provider == 'mollie' and sub.provider_subscription_id and sub.status != 'canceled' %}<p class="notice amber">{{ _('Paga con Mollie: cambiando il piano da qui i rinnovi automatici si fermano e da adesso paga con bonifico. Per restare su Mollie il cliente cambia piano da Il mio piano.') }}</p>{% endif %}
+    </div>
+    {{ dlg_foot(here ~ '--plan', _('Cambia piano')) }}
+  </form>
+</dialog>
+
+{% set cp = paid_plans|selectattr('code', 'equalto', (sub.desired_plan if sub and sub.desired_plan else cur_plan))|first %}
+<dialog id="{{ here }}--record" class="modal" aria-labelledby="{{ here }}--record-title">
+  <form method="post" action="/admin/subscriptions/{{ tid }}">
+    <input type="hidden" name="dialog" value="record">
+    {{ dlg_head(here ~ '--record', _('Registra un pagamento'), _('Un bonifico ricevuto da {name}.', name=c.name if c else r.name)) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field">{{ _('Importo ricevuto (€)') }}<input name="amount" inputmode="decimal" required autofocus {% if cp and cp.price_month_cents %}placeholder="{{ '%.2f'|format(cp.price_month_cents / 100)|replace('.', ',') }}"{% endif %}></label>
+        <label class="field">{{ _('Per il piano') }}<select name="plan">{% for p in paid_plans %}<option value="{{ p.code }}" {% if cur_plan == p.code or (cur_plan == 'trial' and sub and sub.desired_plan == p.code) %}selected{% endif %}>{{ p.name }}{% if p.price_month_cents %} · {{ money(p.price_month_cents, p.currency) }} {{ _('al mese') }}{% endif %}</option>{% endfor %}</select></label>
+        <label class="field">{{ _('Rinnovo') }}<select name="interval"><option value="month">{{ _('Mensile') }}</option><option value="year" {% if sub and (sub.billing_interval == 'year' or sub.desired_interval == 'year') %}selected{% endif %}>{{ _('Annuale') }}</option></select></label>
+        <label class="field">{{ _('Pagato fino al') }}<input name="paid_until" type="date"></label>
+      </div>
+      <p class="hint">{{ _('La redazione diventa attiva con questo piano. Senza data il periodo si allunga di un mese o di un anno dalla scadenza attuale (o da oggi).') }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--record', _('Registra il pagamento')) }}
+  </form>
+</dialog>
+
+{% if trial_plans %}
+<dialog id="{{ here }}--trial" class="modal" aria-labelledby="{{ here }}--trial-title">
+  <form method="post" action="/admin/subscriptions/{{ tid }}">
+    <input type="hidden" name="dialog" value="trial">
+    <input type="hidden" name="interval" value="month">
+    {{ dlg_head(here ~ '--trial', _('Ridai la prova'), r.name) }}
+    <div class="dlg-body">
+      <label class="field">{{ _('Prova del piano') }}<select name="plan" autofocus>{% for p in trial_plans %}<option value="{{ p.code }}" {% if cur_plan == p.code %}selected{% endif %}>{{ p.name }} · {{ _('{n} giorni di prova', n=p.trial_days) }}</option>{% endfor %}</select></label>
+      <p class="hint">{{ _('La redazione torna in prova da oggi per i giorni del piano e riparte subito. Serve a chi ha avuto la prova negata per errore o ha bisogno di qualche giorno in più.') }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--trial', _('Ridai la prova')) }}
+  </form>
+</dialog>
+{% endif %}
+
+{% if sub %}
+<dialog id="{{ here }}--cancel" class="modal" aria-labelledby="{{ here }}--cancel-title" closedby="any">
+  <form method="post" action="/admin/newsrooms/{{ tid }}/cancel">
+    {{ dlg_head(here ~ '--cancel', _('Ferma i rinnovi'), r.name) }}
+    <div class="dlg-body">
+      {% set end = sub.trial_ends_at if sub.status == 'trialing' else sub.current_period_end %}
+      <p>{% if end %}{{ _('La redazione lavora fino al {date}. Poi per 30 giorni riceve solo le proposte e infine si ferma; i dati restano e riparte appena paga.', date=end.strftime('%d/%m/%Y')) }}{% else %}{{ _('Questo piano non ha una scadenza: con i rinnovi fermi la redazione continua a lavorare. Per fermarla usa «Sospendi», oppure dai al piano una data in «Cambia piano».') }}{% endif %}</p>
+      <p class="hint">{{ _('Niente rimborso: per ridare dei soldi usa «Rimborsa» su un pagamento.') }}{% if sub.provider == 'mollie' and sub.provider_subscription_id %} {{ _('I rinnovi automatici su Mollie si annullano subito.') }}{% endif %}</p>
+    </div>
+    {{ dlg_foot(here ~ '--cancel', _('Ferma i rinnovi'), 'danger', safe=True) }}
+  </form>
+</dialog>
+{% endif %}
+
+{% for p in pays if p.refundable_cents and online %}
+<dialog id="{{ here }}--refund-{{ p.id }}" class="modal" aria-labelledby="{{ here }}--refund-{{ p.id }}-title">
+  <form method="post" action="/admin/payments/{{ p.id }}/refund">
+    {{ dlg_head(here ~ '--refund-' ~ p.id, _('Rimborsa {payment}', payment=p.provider_payment_id), _('fino a {amount}', amount=money(p.refundable_cents, p.currency))) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field">{{ _('Importo (€)') }}<input name="amount" inputmode="decimal" placeholder="{{ (p.refundable_cents / 100)|num }}"></label>
+        <label class="field span-2">{{ _('Poi') }}<select name="then">
+          <option value="none">{{ _("Solo il rimborso: l'abbonamento resta com'è") }}</option>
+          <option value="renewals">{{ _('Ferma i rinnovi: la redazione lavora fino a fine periodo') }}</option>
+          <option value="now">{{ _('Ferma subito la redazione e i rinnovi') }}</option>
+        </select></label>
+      </div>
+      <label class="check"><input type="checkbox" name="confirm" value="1" required> {{ _('Confermo: i soldi tornano al cliente e non si annulla') }}</label>
+      <p class="hint">{{ _('Vuoto rimborsa tutto quello che resta ({amount}). Il rimborso parte da Mollie e arriva sulla carta del cliente in qualche giorno lavorativo; Mollie trattiene la sua commissione.', amount=money(p.refundable_cents, p.currency)) }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--refund-' ~ p.id, _('Rimborsa'), 'danger', safe=True) }}
+  </form>
+</dialog>
+{% endfor %}
+
+{% if cr and cr.enabled %}
+<dialog id="{{ here }}--credits" class="modal" aria-labelledby="{{ here }}--credits-title">
+  <form method="post" action="/admin/newsrooms/{{ tid }}/credits">
+    {{ dlg_head(here ~ '--credits', _('Aggiungi crediti'), _('{left} di {month} del mese', left=cr.month_left, month=cr.month) ~ ' · ' ~ _('{n} extra', n=cr.extra)) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field">{{ _('Crediti') }}<input name="credits" inputmode="numeric" required placeholder="500" autofocus></label>
+        <label class="field">{{ _('Pagati (€)') }}<input name="amount" inputmode="decimal" placeholder="{{ _('vuoto: regalati') }}"></label>
+        <label class="field">{{ _('Nota') }}<input name="note" maxlength="200" placeholder="{{ _('bonifico del 31/10') }}"></label>
+      </div>
+      <p class="hint">{{ _('Crediti extra: non scadono e si usano dopo quelli del mese. Con un importo resta anche il pagamento (un bonifico); un numero negativo corregge un errore.') }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--credits', _('Registra')) }}
+  </form>
+</dialog>
+{% endif %}
+
+<dialog id="{{ here }}--edit" class="modal" aria-labelledby="{{ here }}--edit-title">
+  <form method="post" action="/admin/newsrooms/{{ tid }}">
+    {{ dlg_head(here ~ '--edit', _('Nome e limiti'), r.name) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Nome') }}<input name="name" value="{{ r.name }}" maxlength="100" required autofocus></label>
+        <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" value="{{ r.max_sites if r.max_sites is not none else '' }}"></label>
+        <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" value="{{ r.max_active_sources if r.max_active_sources is not none else '' }}"></label>
+        <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ r.max_items_per_day if r.max_items_per_day is not none else '' }}"></label>
+        <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ r.max_drafts_month if r.max_drafts_month is not none else '' }}"></label>
+        <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" value="{{ r.max_languages if r.max_languages is not none else '' }}"></label>
+        <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ r.credits_month if r.credits_month is not none else '' }}"></label>
+        <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" value="{{ (r.max_llm_cost_month|string)|replace('.', ',') if r.max_llm_cost_month is not none else '' }}"></label>
+      </div>
+      <p class="hint">{{ _('Vuoto vuol dire senza limite. Il costo del modello diventa anche il limite della redazione nel Core.') }} {{ _('Il piano si cambia in Abbonamento: i suoi limiti sostituiscono questi.') }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--edit', _('Salva')) }}
+  </form>
+</dialog>
+
+<dialog id="{{ here }}--invite" class="modal" aria-labelledby="{{ here }}--invite-title">
+  <form method="post" action="/admin/newsrooms/{{ tid }}/invite">
+    {{ dlg_head(here ~ '--invite', _('Invita una persona'), r.name) }}
+    <div class="dlg-body">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Email') }}<input name="email" type="email" required autofocus autocomplete="off"></label>
+        <label class="field">{{ _('Ruolo') }}<select name="role">{% for k, v in roles_names.items() %}<option value="{{ k }}" {% if k == ('editor' if people else 'owner') %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+      </div>
+      <p class="hint">{{ _('Arriva un link per scegliere la password, valido 7 giorni; chi ha già un account trova la redazione fra le sue. I direttori approvano profili e pubblicazioni, i redattori decidono proposte e bozze.') }}</p>
+    </div>
+    {{ dlg_foot(here ~ '--invite', _("Crea l'invito")) }}
+  </form>
+</dialog>
+
+{% set cv = form if reopen == here ~ '--customer' else {} %}
+{% set mode = cv.get('customer_mode') or ('existing' if customers and not reopen else 'new') %}
+<dialog id="{{ here }}--customer" class="modal wide pick-scope" aria-labelledby="{{ here }}--customer-title">
+  {{ dlg_head(here ~ '--customer', _('Cambia cliente') if c else _('Collega o crea il cliente'), r.name) }}
+  <div class="dlg-body">
+    <fieldset class="kind-pick">
+      <legend class="sr">{{ _('Cliente') }}</legend>
+      {% if customers %}<label><input class="pick" type="radio" name="pick-{{ here }}" value="existing" {% if mode == 'existing' %}checked{% endif %}>{{ _('Cliente esistente') }}<small>{{ _('Scegli dall\'elenco dei clienti.') }}</small></label>{% endif %}
+      <label><input class="pick" type="radio" name="pick-{{ here }}" value="new" {% if mode == 'new' %}checked{% endif %}>{{ _('Cliente nuovo') }}<small>{{ _('Inserisci i suoi dati di fatturazione.') }}</small></label>
+      {% if c %}<label><input class="pick" type="radio" name="pick-{{ here }}" value="none" {% if mode == 'none' %}checked{% endif %}>{{ _('Nessun cliente') }}<small>{{ _('Scollega {name} da questa redazione.', name=c.name) }}</small></label>{% endif %}
+    </fieldset>
+    {% if customers %}
+    <form class="when-existing" method="post" action="/admin/newsrooms/{{ tid }}/customer/link">
+      <label class="field">{{ _('Cliente') }}<select name="customer_id">{% for cu in customers %}<option value="{{ cu.id }}" {% if (cv.get('customer_id') or (c.id if c else ''))|string == cu.id|string %}selected{% endif %}>{{ cu.name }} · {{ cu.email }}{% if cu.vat_number %} · {{ _('P.IVA') }} {{ cu.vat_number }}{% endif %}</option>{% endfor %}</select></label>
+      {{ dlg_foot(here ~ '--customer', _('Collega')) }}
+    </form>
+    {% endif %}
+    <form class="when-new" method="post" action="/admin/customers">
+      <input type="hidden" name="room" value="{{ tid }}">
+      {{ customer_fields(cv, '', resellers, 'reseller') }}
+      {{ dlg_foot(here ~ '--customer', _('Crea il cliente e collegalo')) }}
+    </form>
+    {% if c %}
+    <form class="when-none" method="post" action="/admin/newsrooms/{{ tid }}/customer/link">
+      <input type="hidden" name="customer_id" value="">
+      <p>{{ _('La redazione resta com\'è, senza un cliente a cui fatturare. {name} resta fra i clienti.', name=c.name) }}</p>
+      {{ dlg_foot(here ~ '--customer', _('Scollega'), 'danger') }}
+    </form>
+    {% endif %}
+  </div>
+</dialog>
+
+<dialog id="{{ here }}--delete" class="modal" aria-labelledby="{{ here }}--delete-title" closedby="any">
+  <form method="post" action="/admin/newsrooms/{{ tid }}/delete">
+    {{ dlg_head(here ~ '--delete', _('Cancella la redazione'), r.name) }}
+    <div class="dlg-body">
+      <p>{{ _('Cancella siti, profili, fonti, articoli, bozze, pubblicazioni e persone della redazione. Non si torna indietro: prima scarica i dati da Impostazioni della redazione.') }}</p>
+      <label class="field">{{ _('Scrivi <span class="num">{id}</span> per confermare', id=tid) }}<input name="confirm" autocomplete="off" required></label>
+    </div>
+    {{ dlg_foot(here ~ '--delete', _('Cancella tutto'), 'danger', safe=True) }}
+  </form>
+</dialog>
+{% endfor %}

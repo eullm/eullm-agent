@@ -1,0 +1,82 @@
+{# Console › Nuova redazione: a sale in three steps on one page (the
+   customer, the newsroom with its director, the plan); nothing is created
+   until the button at the bottom, and a mistake brings back what was written. #}
+{% from "_admin_macros.html.j2" import customer_fields with context %}
+{% set mode = form.get('customer_mode') or ('existing' if form.get('customer_id') else 'new') %}
+{% set chosen_plan = form.get('plan') if form.get('plan') is not none else (plans[0].code if plans else '') %}
+<header class="page-head">
+  <div class="ph-text">
+    <nav class="crumbs" aria-label="{{ _('Percorso') }}"><a href="/admin">{{ _('Redazioni') }}</a></nav>
+    <h1>{{ _('Nuova redazione') }}</h1>
+    <p class="ph-sub">{{ _('Tre passi: il cliente, la redazione con il suo direttore, il piano. Non si crea niente finché non premi «Crea la redazione».') }}</p>
+  </div>
+</header>
+
+<form method="post" action="/admin/newsrooms" class="new-room pick-scope" id="nuova">
+  <section class="card step" aria-labelledby="h-step1">
+    <div class="step-head"><span class="step-n" aria-hidden="true">1</span><div><h2 id="h-step1">{{ _('Cliente') }}</h2><p class="hint">{{ _('Chi paga la redazione e riceve le fatture.') }}</p></div></div>
+    <div class="pad">
+      <fieldset class="kind-pick">
+        <legend class="sr">{{ _('Cliente') }}</legend>
+        <label><input class="pick" type="radio" name="customer_mode" value="new" {% if mode == 'new' %}checked{% endif %}>{{ _('Cliente nuovo') }}<small>{{ _('Inserisci adesso i suoi dati di fatturazione.') }}</small></label>
+        <label><input class="pick" type="radio" name="customer_mode" value="existing" {% if mode == 'existing' %}checked{% endif %} {% if not customers %}disabled{% endif %}>{{ _('Cliente esistente') }}<small>{% if customers %}{{ _('Un\'altra redazione per un cliente che c\'è già.') }}{% else %}{{ _('Non ci sono ancora clienti.') }}{% endif %}</small></label>
+        <label><input class="pick" type="radio" name="customer_mode" value="none" {% if mode == 'none' %}checked{% endif %}>{{ _('Nessun cliente') }}<small>{{ _('Una redazione interna o di prova: il cliente si collega dopo.') }}</small></label>
+      </fieldset>
+      <div class="when-new">
+        {{ customer_fields(form, 'c_', resellers, 'c_reseller') }}
+      </div>
+      <div class="when-existing">
+        <label class="field">{{ _('Cliente') }}<select name="customer_id"><option value="">{{ _('Scegli il cliente…') }}</option>{% for cu in customers %}<option value="{{ cu.id }}" {% if (form.get('customer_id') or '')|string == cu.id|string %}selected{% endif %}>{{ cu.name }} · {{ cu.email }}{% if cu.vat_number %} · {{ _('P.IVA') }} {{ cu.vat_number }}{% endif %}{% if cu.newsrooms %} · {{ _('1 redazione') if cu.newsrooms|length == 1 else _('{n} redazioni', n=cu.newsrooms|length) }}{% endif %}</option>{% endfor %}</select></label>
+      </div>
+      <div class="when-none">
+        <p class="hint">{{ _('La redazione nasce senza cliente: lo colleghi o lo crei quando serve dalla sua scheda, in «Cliente».') }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card step" aria-labelledby="h-step2">
+    <div class="step-head"><span class="step-n" aria-hidden="true">2</span><div><h2 id="h-step2">{{ _('Redazione') }}</h2><p class="hint">{{ _('Il direttore riceve un invito per scegliere la sua password (o se ha già un account la trova fra le sue redazioni).') }}</p></div></div>
+    <div class="pad">
+      <div class="form-grid">
+        <label class="field span-2">{{ _('Nome della redazione') }}<input name="name" required maxlength="100" value="{{ form.get('name') or '' }}" placeholder="{{ _('Redazione i3k') }}"></label>
+        <label class="field span-2">{{ _('Email del direttore') }}<input name="owner_email" type="email" value="{{ form.get('owner_email') or '' }}" placeholder="{{ _('vuota: l\'email del cliente') }}" autocomplete="off"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card step" aria-labelledby="h-step3">
+    <div class="step-head"><span class="step-n" aria-hidden="true">3</span><div><h2 id="h-step3">{{ _('Piano') }}</h2><p class="hint">{{ _('La redazione parte con i limiti del piano e il suo abbonamento, in prova se il piano ha giorni di prova. Un bonifico si registra poi dalla scheda della redazione.') }}</p></div></div>
+    <div class="pad">
+      <fieldset class="kind-pick plans-pick">
+        <legend class="sr">{{ _('Piano') }}</legend>
+        {% for p in plans %}
+        <label><input type="radio" name="plan" value="{{ p.code }}" {% if chosen_plan == p.code %}checked{% endif %}>
+          <span class="plan-top"><strong>{{ p.name }}</strong>{% if p.public %}<span class="chip green">{{ _('sul sito') }}</span>{% endif %}</span>
+          <span class="plan-price num">{% if p.price_month_cents %}{{ money(p.price_month_cents, p.currency) }} <small>{{ _('al mese') }}</small>{% else %}{{ _('gratis') }}{% endif %}</span>
+          <small>{% if p.trial_days %}{{ _('{n} giorni di prova', n=p.trial_days) }} · {% endif %}{{ _('siti: {n}', n=p.max_sites if p.max_sites is not none else '∞') }} · {{ _('articoli al mese: {n}', n=p.max_drafts_month if p.max_drafts_month is not none else '∞') }}</small>
+        </label>
+        {% endfor %}
+        <label><input type="radio" name="plan" value="" {% if chosen_plan == '' %}checked{% endif %}>
+          <span class="plan-top"><strong>{{ _('Su misura') }}</strong></span>
+          <span class="plan-price">–</span>
+          <small>{{ _('Nessun abbonamento: solo i limiti scritti qui sotto.') }}</small>
+        </label>
+      </fieldset>
+      <details class="act sm" {% if form.get('max_sites') or form.get('max_drafts_month') or form.get('max_llm_cost_month') or form.get('max_active_sources') or form.get('max_items_per_day') or form.get('max_languages') or form.get('credits_month') %}open{% endif %}>
+        <summary><span class="ico" aria-hidden="true">✎</span>{{ _('Limiti su misura') }}<span class="sub">{{ _('vuoti: valgono quelli del piano') }}</span></summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_items_per_day', _('Notizie al giorno')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese'))] %}
+          <label class="field">{{ label }}<input name="{{ key }}" inputmode="numeric" value="{{ form.get(key) or '' }}" placeholder="{{ _('dal piano') }}"></label>
+          {% endfor %}
+          <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" value="{{ form.get('max_llm_cost_month') or '' }}" placeholder="{{ _('dal piano') }}"></label>
+        </div>
+        <p class="hint" style="margin-top: 8px;">{{ _('Un numero scritto qui sostituisce quello del piano. Con "Su misura" un campo vuoto vuol dire senza limite.') }}</p>
+      </details>
+    </div>
+  </section>
+
+  <div class="form-foot">
+    <a class="btn" href="/admin">{{ _('Annulla') }}</a>
+    <button class="btn pri" type="submit">{{ _('Crea la redazione') }}</button>
+  </div>
+</form>

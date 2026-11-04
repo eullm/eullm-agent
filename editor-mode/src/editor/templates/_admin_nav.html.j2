@@ -1,26 +1,31 @@
-{# The menu of the console, the same on every page of /admin. #}
+{# The menu of the console, the same on every page of /admin: the sale's
+   main action at the top, then the sections in three groups. #}
 <nav class="nav" aria-label="{{ _('Sezioni') }}">
   <a class="brand" href="/admin"><img class="logo" src="/static/redazia-logo.webp" alt="Redazia" width="111" height="36"><small>{{ _('Amministrazione') }}</small></a>
 <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="{{ _('Sezioni') }}">
 <label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span><span></span><span></span></label>
 <div class="nav-body">
-  <a href="/admin" {% if view in ('redazioni', 'redazione') %}class="on"{% endif %}>{{ _('Redazioni') }}</a>
-  <a href="/admin/new" {% if view == 'nuova' %}class="on"{% endif %}>{{ _('Nuova redazione') }}</a>
-  <a href="/admin/customers" {% if view == 'clienti' %}class="on"{% endif %}>{{ _('Clienti') }}</a>
-  <a href="/admin/plans" {% if view == 'piani' %}class="on"{% endif %}>{{ _('Piani') }}</a>
-  <a href="/admin/resellers" {% if view == 'rivenditori' %}class="on"{% endif %}>{{ _('Rivenditori') }}</a>
-  <a href="/admin/operators" {% if view == 'operatori' %}class="on"{% endif %}>{{ _('Amministratori') }}</a>
-  <a href="/admin/keys" {% if view == 'api' %}class="on"{% endif %}>{{ _('Chiavi API') }}</a>
-  <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on"{% endif %}>{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal" style="margin-left: 6px;">{{ updates.available.version }}</span>{% endif %}</a>
-  <a href="/admin/backups" {% if view == 'backup' %}class="on"{% endif %}>{{ _('Backup') }}</a>
-  <a href="/admin/usage" {% if view == 'consumi' %}class="on"{% endif %}>{{ _('Consumi') }}</a>
+  <div class="nav-new"><a class="btn pri" href="/admin/new">+ {{ _('Nuova redazione') }}</a></div>
+  <span class="nav-label">{{ _('Clienti') }}</span>
+  <a href="/admin" {% if view in ('redazioni', 'redazione', 'nuova') %}class="on" aria-current="page"{% endif %}>{{ _('Redazioni') }}</a>
+  <a href="/admin/customers" {% if view in ('clienti', 'cliente', 'nuovo-cliente') %}class="on" aria-current="page"{% endif %}>{{ _('Clienti') }}</a>
+  <a href="/admin/payments" {% if view == 'pagamenti' %}class="on" aria-current="page"{% endif %}>{{ _('Pagamenti') }}</a>
+  <span class="nav-label">{{ _('Vendite') }}</span>
+  <a href="/admin/plans" {% if view == 'piani' %}class="on" aria-current="page"{% endif %}>{{ _('Piani e crediti') }}</a>
+  <a href="/admin/resellers" {% if view == 'rivenditori' %}class="on" aria-current="page"{% endif %}>{{ _('Rivenditori') }}</a>
+  <a href="/admin/keys" {% if view == 'api' %}class="on" aria-current="page"{% endif %}>{{ _('Chiavi API') }}</a>
+  <span class="nav-label">{{ _('Sistema') }}</span>
+  <a href="/admin/usage" {% if view == 'consumi' %}class="on" aria-current="page"{% endif %}>{{ _('Consumi') }}</a>
   {% if view == 'consumi' %}
   <a class="sub" href="#modelli">{{ _('Modello per passo') }}</a>
   <a class="sub" href="#prezzi">{{ _('Prezzi di riferimento') }}</a>
   <a class="sub" href="#articoli">{{ _('Costo per articolo') }}</a>
   {% endif %}
-  {% if mine %}<span class="hint" style="padding: 12px 12px 4px;">{{ _('Le tue redazioni') }}</span>
-  {% for x in mine %}<a href="/admin/enter/{{ x.tenant_id }}">{{ x.name }}</a>{% endfor %}{% endif %}
+  <a href="/admin/operators" {% if view == 'operatori' %}class="on" aria-current="page"{% endif %}>{{ _('Amministratori') }}</a>
+  <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on" aria-current="page"{% endif %}>{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal" style="margin-left: 6px;">{{ updates.available.version }}</span>{% endif %}</a>
+  <a href="/admin/backups" {% if view == 'backup' %}class="on" aria-current="page"{% endif %}>{{ _('Backup') }}</a>
+  {% if mine %}<span class="nav-label">{{ _('Le tue redazioni') }}</span>
+  {% for x in mine %}<a href="/admin/enter/{{ x.tenant_id }}">{{ x.name }} <span aria-hidden="true" class="hint" style="margin-left: auto;">↗</span></a>{% endfor %}{% endif %}
   <span class="grow"></span>
   <div class="nav-foot">
   {% if updates.installed %}<small class="hint" style="font-size: 11px; padding: 0 10px;"><a href="/admin/updates">Redazia {{ updates.installed }}</a></small>{% endif %}

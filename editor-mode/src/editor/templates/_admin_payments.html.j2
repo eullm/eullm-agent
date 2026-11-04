@@ -1,0 +1,90 @@
+{# Console › Pagamenti: every payment and refund of every newsroom, the
+   month in numbers, filters, and the file for the accountant. #}
+{% from "_admin_macros.html.j2" import pay_kind, pay_status, when with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Pagamenti') }}</h1>
+    <p class="ph-sub">{{ _('Pagamenti online, bonifici registrati, crediti e rimborsi di tutte le redazioni.') }}</p>
+  </div>
+  <div class="ph-actions"><a class="btn" href="/admin/payments.csv" download>{{ _('Scarica CSV') }}</a></div>
+</header>
+
+<section class="kpis wrap" aria-label="{{ _('Il mese in numeri') }}">
+  <div class="card kpi"><span class="label">{{ _('Incassato nel mese') }}</span><span class="value">{{ money(month.paid) }}</span><span class="note">{{ _('dal 1° del mese') }}</span></div>
+  <div class="card kpi"><span class="label">{{ _('Rimborsato nel mese') }}</span><span class="value">{{ money(month.refunded) }}</span><span class="note">{{ _('rimborsi partiti') }}</span></div>
+  <div class="card kpi"><span class="label">{{ _('Netto del mese') }}</span><span class="value">{{ money(month.net) }}</span><span class="note">{{ _('incassato meno rimborsato') }}</span></div>
+  <div class="card kpi {{ 'bad' if month.failed }}"><span class="label">{{ _('Non riusciti') }}</span><span class="value">{{ month.failed }}</span><span class="note">{{ _('pagamenti falliti o scaduti nel mese') }}</span></div>
+  <div class="card kpi"><span class="label">{{ _('Ricorrente al mese') }}</span><span class="value">{{ money(month.mrr) }}</span><span class="note">{{ _('1 redazione pagante') if month.paying == 1 else _('{n} redazioni paganti', n=month.paying) }}</span></div>
+</section>
+
+{% set groups = {} %}{% set months = [] %}
+{% for p in all_pays %}{% set _x = groups.update({p.id: 'refund' if p.kind == 'refund' else 'paid' if p.status == 'paid' else 'failed' if p.status in ('failed', 'expired', 'canceled') else 'open'}) %}{% set d = p.paid_at or p.created_at %}{% if d and d.strftime('%Y-%m') not in months %}{% set _y = months.append(d.strftime('%Y-%m')) %}{% endif %}{% endfor %}
+<section class="card" aria-label="{{ _('Elenco dei pagamenti') }}">
+  {% if all_pays %}
+  <div class="filters">
+    <input type="search" id="pay-filter" class="search" value="{{ request.query_params.get('q', '') }}" placeholder="{{ _('Filtra per redazione, cliente, P.IVA, ID o nota') }}" aria-label="{{ _('Filtra per redazione, cliente, P.IVA, ID o nota') }}" autocomplete="off">
+    <nav class="tabs" id="pay-groups" aria-label="{{ _('Mostra') }}">
+      {% for key, label in [('', _('Tutti')), ('paid', _('Pagati')), ('refund', _('Rimborsi')), ('failed', _('Non riusciti')), ('open', _('In attesa'))] %}
+      {% set k = groups.values()|select('equalto', key)|list|length if key else all_pays|length %}
+      {% if k or not key %}<a href="#" data-group="{{ key }}" {% if not key %}class="on" aria-current="true"{% endif %}>{{ label }} <span class="count">{{ k }}</span></a>{% endif %}
+      {% endfor %}
+      <select id="pay-month" class="pill-select" aria-label="{{ _('Mese') }}"><option value="">{{ _('Tutti i mesi') }}</option>{% for ym in months %}<option value="{{ ym }}">{{ ym[5:7] }}/{{ ym[0:4] }}</option>{% endfor %}</select>
+    </nav>
+  </div>
+  <div class="scroll">
+  <table class="tbl cards pays">
+    <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Redazione') }}</th><th>{{ _('Cliente') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Metodo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th></tr></thead>
+    <tbody>
+    {% for p in all_pays %}
+    {% set day = p.paid_at or p.created_at %}
+    <tr data-href="/admin/newsrooms/{{ p.tenant_id }}#r-{{ p.tenant_id }}--pay" data-group="{{ groups[p.id] }}" data-month="{{ day.strftime('%Y-%m') if day else '' }}" data-find="{{ ((p.newsroom or '') ~ ' ' ~ (p.tenant_id or '') ~ ' ' ~ (p.customer_name or '') ~ ' ' ~ (p.customer_vat or '') ~ ' ' ~ (p.customer_tax_code or '') ~ ' ' ~ (p.provider_payment_id or '') ~ ' ' ~ (p.note or ''))|lower }}">
+      <td class="num" data-label="{{ _('Data') }}">{{ when(day) }}</td>
+      <td data-label="{{ _('Redazione') }}"><a href="/admin/newsrooms/{{ p.tenant_id }}">{{ p.newsroom or p.tenant_id }}</a></td>
+      <td data-label="{{ _('Cliente') }}">{% if p.customer_id %}<a href="/admin/customers/{{ p.customer_id }}">{{ p.customer_name }}</a>{% if p.customer_vat %}<small class="num">{{ p.customer_vat }}</small>{% endif %}{% else %}<span class="hint">–</span>{% endif %}</td>
+      <td data-label="{{ _('Tipo') }}">{{ pay_kind(p.kind) }}{% if p.note %}<small>{{ p.note }}</small>{% endif %}</td>
+      <td data-label="{{ _('Metodo') }}">{% if p.provider == 'mollie' %}Mollie{% if p.provider_payment_id %}<small class="num">{{ p.provider_payment_id }}</small>{% endif %}{% elif p.provider == 'manual' %}{{ _('bonifico') }}{% else %}{{ p.provider or '–' }}{% endif %}</td>
+      <td class="num" data-label="{{ _('Importo') }}"><span {% if p.kind == 'refund' %}class="down"{% endif %}>{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</span></td>
+      <td data-label="{{ _('Stato') }}">{{ pay_status(p) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="empty" id="pay-none" hidden>{{ _('Nessun pagamento corrisponde alla ricerca.') }}</p>
+  <p class="hint foot-note" id="pay-sum" aria-live="polite"></p>
+  <script>
+  (function () {
+    var box = document.getElementById('pay-filter'), month = document.getElementById('pay-month');
+    var none = document.getElementById('pay-none'), sum = document.getElementById('pay-sum'), group = '';
+    var rows = Array.prototype.slice.call(document.querySelectorAll('table.pays tbody tr'));
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#pay-groups a'));
+    var shownText = {{ _('{n} pagamenti mostrati')|tojson }}, oneText = {{ _('1 pagamento mostrato')|tojson }};
+    function show() {
+      var q = box.value.trim().toLowerCase(), ym = month.value, shown = 0;
+      rows.forEach(function (tr) {
+        var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!group || tr.dataset.group === group) && (!ym || tr.dataset.month === ym);
+        tr.hidden = !on; if (on) shown++;
+      });
+      none.hidden = shown > 0;
+      sum.textContent = shown === 1 ? oneText : shownText.replace('{n}', shown);
+    }
+    box.addEventListener('input', show);
+    month.addEventListener('change', show);
+    tabs.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault(); group = a.dataset.group;
+        tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+        show();
+      });
+    });
+    show();
+  })();
+  </script>
+  {% else %}
+  <div class="empty-state">
+    <h2>{{ _('Ancora nessun pagamento') }}</h2>
+    <p class="hint">{{ _('Qui arrivano i pagamenti con Mollie, i bonifici che registri dalla scheda di una redazione e i crediti venduti.') }}</p>
+  </div>
+  {% endif %}
+</section>
+<p class="hint">{{ _('Il CSV ha tutte le righe, con punto e virgola e virgola decimale: si apre così com\'è in un foglio di calcolo in italiano.') }}</p>

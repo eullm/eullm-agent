@@ -349,6 +349,11 @@ form.row input[type=number], form.row select { min-height: 36px; padding: 0 10px
 .checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
 .checks li { display: flex; gap: 10px; align-items: baseline; }
 .meter { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 2fr) 110px; gap: 12px; align-items: center; font-size: 14px; padding: 8px 0; }
+@media (max-width: 560px) {
+  /* Name and number on one line, the bar under them. */
+  .meter { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .meter > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+}
 .list-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; flex-wrap: wrap; }
 .list-row:last-child { border-bottom: 0; }
 .list-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -392,4 +397,114 @@ code { font: 12px var(--mono); background: var(--bg); padding: 1px 4px; border-r
   .grow { display: none; }
   .map .dot span { display: none; }
 }
+/* The console: the menu in groups, a search on every page, the head of a
+   page with its actions, a record in two columns, windows for the changes. */
+.nav-label { display: block; padding: 14px 12px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.nav-new { padding: 0 0 4px; }
+.nav-new .btn { width: 100%; }
+.topsearch { margin-right: auto; flex: 0 1 460px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); }
+.topsearch:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.topsearch input { flex: 1 1 auto; min-width: 0; min-height: 38px; border: 0; background: transparent; font: 14px var(--sans); color: var(--ink); }
+.topsearch input:focus-visible { outline: none; }
+.topbar:has(.topsearch) { justify-content: space-between; align-items: center; gap: 12px; margin: -16px 0 -8px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.ph-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 420px; }
+.ph-sub { font-size: 14px; color: var(--muted); max-width: 820px; }
+.ph-sub.row { gap: 8px; }
+.ph-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted); }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--accent); text-decoration: underline; }
+.created { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 20px; align-items: start; }
+.detail-main, .detail-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@media (max-width: 1100px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+.dl { margin: 0; display: grid; gap: 8px; font-size: 14px; }
+.dl > div { display: grid; grid-template-columns: minmax(100px, 42%) minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.dl dt { color: var(--muted); font-size: 13px; }
+.dl dd { margin: 0; overflow-wrap: anywhere; }
+.danger-zone { border-color: #E3B3AC; }
+.danger-zone .card-head h2 { color: var(--red); }
+.danger-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line-2); }
+.card-head + .danger-row { border-top: 0; }
+.danger-row > div { flex: 1 1 200px; min-width: 0; }
+.danger-row strong { font-size: 14px; font-weight: 600; }
+.danger-row .hint { margin-top: 2px; }
+.filters { padding: 16px 20px 4px; display: flex; flex-direction: column; gap: 12px; }
+.tabs .count { font: 500 12px var(--mono); color: var(--muted); }
+.tabs a.on .count { color: #FFFFFF; opacity: .75; }
+.pill-select { min-height: 36px; padding: 0 12px; border: 1px solid #C9CDC7; border-radius: 18px; background: var(--surface); font: 500 13px var(--sans); color: var(--ink-2); }
+.card > .scroll > table th:first-child, .card > .scroll > table td:first-child { padding-left: 20px; }
+.card > .scroll > table th:last-child, .card > .scroll > table td:last-child { padding-right: 20px; }
+.card > .scroll > table thead th { background: #FAFBF9; border-bottom: 1px solid var(--line-2); }
+td.end { text-align: right; white-space: nowrap; }
+td.end .row { justify-content: flex-end; flex-wrap: nowrap; }
+.tbl td a:not(.btn) { text-decoration: none; }
+.tbl td a:not(.btn):hover { text-decoration: underline; }
+.tbl td.num, .tbl td .num, .tbl td.num small { white-space: nowrap; }
+.kpis.wrap .kpi .note { white-space: normal; }
+tr[data-href] { cursor: pointer; }
+tr[data-href]:hover > td { background: #F7F8F5; }
+.room-line + .room-line { margin-top: 2px; }
+.who-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; overflow-wrap: anywhere; }
+.tbl.people td:first-child { min-width: 15em; }
+form.role { gap: 6px; align-items: center; }
+.empty-state { padding: 32px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.empty-state .hint { max-width: 540px; }
+.foot-note { margin: 0; padding: 12px 20px 16px; }
+.card-head.sub-head { border-top: 1px solid var(--line); }
+.form-grid .span-2 { grid-column: span 2; }
+.form-grid .full { grid-column: 1 / -1; }
+@media (max-width: 640px) { .form-grid .span-2 { grid-column: auto; } }
+@media (max-width: 700px) {
+  .card > .scroll > table.cards tr { padding: 12px 16px; }
+  .card > .scroll > table.cards td:first-child, .card > .scroll > table.cards td:last-child { padding-left: 0; padding-right: 0; }
+  .card > .scroll > table.cards thead th { background: none; }
+  td.end { text-align: left; }
+  /* On a phone each row is a small card: its first cell is the title, the
+     others are label and value side by side, so a list stays short. */
+  table.cards td[data-label] { display: grid; grid-template-columns: minmax(7.5em, 38%) minmax(0, 1fr); gap: 2px 12px; align-items: baseline; }
+  table.cards td[data-label] > * { grid-column: 2; justify-self: start; }
+  table.cards td[data-label]::before { font-family: var(--sans); }
+  table.cards td:first-child { display: block; padding-bottom: 6px; }
+  table.cards td:first-child::before { content: none; }
+  table.cards td[data-label] small { margin-top: 0; }
+}
+/* New newsroom: three numbered steps; the customer's part shows the fields
+   of the choice made (new, existing, none). */
+.new-room { display: flex; flex-direction: column; gap: 16px; max-width: 980px; }
+.step-head { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--line-2); }
+.step-n { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #FFFFFF; font: 600 14px var(--sans); }
+.step-head h2 { font-size: 16px; }
+.step-head .hint { margin-top: 2px; }
+.pick-scope .when-new, .pick-scope .when-existing, .pick-scope .when-none { display: none; }
+.pick-scope:has(input.pick[value="new"]:checked) .when-new,
+.pick-scope:has(input.pick[value="existing"]:checked) .when-existing,
+.pick-scope:has(input.pick[value="none"]:checked) .when-none { display: block; }
+.kind-pick label:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.plans-pick { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.plans-pick label { gap: 4px; }
+.plan-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.plan-price { font: 500 20px/1.3 var(--mono); }
+.plan-price small { font: 12px var(--sans); color: var(--muted); }
+.form-foot { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 0; background: linear-gradient(to bottom, rgba(244, 245, 242, 0), var(--bg) 35%); }
+.card .form-foot { margin: 4px -20px -18px; padding: 12px 20px; border-top: 1px solid var(--line-2); border-radius: 0 0 12px 12px; background: var(--surface); }
+/* Windows: opened with showModal(), the page behind does not scroll. */
+dialog.modal { width: min(560px, calc(100vw - 32px)); max-height: min(88vh, 920px); padding: 0; border: 0; border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 64px rgba(22, 25, 29, .26); }
+dialog.modal.wide { width: min(840px, calc(100vw - 32px)); }
+dialog.modal[open] { display: flex; flex-direction: column; }
+dialog.modal:modal { overscroll-behavior: contain; }
+dialog.modal::backdrop { background: rgba(22, 25, 29, .45); overflow: hidden; overscroll-behavior: contain; }
+dialog.modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.dlg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line-2); }
+.dlg-head h2 { font-size: 18px; }
+.dlg-head .hint { margin-top: 2px; }
+.dlg-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
+.dlg-x:hover { background: var(--track); color: var(--ink); }
+.dlg-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.dlg-body .form-grid.billing { max-width: none; }
+.dlg-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line-2); background: var(--surface); border-radius: 0 0 14px 14px; }
+.dlg-body .dlg-foot { position: sticky; bottom: -16px; margin: 4px -20px -16px; border-radius: 0; }
+.dlg-foot .left { margin-right: auto; }
+@media (max-width: 640px) { .dlg-foot .left { margin-right: 0; width: 100%; } }
 </style>

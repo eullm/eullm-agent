@@ -704,7 +704,7 @@ dependencies = [
 
 [[package]]
 name = "eullm-agent"
-version = "0.28.41"
+version = "0.28.42"
 dependencies = [
  "anyhow",
  "async-trait",

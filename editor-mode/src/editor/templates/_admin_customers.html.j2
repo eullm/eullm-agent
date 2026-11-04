@@ -1,0 +1,112 @@
+{# Console › Clienti: every customer, a row opens its page; then the
+   newsrooms without one and the second trials refused. #}
+{% from "_admin_macros.html.j2" import room_chips with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Clienti') }}</h1>
+    <p class="ph-sub">{{ _('1 cliente') if customers|length == 1 else _('{n} clienti', n=customers|length) }} · {{ _('arrivano dal sito, dai rivenditori o li inserisci tu') }}</p>
+  </div>
+  <div class="ph-actions"><a class="btn pri" href="/admin/customers/new">+ {{ _('Nuovo cliente') }}</a></div>
+</header>
+
+{% if customers %}
+{% set kinds = {} %}
+{% for c in customers %}{% set st = c.newsrooms|map(attribute='status')|list %}{% set _x = kinds.update({c.id: 'paying' if 'active' in st else 'trial' if 'trialing' in st else 'none' if not c.newsrooms else 'stopped'}) %}{% endfor %}
+<section class="card" aria-label="{{ _('Elenco dei clienti') }}">
+  <div class="filters">
+    <input type="search" id="cust-filter" class="search" placeholder="{{ _('Filtra per nome, email, P.IVA, città o redazione') }}" aria-label="{{ _('Filtra per nome, email, P.IVA, città o redazione') }}" autocomplete="off">
+    <nav class="tabs" id="cust-kinds" aria-label="{{ _('Mostra') }}">
+      {% for key, label in [('', _('Tutti')), ('paying', _('Paganti')), ('trial', _('In prova')), ('stopped', _('Scaduti o fermi')), ('none', _('Senza redazione'))] %}
+      {% set k = kinds.values()|select('equalto', key)|list|length if key else customers|length %}
+      {% if k or not key %}<a href="#" data-kind="{{ key }}" {% if not key %}class="on" aria-current="true"{% endif %}>{{ label }} <span class="count">{{ k }}</span></a>{% endif %}
+      {% endfor %}
+      {% if reseller_names %}<select id="cust-seller" class="pill-select" aria-label="{{ _('Rivenditore') }}"><option value="">{{ _('Diretti e rivenditori') }}</option><option value="0">{{ _('Solo diretti') }}</option>{% for rid, rname in reseller_names.items() %}<option value="{{ rid }}">{{ rname }}</option>{% endfor %}</select>{% endif %}
+    </nav>
+  </div>
+  <div class="scroll">
+  <table class="tbl cards customers">
+    <thead><tr><th>{{ _('Cliente') }}</th><th>{{ _('Fiscale') }}</th><th>{{ _('Città') }}</th><th>{{ _('Redazioni') }}</th><th>{{ _('Rivenditore') }}</th></tr></thead>
+    <tbody>
+    {% for c in customers %}
+    <tr class="cust" data-href="/admin/customers/{{ c.id }}" data-kind="{{ kinds[c.id] }}" data-seller="{{ c.reseller_id or 0 }}" data-find="{{ (c.name ~ ' ' ~ c.email ~ ' ' ~ (c.vat_number or '') ~ ' ' ~ (c.tax_code or '') ~ ' ' ~ (c.city or '') ~ ' ' ~ (c.newsrooms|map(attribute='name')|join(' ')))|lower }}">
+      <td data-label="{{ _('Cliente') }}"><a class="room-name" href="/admin/customers/{{ c.id }}">{{ c.name }}</a><small>{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %}</small></td>
+      <td class="hint" data-label="{{ _('Fiscale') }}">{% if c.vat_number %}{{ _('P.IVA') }} <span class="num">{{ c.vat_number }}</span>{% elif c.tax_code %}{{ _('CF') }} <span class="num">{{ c.tax_code }}</span>{% else %}<span class="chip amber">{{ _('mancano i dati fiscali') }}</span>{% endif %}</td>
+      <td class="hint" data-label="{{ _('Città') }}">{{ c.city or '–' }}{% if c.province %} ({{ c.province }}){% endif %}</td>
+      <td data-label="{{ _('Redazioni') }}">{% for n in c.newsrooms %}<div class="room-line"><a href="/admin/newsrooms/{{ n.tenant_id }}">{{ n.name }}</a> <span class="hint">{% if n.plan_code %}{{ plan_names.get(n.plan_code, n.plan_code) }} · {{ _(statuses[n.status]) if n.status in statuses else n.status }}{% else %}{{ _('nessun abbonamento') }}{% endif %}</span></div>{% else %}<span class="hint">{{ _('nessuna') }}</span>{% endfor %}</td>
+      <td class="hint" data-label="{{ _('Rivenditore') }}">{{ reseller_names.get(c.reseller_id) or _('diretto') }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="empty" id="cust-none" hidden>{{ _('Nessun cliente corrisponde alla ricerca.') }}</p>
+</section>
+<script>
+(function () {
+  var box = document.getElementById('cust-filter'), seller = document.getElementById('cust-seller');
+  var none = document.getElementById('cust-none'), kind = '';
+  var rows = Array.prototype.slice.call(document.querySelectorAll('table.customers tr.cust'));
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('#cust-kinds a'));
+  function show() {
+    var q = box.value.trim().toLowerCase(), who = seller ? seller.value : '', shown = 0;
+    rows.forEach(function (tr) {
+      var on = (!q || tr.dataset.find.indexOf(q) >= 0) && (!kind || tr.dataset.kind === kind) && (!who || tr.dataset.seller === who);
+      tr.hidden = !on; if (on) shown++;
+    });
+    none.hidden = shown > 0;
+  }
+  box.addEventListener('input', show);
+  if (seller) seller.addEventListener('change', show);
+  tabs.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault(); kind = a.dataset.kind;
+      tabs.forEach(function (x) { x.classList.toggle('on', x === a); if (x === a) x.setAttribute('aria-current', 'true'); else x.removeAttribute('aria-current'); });
+      show();
+    });
+  });
+})();
+</script>
+{% else %}
+<section class="card empty-state">
+  <h2>{{ _('Ancora nessun cliente') }}</h2>
+  <p class="hint">{{ _('Arrivano dal sito di vendita a ogni iscrizione, dai rivenditori con la loro chiave API, oppure li inserisci tu.') }}</p>
+  <div class="row"><a class="btn pri" href="/admin/customers/new">+ {{ _('Nuovo cliente') }}</a></div>
+</section>
+{% endif %}
+
+{% set orphans = rooms|selectattr('customer_id', 'none')|list %}
+{% if orphans %}
+<section class="card" aria-labelledby="h-orphans">
+  <div class="card-head"><h2 id="h-orphans">{{ _('Redazioni senza cliente') }}</h2><span class="hint">{{ orphans|length }}</span></div>
+  <div class="pad">
+    <p class="hint">{{ _('Aprila e, in «Cliente», collega un cliente esistente o creane uno.') }}</p>
+    {% for o in orphans %}<div class="list-row"><a href="/admin/newsrooms/{{ o.tenant_id }}#r-{{ o.tenant_id }}--customer">{{ o.name }}</a><span class="num hint">{{ o.tenant_id }}</span></div>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="card" id="prove-negate" aria-labelledby="h-refused">
+  <div class="card-head"><h2 id="h-refused">{{ _('Seconde prove negate') }}</h2><span class="hint">{{ refusals|length }}</span></div>
+  <div class="pad">
+    <p class="hint">{{ _('La prova gratuita si dà una volta sola: chi torna con la stessa email, P.IVA, codice fiscale o telefono, o con un sito già provato in un\'altra redazione, ha la redazione ferma finché non sceglie un piano. Se è un errore, apri la redazione e usa «Ridai la prova».') }}</p>
+    {% if refusals %}
+    <div class="scroll">
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Redazione') }}</th><th>{{ _('Cliente') }}</th><th>{{ _('Già usato') }}</th></tr></thead>
+      <tbody>
+      {% for r in refusals %}
+      <tr>
+        <td class="hint num" data-label="{{ _('Quando') }}">{{ r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at.strftime is defined else r.created_at }}</td>
+        <td data-label="{{ _('Redazione') }}"><a class="num" href="/admin/newsrooms/{{ r.newsroom }}">{{ r.newsroom }}</a></td>
+        <td data-label="{{ _('Cliente') }}">{% if r.name %}{{ r.name }}<small>{{ r.email }}</small>{% else %}<span class="hint">–</span>{% endif %}</td>
+        <td class="hint" data-label="{{ _('Già usato') }}">{% for x in r.reasons %}<div>{{ _(trial_kinds[x.kind]) }} {{ x.value }}{% if x.newsroom %} ({{ x.newsroom }}){% endif %}</div>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _('Nessuna: finora ogni prova è andata a chi non l\'aveva mai avuta.') }}</p>
+    {% endif %}
+  </div>
+</section>

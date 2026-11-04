@@ -1,0 +1,61 @@
+{# Console › Amministratori: who enters this console, and a new password
+   link for anyone who cannot get in. #}
+{% from "_admin_macros.html.j2" import dlg_head, dlg_foot with context %}
+<header class="page-head">
+  <div class="ph-text">
+    <h1>{{ _('Amministratori') }}</h1>
+    <p class="ph-sub">{{ _('Gli amministratori entrano in questa console e vedono tutte le redazioni. Ognuno ha il suo account: non condividere le password.') }}</p>
+  </div>
+  <div class="ph-actions">
+    <button class="btn" type="button" command="show-modal" commandfor="nuova-password">{{ _('Link per nuova password') }}</button>
+    <button class="btn pri" type="button" command="show-modal" commandfor="nuovo-amministratore">+ {{ _('Invita un amministratore') }}</button>
+  </div>
+</header>
+
+<section class="card" id="operatori" aria-label="{{ _('Elenco degli amministratori') }}">
+  <div class="scroll">
+  <table class="tbl cards">
+    <thead><tr><th>{{ _('Amministratore') }}</th><th>{{ _('Ultimo accesso') }}</th><th>{{ _('Stato') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+    <tbody>
+    {% for o in operators %}
+    <tr>
+      <td data-label="{{ _('Amministratore') }}">{{ o.name or o.email }}{% if o.name %}<small>{{ o.email }}</small>{% endif %}</td>
+      <td class="num" data-label="{{ _('Ultimo accesso') }}">{% if o.last_login %}{{ o.last_login.strftime('%d/%m/%Y %H:%M') }} <small class="hint" style="display: inline;">UTC</small>{% elif o.password_hash %}<span class="hint">{{ _('nessun accesso negli ultimi 30 giorni') }}</span>{% else %}<span class="hint">{{ _('non è ancora entrato') }}</span>{% endif %}</td>
+      <td data-label="{{ _('Stato') }}">{% if not o.password_hash %}<span class="chip amber">{{ _('Invito non accettato') }}</span>{% elif o.id == me.user_id %}<span class="chip dark">{{ _('Sei tu') }}</span>{% else %}<span class="chip green">{{ _('Attivo') }}</span>{% endif %}</td>
+      <td class="end">{% if o.id != me.user_id %}<form class="inline" method="post" action="/admin/operators/{{ o.id }}/remove" onsubmit='return confirm({{ _('Togliere la console a {email}? Le sue redazioni restano.', email=o.email)|string|tojson }})'><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% else %}<span class="hint" title="{{ _('Non puoi togliere te stesso: chiedilo a un altro amministratore.') }}">–</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    {% for i in pending %}
+    <tr>
+      <td data-label="{{ _('Amministratore') }}">{{ i.email }}<small>{{ _('invito inviato, non ancora accettato') }}</small></td>
+      <td data-label="{{ _('Ultimo accesso') }}"><span class="hint">–</span></td>
+      <td data-label="{{ _('Stato') }}"><span class="chip">{{ _('Invitato, scade {date}', date=i.expires_at.strftime('%d/%m')) }}</span></td>
+      <td class="end"><form class="inline" method="post" action="/admin/invites/{{ i.token_sha256 }}/revoke"><button class="btn sm" type="submit">{{ _('Annulla') }}</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card pad" aria-labelledby="h-reset">
+  <h2 id="h-reset">{{ _('Chi non riesce a entrare') }}</h2>
+  <p class="hint">{{ _('Per qualsiasi account, anche il direttore o un collaboratore di una redazione: crea un link per scegliere una nuova password, valido 24 ore. Arriva per email alla persona; se la posta non è configurata lo vedi qui e lo mandi tu.') }}</p>
+  <div class="row"><button class="btn" type="button" command="show-modal" commandfor="nuova-password">{{ _('Link per nuova password') }}</button></div>
+</section>
+
+<dialog id="nuovo-amministratore" class="modal" aria-labelledby="nuovo-amministratore-title">
+  <form method="post" action="/admin/operators">
+    {{ dlg_head('nuovo-amministratore', _('Invita un amministratore'), _('Vedrà tutte le redazioni e i clienti.')) }}
+    <div class="dlg-body"><label class="field">{{ _('Email') }}<input name="email" type="email" required autofocus autocomplete="off"></label></div>
+    {{ dlg_foot('nuovo-amministratore', _("Crea l'invito")) }}
+  </form>
+</dialog>
+
+<dialog id="nuova-password" class="modal" aria-labelledby="nuova-password-title">
+  <form method="post" action="/admin/reset">
+    {{ dlg_head('nuova-password', _('Link per nuova password'), _('Valido 24 ore, si usa una volta.')) }}
+    <div class="dlg-body"><label class="field">{{ _('Email di un account') }}<input name="email" type="email" required autofocus autocomplete="off"></label></div>
+    {{ dlg_foot('nuova-password', _('Crea il link')) }}
+  </form>
+</dialog>

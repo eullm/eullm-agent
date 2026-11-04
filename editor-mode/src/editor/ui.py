@@ -1798,7 +1798,7 @@ def register(app, ctx) -> None:
             pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode,
                                     m.publications.c.external_url, m.publications.c.withdrawn_at,
                                     m.publications.c.updated_at, m.publications.c.published_at, m.publications.c.error,
-                                    m.publish_targets.c.name)
+                                    m.publish_targets.c.name, m.publish_targets.c.kind)
                              .join(m.publish_targets, m.publish_targets.c.id == m.publications.c.target_id)
                              .where(m.publications.c.draft_id == draft_id).order_by(m.publications.c.id)).all()
             sites, site = current_site(s, request)
@@ -1815,6 +1815,9 @@ def register(app, ctx) -> None:
             img_busy = any(a and a.get("draft_id") == root for a in s.execute(select(j.args).where(
                 j.kind == "image", j.status.in_(("queued", "running")))).scalars())
             image = images.of(s, d.id)
+            # A cover made after the article went online: it goes there with «Aggiorna sul sito».
+            stale_cover = {p.id for p in pubs if p.status == "published" and p.mode == "publish" and not p.withdrawn_at
+                           and p.kind != "telegram_channel" and publishing.cover_changed(image, p)}
             cover = {"cost": credits.cover_cost(s, root), "free": credits.free_covers_left(s, root),
                      "credits": credits.state(s)}
             # A version written again: what of the old one is online, to replace.
@@ -1833,7 +1836,7 @@ def register(app, ctx) -> None:
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
-                          cover=cover,
+                          cover=cover, stale_cover=stale_cover,
                           body_html=to_html(delivery.body_md(d.body_md)),
                           sources=[{"n": refs[i], **items[i]._mapping} for i in order if i in items],
                           flags=flags, checks=checks, targets=targets, pubs=pubs, kinds=TARGET_KINDS,
@@ -2178,6 +2181,7 @@ def register(app, ctx) -> None:
                 room = {"tenant_id": c.tenant_id, "active": True,
                         "subscription": billing.subscription(admin, c.tenant_id),
                         "customer": billing.customer_of(admin, c.tenant_id),
+                        "payments": billing.payments_of(admin, c.tenant_id, 24),
                         "reseller": billing.reseller_of_tenant(admin, c.tenant_id) is not None}
             cr = credits.state(s)
             moves = credits.ledger(s, 15) if cr["enabled"] else []
@@ -2292,7 +2296,37 @@ def register(app, ctx) -> None:
         except accounts.AccountError as e:
             with db.tenant(c.tenant_id) as s:
                 return settings_page(request, c, s, error=t("Invito non creato: {e}.", e=e), status_code=400)
-        to = accounts.normalise_email(email)
+        return invite_sent(request, c, token, accounts.normalise_email(email))
+
+    def invite_again(request: Request, c: auth.Caller, email: str, role: str):
+        """A new link for someone who has not come in yet: the links sent
+        before, perhaps expired, stop working."""
+        old = [i.token_sha256 for i in accounts.pending_invites(admin, c.tenant_id) if i.email == email]
+        token = accounts.create_invite(admin, email, c.name, tenant_id=c.tenant_id, role=role)
+        for sha in old:
+            accounts.revoke_invite(admin, c.tenant_id, sha)
+        return invite_sent(request, c, token, email)
+
+    @app.post("/ui/people/{uid}/resend", response_class=HTMLResponse)
+    def ui_person_resend(request: Request, uid: int, c: auth.Caller = Depends(ctx.need("owner"))):
+        who = next((x for x in accounts.members(admin, c.tenant_id) if x.id == uid), None)
+        if who is None:
+            return done("/settings", t("Persona non trovata in questa redazione."))
+        if who.active:
+            return done("/settings", t("{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» "
+                                       "nella pagina di accesso.", email=who.email))
+        return invite_again(request, c, who.email, who.role)
+
+    @app.post("/ui/invites/{sha}/resend", response_class=HTMLResponse)
+    def ui_invite_resend(request: Request, sha: str, c: auth.Caller = Depends(ctx.need("owner"))):
+        i = next((x for x in accounts.pending_invites(admin, c.tenant_id) if x.token_sha256 == sha), None)
+        if i is None:
+            return done("/settings", t("Invito già usato o scaduto."))
+        return invite_again(request, c, i.email, i.role or "editor")
+
+    def invite_sent(request: Request, c: auth.Caller, token: str, to: str):
+        """The settings page with the new link: sent by email when the
+        server can, otherwise shown to hand over."""
         base = (getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/")
         url, sent = f"{base}/invite/{token}", False
         with db.tenant(c.tenant_id) as s:

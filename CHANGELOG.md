@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.28.42
+
+La console dell'amministratore rifatta come un vero gestionale, e la parte
+del direttore sistemata (Francesco: "se voglio inserire una nuova redazione
+e non esiste il cliente come faccio?").
+
+### Added
+
+- **Clienti inseriti a mano**: "+ Nuovo cliente" in Redazioni e in Clienti,
+  con tutti i dati di fatturazione e il controllo dei doppioni (stessa email,
+  partita IVA o codice fiscale: il modulo torna come l'avevi scritto, con il
+  link al cliente che c'è già). Ogni cliente ha la sua scheda con i dati di
+  fatturazione, le redazioni, i pagamenti e i rimborsi, "Modifica" ed
+  "Elimina" (solo se non ha redazioni).
+- **Nuova redazione in tre passi**: il cliente (nuovo con i suoi dati,
+  esistente, oppure nessuno per una redazione interna), la redazione con il
+  direttore (se l'email resta vuota è quella del cliente), il piano scelto
+  da riquadri con prezzo e limiti. Non si crea niente finché tutto non è
+  giusto, e un cliente che c'è già viene scelto da solo.
+- **Pagamenti**: una pagina con tutti i pagamenti online, i bonifici, i
+  crediti e i rimborsi, filtri per tipo, mese e testo, i numeri del mese
+  (incassato, rimborsato, netto, non riusciti, ricorrente) e il CSV per il
+  commercialista (punto e virgola e virgola decimale).
+- **Una ricerca per tutta la console**, in cima a ogni pagina: redazioni,
+  clienti e persone per nome, id, email, partita IVA, codice fiscale, città
+  o telefono. Con un solo risultato si apre direttamente.
+- **Le persone dalla console**: nella pagina della redazione si cambia il
+  ruolo, si toglie una persona, si rimanda l'invito a chi non è ancora
+  entrato (il vecchio link smette di valere).
+- **"Registra un pagamento", "Cambia piano", "Ridai la prova", "Ferma i
+  rinnovi"** nella pagina della redazione, ognuno nella sua finestra, con
+  scritto prima cosa succede.
+- **Lato direttore**: lo storico dei pagamenti (data, cosa, metodo, importo,
+  stato) in Il mio piano e in Abbonamento, e "Rimanda" sugli inviti in
+  Impostazioni.
+
+### Changed
+
+- **La console come gli altri gestionali**: menu a gruppi (Clienti, Vendite,
+  Sistema) con "+ Nuova redazione" sempre in alto, un'intestazione con le
+  azioni su ogni pagina, righe cliccabili e filtri a schede nelle tabelle.
+  Redazioni si apre con i numeri del mese (incassato, ricorrente, in prova,
+  da pagare, margine). La pagina della redazione è in due colonne (il mese,
+  siti, pagamenti, persone; abbonamento, cliente, crediti, nome e limiti,
+  sospendi o cancella) e le modifiche si fanno in finestre. Sul telefono ogni
+  riga diventa una scheda compatta.
+- **Dati di fatturazione in una riga** per il direttore, con il modulo dietro:
+  aperto solo quando mancano.
+- **"Come funziona questa pagina"** si apre solo alla prima visita di ogni
+  pagina, poi resta come l'hai lasciato.
+
+### Fixed
+
+- **Copertina rifatta dopo la pubblicazione** (Francesco: "devo
+  ripubblicarlo?"). La pagina dell'articolo avvisa che online c'è ancora
+  quella vecchia e il riquadro Attività dice di premere «Aggiorna sul sito».
+  Su WordPress l'aggiornamento ora manda anche la copertina nuova, solo se è
+  cambiata (non la ricarica a ogni aggiornamento); sui webhook l'evento
+  `update` porta la copertina attuale in `image`, come già diceva la guida.
+  Su GitHub la copertina andava già.
+- I messaggi dopo un pagamento, una prova ridata o i rinnovi fermati nominano
+  la redazione, non il suo id.
+- Le barre d'uso di Il mio piano e della console non escono più dal riquadro
+  sul telefono.
+
 ## 0.28.41
 
 ### Changed

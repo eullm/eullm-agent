@@ -1,0 +1,119 @@
+{# Console › Clienti › a customer: its newsrooms and payments, its billing
+   data on the side; Modifica and Elimina in windows. #}
+{% from "_admin_macros.html.j2" import dlg_head, dlg_foot, customer_fields, room_chips, pay_kind, pay_status, when with context %}
+{% set c = the_customer %}
+{% set cid = 'c-' ~ c.id %}
+{% set tot = namespace(paid=0, refunded=0) %}
+{% for p in all_pays %}{% if p.kind == 'refund' %}{% if p.status not in ('failed', 'canceled') %}{% set tot.refunded = tot.refunded + p.amount_cents %}{% endif %}{% elif p.status == 'paid' %}{% set tot.paid = tot.paid + p.amount_cents %}{% endif %}{% endfor %}
+<header class="page-head" id="{{ cid }}">
+  <div class="ph-text">
+    <nav class="crumbs" aria-label="{{ _('Percorso') }}"><a href="/admin/customers">{{ _('Clienti') }}</a></nav>
+    <h1>{{ c.name }}</h1>
+    <p class="ph-sub row"><span class="chip">{{ _('Privato') if c.kind == 'person' else _('Azienda o professionista') }}</span><span>{{ c.email }}{% if c.phone %} · {{ c.phone }}{% endif %} · {{ reseller_names.get(c.reseller_id) or _('cliente diretto') }}{% if c.created_at %} · {{ _('dal {date}', date=c.created_at.strftime('%d/%m/%Y')) }}{% endif %}</span></p>
+  </div>
+  <div class="ph-actions">
+    <button class="btn" type="button" command="show-modal" commandfor="{{ cid }}--edit">{{ _('Modifica') }}</button>
+    <a class="btn pri" href="/admin/new?customer={{ c.id }}">+ {{ _('Nuova redazione') }}</a>
+  </div>
+</header>
+
+<div class="detail">
+<div class="detail-main">
+  <section class="card" aria-labelledby="h-rooms">
+    <div class="card-head"><h2 id="h-rooms">{{ _('Redazioni') }}</h2><span class="hint">{{ c.newsrooms|length }}</span></div>
+    {% if c.newsrooms %}
+    <div class="scroll">
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Redazione') }}</th><th>{{ _('Abbonamento') }}</th><th>{{ _('Scadenza') }}</th><th><span class="sr">{{ _('Azioni') }}</span></th></tr></thead>
+      <tbody>
+      {% for n in c.newsrooms %}
+      {% set sub = subs.get(n.tenant_id) %}
+      <tr data-href="/admin/newsrooms/{{ n.tenant_id }}">
+        <td data-label="{{ _('Redazione') }}"><a class="room-name" href="/admin/newsrooms/{{ n.tenant_id }}">{{ n.name }}</a><small class="num">{{ n.tenant_id }}</small></td>
+        <td data-label="{{ _('Abbonamento') }}">{{ room_chips(n, sub) }}</td>
+        <td class="hint" data-label="{{ _('Scadenza') }}">{% if n.status == 'trialing' and n.trial_ends_at %}{{ _('prova fino al {date}', date=n.trial_ends_at.strftime('%d/%m/%Y')) }}{% elif n.current_period_end %}{{ _('pagato fino al {date}', date=n.current_period_end.strftime('%d/%m/%Y')) }}{% else %}–{% endif %}</td>
+        <td class="end"><a class="btn sm ghost" href="/admin/enter/{{ n.tenant_id }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <p class="hint">{{ _('Nessuna redazione: creagliene una, con il piano e il direttore.') }}</p>
+      <div class="row"><a class="btn pri" href="/admin/new?customer={{ c.id }}">+ {{ _('Nuova redazione') }}</a></div>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="h-cpays">
+    <div class="card-head"><h2 id="h-cpays">{{ _('Pagamenti e rimborsi') }}</h2><span class="hint">{{ _('incassati {paid}', paid=money(tot.paid)) }}{% if tot.refunded %} · {{ _('rimborsati {refunded}', refunded=money(tot.refunded)) }}{% endif %}</span></div>
+    {% if all_pays %}
+    <div class="scroll">
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Data') }}</th><th>{{ _('Redazione') }}</th><th>{{ _('Tipo') }}</th><th class="num">{{ _('Importo') }}</th><th>{{ _('Stato') }}</th></tr></thead>
+      <tbody>
+      {% for p in all_pays[:100] %}
+      <tr data-href="/admin/newsrooms/{{ p.tenant_id }}">
+        <td class="num" data-label="{{ _('Data') }}">{{ when(p.paid_at or p.created_at) }}</td>
+        <td data-label="{{ _('Redazione') }}"><a href="/admin/newsrooms/{{ p.tenant_id }}">{{ p.newsroom or p.tenant_id }}</a></td>
+        <td data-label="{{ _('Tipo') }}">{{ pay_kind(p.kind) }}</td>
+        <td class="num" data-label="{{ _('Importo') }}">{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</td>
+        <td data-label="{{ _('Stato') }}">{{ pay_status(p) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _('Nessun pagamento ancora.') }}</p>
+    {% endif %}
+  </section>
+</div>
+
+<aside class="detail-side">
+  <section class="card" aria-labelledby="h-bill">
+    <div class="card-head"><h2 id="h-bill">{{ _('Dati di fatturazione') }}</h2><button class="btn sm" type="button" command="show-modal" commandfor="{{ cid }}--edit">{{ _('Modifica') }}</button></div>
+    <div class="pad">
+      <dl class="dl">
+        <div><dt>{{ _('Email per le fatture') }}</dt><dd>{{ c.email }}</dd></div>
+        {% if c.vat_number %}<div><dt>{{ _('Partita IVA') }}</dt><dd class="num">{{ c.vat_number }}</dd></div>{% endif %}
+        {% if c.tax_code %}<div><dt>{{ _('Codice fiscale') }}</dt><dd class="num">{{ c.tax_code }}</dd></div>{% endif %}
+        {% if c.sdi_code %}<div><dt>{{ _('Codice destinatario SDI') }}</dt><dd class="num">{{ c.sdi_code }}</dd></div>{% endif %}
+        {% if c.pec %}<div><dt>{{ _('PEC') }}</dt><dd>{{ c.pec }}</dd></div>{% endif %}
+        {% if c.address or c.city %}<div><dt>{{ _('Indirizzo') }}</dt><dd>{{ c.address or '' }}{% if c.city %}<br>{{ c.postal_code or '' }} {{ c.city }}{% if c.province %} ({{ c.province }}){% endif %}{% endif %}<br>{{ c.country or '' }}</dd></div>{% endif %}
+        {% if c.external_ref %}<div><dt>{{ _('Riferimento esterno') }}</dt><dd class="num">{{ c.external_ref }}</dd></div>{% endif %}
+      </dl>
+      {% if not c.vat_number and not c.tax_code %}<p class="notice amber">{{ _('Mancano partita IVA e codice fiscale: per una fattura in Italia ne serve almeno uno.') }}</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="card danger-zone" aria-labelledby="h-cdanger">
+    <div class="card-head"><h2 id="h-cdanger">{{ _('Elimina') }}</h2></div>
+    <div class="danger-row">
+      <div><strong>{{ _('Elimina il cliente') }}</strong><p class="hint">{% if c.newsrooms %}{{ _('Si può eliminare quando non ha più redazioni.') }}{% else %}{{ _('Non ha redazioni: si cancella solo la sua anagrafica.') }}{% endif %}</p></div>
+      <button class="btn sm danger" type="button" command="show-modal" commandfor="{{ cid }}--delete" {% if c.newsrooms %}disabled{% endif %}>{{ _('Elimina') }}</button>
+    </div>
+  </section>
+</aside>
+</div>
+
+<dialog id="{{ cid }}--edit" class="modal wide" aria-labelledby="{{ cid }}--edit-title">
+  <form method="post" action="/admin/customers/{{ c.id }}">
+    {{ dlg_head(cid ~ '--edit', _('Modifica o elimina {name}', name=c.name)) }}
+    <div class="dlg-body">
+      {{ customer_fields(form if reopen == cid ~ '--edit' else c, '', [], '', required=True, focus=True) }}
+    </div>
+    {{ dlg_foot(cid ~ '--edit', _('Salva')) }}
+  </form>
+</dialog>
+
+{% if not c.newsrooms %}
+<dialog id="{{ cid }}--delete" class="modal" aria-labelledby="{{ cid }}--delete-title" closedby="any">
+  <form method="post" action="/admin/customers/{{ c.id }}/delete">
+    {{ dlg_head(cid ~ '--delete', _('Eliminare il cliente {name}?', name=c.name)) }}
+    <div class="dlg-body"><p>{{ _('Non ha redazioni: si cancella solo la sua anagrafica. Non si annulla.') }}</p></div>
+    {{ dlg_foot(cid ~ '--delete', _('Elimina il cliente'), 'danger', safe=True) }}
+  </form>
+</dialog>
+{% endif %}
