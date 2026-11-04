@@ -79,7 +79,11 @@ CHECK_SYSTEM = (
     "measures or scopes are not an error. A live page read at a given time says what was true then. Reply with JSON "
     "only: "
     '{"publish": true|false, "problems": ["<each rule broken, one sentence each, in English>"], '
-    '"section": "<the one of the site\'s sections the article belongs to, written exactly as listed, or null>"}'
+    '"section": "<the one of the site\'s sections the article belongs to, written exactly as listed, or null>", '
+    '"headline_fixes": {"title": "<the title with its typos corrected, or null>", "subtitle": "<same, or null>", '
+    '"seo_title": "<same, or null>", "seo_description": "<same, or null>"}}. headline_fixes is a last proofread '
+    "of the Headlines given after the article: correct only a clear typo, a missing or doubled word or a grammar "
+    "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right"
 )
 
 LABELS = {
@@ -247,43 +251,56 @@ def source_count(s, proposal_id: int, need: int = 0) -> int:
 OPPORTUNITY_FLOOR = 0.5
 
 
-# A proposal is left for later when it tells what an article of the last
-# two days (or one chosen in the same round) already tells: at least this
-# many shared words, and this share of the shorter title with angle. Found by
-# an external review, 2026-11-04: four pieces on the same midterm night.
+# A proposal is left for later when it only tells again what an article of
+# the last two days (or one chosen in the same round) already told. The same
+# subject is not the same news: on a night of elections many articles are
+# right for a site that follows the hype, so a proposal with at least one
+# news item no recent article used, and a title that is not nearly the same,
+# is a new development and goes ahead. Left out: the same words almost
+# entirely (the same story retold), or most of the words with no new item
+# (an external review, 2026-11-04: four pieces on the same midterm night).
 OVERLAP_DAYS = 2
 OVERLAP_WORDS = 3
-OVERLAP_SHARE = 0.4
+OVERLAP_SHARE = 0.4  # with no new news item
+SAME_STORY_SHARE = 0.65  # even with new news items
+SAME_STORY_WORDS = 4
 
 
 def _angle_terms(title: str, angle: str | None) -> set[str]:
     return set(tokens(title)) | set(tokens(angle or ""))
 
 
-def overlaps(terms: set[str], others: list[set[str]]) -> bool:
-    for o in others:
-        shared = len(terms & o)
-        if shared >= OVERLAP_WORDS and shared >= OVERLAP_SHARE * min(len(terms), len(o)):
+def overlaps(terms: set[str], items: set[int], others: list[tuple[set[str], set[int]]]) -> bool:
+    for o_terms, o_items in others:
+        shared = len(terms & o_terms)
+        share = shared / max(1, min(len(terms), len(o_terms)))
+        if shared >= SAME_STORY_WORDS and share >= SAME_STORY_SHARE:
+            return True
+        if shared >= OVERLAP_WORDS and share >= OVERLAP_SHARE and items <= o_items:
             return True
     return False
 
 
-def recent_angles(s, site_id: int, now: datetime) -> list[set[str]]:
-    """Words of the proposals the newsroom took on in the last days, those
-    still being written included, and not the ones discarded."""
-    pr, dr = m.proposals.c, m.drafts.c
+def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[int]]]:
+    """Words and news items of the proposals the newsroom took on in the
+    last days, those still being written included, not the ones discarded."""
+    pr, dr, pc = m.proposals.c, m.drafts.c, m.proposal_citations.c
     kept = select(dr.proposal_id).where(dr.status != "rejected", dr.translation_of.is_(None))
-    rows = s.execute(select(pr.title, pr.angle).where(
+    rows = s.execute(select(pr.id, pr.title, pr.angle).where(
         pr.site_id == site_id, pr.decided_by == AUTO, pr.created_at >= now - timedelta(days=OVERLAP_DAYS),
         (pr.status == "accepted") | ((pr.status == "drafted") & pr.id.in_(kept)))).all()
-    return [_angle_terms(r.title, r.angle) for r in rows]
+    used: dict[int, set[int]] = {}
+    if rows:
+        for pid, item in s.execute(select(pc.proposal_id, pc.item_id).where(pc.proposal_id.in_([r.id for r in rows]))):
+            used.setdefault(pid, set()).add(item)
+    return [(_angle_terms(r.title, r.angle), used.get(r.id, set())) for r in rows]
 
 
 def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False) -> list:
     """The best proposals of the last day and a half that pass the
     guardrails, those over the minimum opportunity first; those on a topic
-    to avoid are turned down for good, those telling what a recent article
-    already tells wait (they may become an update of it)."""
+    to avoid are turned down for good, those only telling again what a
+    recent article told wait; a new development of the same subject goes on."""
     pr = m.proposals.c
     seen = recent_angles(s, site_id, now)
     rows = s.execute(select(m.proposals).where(
@@ -303,11 +320,13 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, f"topic to avoid: {word}", site_id)
             continue
         terms = _angle_terms(r.title, r.angle)
-        if overlaps(terms, seen):
+        items = set(s.execute(select(m.proposal_citations.c.item_id).where(
+            m.proposal_citations.c.proposal_id == r.id)).scalars())
+        if overlaps(terms, items, seen):
             continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
             out.append(r)
-            seen.append(terms)
+            seen.append((terms, items))
     return out
 
 
@@ -472,7 +491,40 @@ def _check_validator(v) -> dict:
     problems = [str(x)[:300] for x in v.get("problems") or [] if str(x).strip()][:6]
     if not v["publish"] and not problems:
         problems = ["refused without a reason"]
-    return {"publish": v["publish"], "problems": problems, "section": str(v.get("section") or "").strip()[:80]}
+    fixes = v.get("headline_fixes") if isinstance(v.get("headline_fixes"), dict) else {}
+    fixes = {k: " ".join(str(x).split()) for k, x in fixes.items()
+             if k in ("title", "subtitle", "seo_title", "seo_description") and isinstance(x, str) and x.strip()}
+    return {"publish": v["publish"], "problems": problems, "section": str(v.get("section") or "").strip()[:80],
+            "fixes": fixes}
+
+
+def proofread(db, tenant_id: str, d, fixes: dict) -> bool:
+    """Apply the editor-in-chief's corrections of typos to the title, the
+    subtitle and the search title and description, in the draft and in its
+    text. A correction that is not a small change of the original (more
+    than a fifth of its characters) is not applied: it is a rewrite."""
+    import difflib
+
+    seo = dict(d.seo or {})
+    new = {"title": d.title, "subtitle": d.subtitle, "seo_title": seo.get("title"), "seo_description": seo.get("description")}
+    changed = False
+    for k, fixed in fixes.items():
+        old = new.get(k)
+        if not old or fixed == old or difflib.SequenceMatcher(None, old, fixed).ratio() < 0.8:
+            continue
+        new[k], changed = fixed, True
+    if not changed:
+        return False
+    body = d.body_md
+    if new["title"] != d.title:
+        body = body.replace(f"# {d.title}", f"# {new['title']}", 1)
+    if new["subtitle"] != d.subtitle and d.subtitle:
+        body = body.replace(f"_{d.subtitle}_", f"_{new['subtitle']}_", 1)
+    seo.update({"title": new["seo_title"], "description": new["seo_description"]})
+    with db.tenant(tenant_id) as s:
+        s.execute(update(m.drafts).where(m.drafts.c.id == d.id).values(
+            title=new["title"], subtitle=new["subtitle"], body_md=body, seo=seo))
+    return True
 
 
 EXCERPT = 2500  # characters of each cited source the editor-in-chief reads
@@ -499,7 +551,11 @@ def _excerpts(db, tenant_id: str, draft_id: int) -> list[str]:
 def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
-    prompt = "\n".join(lines + [f"Language: {d.language}", "Article:", d.body_md[:14000], *_excerpts(db, tenant_id, d.id)])
+    seo = d.seo or {}
+    heads = [f"Headlines: title: {d.title} | subtitle: {d.subtitle or ''} | search title: {seo.get('title') or ''} | "
+             f"search description: {seo.get('description') or ''}"]
+    prompt = "\n".join(lines + [f"Language: {d.language}", "Article:", d.body_md[:14000], *heads,
+                               *_excerpts(db, tenant_id, d.id)])
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
         verdict, _calls = core.chat_json(CHECK_SYSTEM, prompt, _check_validator)
     return verdict
@@ -580,6 +636,10 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             with db.tenant(tenant_id) as s:
                 s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
                     seo={**(d.seo or {}), "section": section}))
+        if verdict.get("fixes") and not fixable:
+            with db.tenant(tenant_id) as s:
+                fresh = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
+            proofread(db, tenant_id, fresh, verdict["fixes"])
     if fixable:
         if cfg["on_problem"] != "fix":
             return _stop(db, tenant_id, d, fixable, out, discard=False)

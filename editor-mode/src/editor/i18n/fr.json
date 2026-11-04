@@ -2138,5 +2138,7 @@
  "riprende domani": "reprend demain",
  "Articoli del mese": "Articles du mois",
  "Notizie lette oggi": "Actualités lues aujourd'hui",
- "Limiti": "Limites"
+ "Limiti": "Limites",
+ "Ricerca della fonte primaria: {datum}": "Recherche de la source primaire : {datum}",
+ "Ricerca delle fonti primarie": "Recherche des sources primaires"
 }

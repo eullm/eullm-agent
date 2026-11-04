@@ -148,3 +148,14 @@ def _no_model_retry_waits(monkeypatch):
     from editor import core_client
 
     monkeypatch.setattr(core_client, "RETRY_WAITS", ())
+
+
+@pytest.fixture(autouse=True)
+def _no_primary_search(monkeypatch, request):
+    """The search for primary sources asks the model a question of its own:
+    only the tests about it (test_primary) let it run."""
+    if request.module.__name__.endswith("test_primary"):
+        return
+    from editor import primary
+
+    monkeypatch.setattr(primary, "look", lambda *a, **k: [])

@@ -391,11 +391,29 @@ def _documents_source(s, tenant_id: str) -> int:
     ).returning(m.sources.c.id)).scalar_one()
 
 
+def store_document(db, tenant_id: str, item_id: int, url: str, page) -> int | None:
+    """Keep a document the article can cite, as a copy of the news that led
+    to it (never news of its own); None for a landing page."""
+    from .normalize import canonical_url, content_hash, sha256_hex
+
+    text = page.text[:MAX_CONTENT]
+    if len(text.split()) < 80:  # a landing page, not a document
+        return None
+    title = " ".join((page.title or page.h1 or url).split())[:300]
+    with db.tenant(tenant_id) as s:
+        return s.execute(insert(m.source_items).values(
+            tenant_id=tenant_id, source_id=_documents_source(s, tenant_id), url=url,
+            canonical_url=canonical_url(url), url_hash=sha256_hex(canonical_url(url)),
+            content_hash=content_hash(title, text[:500]), title=title, summary="", metrics={},
+            minhash=[], duplicate_of=item_id, content=text, content_fetched_at=datetime.now(UTC),
+        ).on_conflict_do_nothing().returning(m.source_items.c.id)).scalar()
+
+
 def read_documents(db, tenant_id: str, links: dict[int, list[str]], client: httpx.Client | None) -> list[int]:
     """Read the original documents the main news link and store them as
     items the article can cite: marked as copies of the news that linked
     them, so they never become news of their own."""
-    from .normalize import canonical_url, content_hash, sha256_hex
+    from .normalize import canonical_url, sha256_hex
 
     out: list[int] = []
     if client is None:
@@ -418,18 +436,9 @@ def read_documents(db, tenant_id: str, links: dict[int, list[str]], client: http
                 continue
             if r.status_code != 200 or "html" not in r.headers.get("content-type", "html"):
                 continue
-            page = parse_html(r.text, url)
-            text = page.text[:MAX_CONTENT]
-            if len(text.split()) < 80:  # a landing page, not a document
-                continue
-            title = " ".join((page.title or page.h1 or url).split())[:300]
-            with db.tenant(tenant_id) as s:
-                out.append(s.execute(insert(m.source_items).values(
-                    tenant_id=tenant_id, source_id=_documents_source(s, tenant_id), url=url,
-                    canonical_url=canonical_url(url), url_hash=sha256_hex(canonical_url(url)),
-                    content_hash=content_hash(title, text[:500]), title=title, summary="", metrics={},
-                    minhash=[], duplicate_of=item_id, content=text, content_fetched_at=datetime.now(UTC),
-                ).returning(m.source_items.c.id)).scalar_one())
+            stored = store_document(db, tenant_id, item_id, url, parse_html(r.text, url))
+            if stored is not None:
+                out.append(stored)
     return list(dict.fromkeys(out))
 
 
@@ -574,6 +583,21 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     ids = list(dict.fromkeys(ids + documents))
     with db.tenant(tenant_id) as s:
         sources = _sources(s, ids)
+    if client is not None:
+        # The central fact told by outlets only: look for the document it comes from.
+        from . import primary
+
+        try:
+            found = primary.look(db, tenant_id, prop, [sources[i] for i in cited if i in sources], bool(documents),
+                                 core, client)
+        except Exception:  # never stops the article: it is written from what it has
+            log.exception("primary source search failed")
+            found = []
+        if found:
+            documents = list(dict.fromkeys(documents + found))
+            ids = list(dict.fromkeys(ids + found))
+            with db.tenant(tenant_id) as s:
+                sources = _sources(s, ids)
 
     allowed = set(sources)
     roles = {**{i: "CONTEXT" for i in context}, **{i: "MAIN" for i in cited}, **{i: "ORIGINAL" for i in documents}}

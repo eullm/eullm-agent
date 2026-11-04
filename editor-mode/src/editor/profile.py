@@ -590,7 +590,10 @@ def store_snapshot(s, tenant_id: str, site_id: int, snap: SiteSnapshot) -> int:
                 summary=p.summary, categories=p.categories, published_at=p.published_at,
                 minhash=minhash(f"{p.title} {p.summary}"),
             )
-            .on_conflict_do_nothing(index_elements=["site_id", "url_hash"])
+            .on_conflict_do_update(  # the live site is right: a title corrected there replaces the old one
+                index_elements=["site_id", "url_hash"],
+                set_={"title": p.title, "summary": p.summary, "categories": p.categories,
+                      "minhash": minhash(f"{p.title} {p.summary}")})
         )
     return analysis_id
 

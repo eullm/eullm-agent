@@ -371,14 +371,18 @@ class Repo:
         self.sleep = sleep or time.sleep
         self.clock = clock or (lambda: time.monotonic())
 
-    def call(self, method: str, path: str, **kw):
-        """One request; a read GitHub answers with a server error (500,
-        502, 503, 504) or a rate limit is tried again after a pause: these
-        are GitHub's hiccups, and a publication failed for one of them
-        (2026-11-03, "reading llms.txt: 500"). Writes are never repeated."""
+    def call(self, method: str, path: str, retry: bool = True, **kw):
+        """One request; when GitHub answers with a server error (500, 502,
+        503, 504) or a rate limit it is tried again after a pause: these are
+        GitHub's hiccups, and publications failed for them (2026-11-03,
+        "reading llms.txt: 500"; 2026-11-04, "merge: 502"). Every write of a
+        publication can be repeated without harm (git objects are content
+        addressed, an existing branch or pull request is found again, the
+        branch is moved to the same commit); the merge, which cannot, asks
+        for `retry=False` and checks the pull request itself."""
         r = self.raw_call(method, path, **kw)
         for pause in READ_RETRIES:
-            if method != "GET" or r.status_code not in (429, 500, 502, 503, 504):
+            if not retry or r.status_code not in (429, 500, 502, 503, 504):
                 break
             self.sleep(pause)
             r = self.raw_call(method, path, **kw)
@@ -520,8 +524,16 @@ class Repo:
 
     def merge(self, number: int, title: str) -> str:
         for method in ("squash", "merge", "rebase"):
-            r = self.call("PUT", f"/repos/{self.repo}/pulls/{number}/merge",
-                          json={"merge_method": method, "commit_title": title})
+            for pause in (0, *READ_RETRIES):
+                self.sleep(pause) if pause else None
+                r = self.call("PUT", f"/repos/{self.repo}/pulls/{number}/merge", retry=False,
+                              json={"merge_method": method, "commit_title": title})
+                if r.status_code not in (429, 500, 502, 503, 504):
+                    break
+                # The answer is lost, the merge may not be: look at the pull request before sending it again.
+                info = self.call("GET", f"/repos/{self.repo}/pulls/{number}")
+                if info.status_code == 200 and info.json().get("merged"):
+                    return info.json().get("merge_commit_sha") or ""
             if r.status_code == 405 and "method" in r.text.lower():
                 continue
             return self._ok(r, "merge").get("sha", "")
