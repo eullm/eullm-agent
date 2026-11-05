@@ -38,7 +38,9 @@ DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "av
             "on_problem": "fix", "morning_share": 50,
             # Beyond the day's articles: how many it may bring forward from tomorrow (free), and how many
             # more a day it may pay with credits, for news over `extra_min_opportunity`.
-            "borrow": 2, "extra_credits": 0, "extra_min_opportunity": 65.0}
+            "borrow": 2, "extra_credits": 0, "extra_min_opportunity": 65.0,
+            # A last section that reads the facts: connects them, weighs them (drafts.ANALYSIS).
+            "analysis": True}
 # "fix": an article with problems is written again once, by the stronger model when the console sets one,
 # and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
 ON_PROBLEM = ("fix", "hold")
@@ -67,12 +69,15 @@ RULES = [
     "said here\")",
     "gives a central number or a record that differs from an original document among the sources (an "
     "official statistic, a decision, a paper): the document wins over the outlets reporting it",
+    "in its analysis or commentary, states as news a cause, a consequence, a forecast, a number or a fact that "
+    "no source gives, or presents the newsroom's own reading as an established fact",
 ]
 
-CHECK_SYSTEM = (
+def _check_system(rules: list[str], what: str, joined: str) -> str:
+    return (
     "You are the editor-in-chief of a news site whose articles are published without human review. Decide "
-    "whether the article below can be published as it is. Refuse it if it breaks any of these rules: "
-    + "; ".join(f"({n}) {r}" for n, r in enumerate(RULES, 1))
+    f"whether the {what} below can be published as it is. Refuse it if it breaks any of these rules: "
+    + "; ".join(f"({n}) {r}" for n, r in enumerate(rules, 1))
     + ". Refuse it also if it goes against the newsroom's directives or is about a topic it must avoid. Do not "
     "refuse for style, length or a dull title. Check every number, superlative and cause against the source "
     "excerpts given after the article; a source given only by its title cannot support details. Before "
@@ -92,8 +97,23 @@ CHECK_SYSTEM = (
     'Add "cut": ["<sentence copied exactly from the article>"] when removing one to three sentences fixes every '
     "problem (a detail the sources do not support, a sentence about the sources): then set publish to true, "
     "because the article goes out without them. Refuse only what removing a few sentences cannot fix: the event "
-    "itself wrong, the title or the opening wrong, two stories joined"
-)
+    f"itself wrong, the title or the opening wrong{joined}"
+    )
+
+
+CHECK_SYSTEM = _check_system(RULES, "article", ", two stories joined")
+
+# The evening analysis joins the day's stories by design (evening.py): the
+# rules on one event per article do not apply; what it must not do is make
+# up the links between them.
+EVENING_RULES = [r for r in RULES if not r.startswith(("joins separate", "does not give the essential"))] + [
+    "joins two stories with a cause, an effect or an influence that none of the articles states, written as a "
+    "fact instead of as the newsroom's reading",
+    "gives a fact, a number, a name, a quote or a date that none of the articles gives",
+]
+EVENING_CHECK_SYSTEM = _check_system(EVENING_RULES, "evening analysis of the day's articles (the sources are the "
+                                     "site's own articles)", "")
+
 
 LABELS = {
     "it": "Articolo scritto con l'intelligenza artificiale a partire dalle fonti citate, senza revisione umana.",
@@ -132,6 +152,7 @@ class _Auto(BaseModel):
     borrow: int = Field(DEFAULTS["borrow"], ge=0, le=20)
     extra_credits: int = Field(DEFAULTS["extra_credits"], ge=0, le=20)
     extra_min_opportunity: float = Field(DEFAULTS["extra_min_opportunity"], ge=0, le=100)
+    analysis: bool = True
 
 
 def check_settings(values: dict) -> dict:
@@ -749,7 +770,13 @@ def reasons_language(db, tenant_id: str, d) -> str:
     return tr.LANGUAGES[newsroom_language(db, tenant_id, d.site_id)]
 
 
-def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient) -> dict:
+def is_evening(s, proposal_id: int | None) -> bool:
+    """Whether a draft's proposal is the evening analysis (evening.py)."""
+    return bool(proposal_id) and s.execute(select(m.proposals.c.format).where(
+        m.proposals.c.id == proposal_id)).scalar() == "evening"
+
+
+def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: bool = False) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
     seo = d.seo or {}
@@ -758,7 +785,7 @@ def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient) -> dict:
     prompt = "\n".join(lines + [f"Language: {d.language}", f"Reasons in: {reasons_language(db, tenant_id, d)}",
                                "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id)])
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
-        verdict, _calls = core.chat_json(CHECK_SYSTEM, prompt, _check_validator)
+        verdict, _calls = core.chat_json(EVENING_CHECK_SYSTEM if evening else CHECK_SYSTEM, prompt, _check_validator)
     return verdict
 
 
@@ -818,9 +845,10 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         body = s.execute(select(m.editorial_profiles.c.body).where(
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
         cfg = settings_of(body)
+        evening = is_evening(s, d.proposal_id)
         # The outlets the article must cite: those the site asks for, when the news has them
-        # (a story one outlet tells goes on, with one: choose).
-        need = min(cfg["min_sources"], max(1, source_count(s, d.proposal_id, cfg["min_sources"]))) \
+        # (a story one outlet tells goes on, with one: choose). The evening analysis cites the site.
+        need = 1 if evening else min(cfg["min_sources"], max(1, source_count(s, d.proposal_id, cfg["min_sources"]))) \
             if d.proposal_id else cfg["min_sources"]
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id}
     lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
@@ -847,7 +875,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if not fixable:
         step(N_("Il caporedattore AI rilegge l'articolo"))
         try:
-            verdict = editor_check(db, tenant_id, d, body, core)
+            verdict = editor_check(db, tenant_id, d, body, core, evening)
         except CoreError as e:
             return _stop(db, tenant_id, d, [t("il caporedattore AI non ha risposto: {error}", lang, error=e)], out,
                          discard=False)
@@ -862,7 +890,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
                 out["cut"] = out.get("cut", 0) + len(verdict["cut"])
                 if d.status == "needs_review" or cited < need:
                     fixable += verdict["problems"] or [t("dopo i tagli l'articolo non supera i controlli", lang)]
-        section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
+        section = None if evening else next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
         if section:  # the site files the article under it
             with db.tenant(tenant_id) as s:
                 s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(

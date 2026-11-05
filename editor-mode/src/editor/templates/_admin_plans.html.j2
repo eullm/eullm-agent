@@ -27,6 +27,7 @@
     <tr><td>{{ label }}</td>{% for p in plans %}<td class="num">{{ p[key] if p[key] is not none else unlimited }}</td>{% endfor %}</tr>
     {% endfor %}
     <tr><td>{{ _('Redazione automatica') }}</td>{% for p in plans %}<td class="num">{{ _('Sì') if p.autopilot is not false else _('No') }}</td>{% endfor %}</tr>
+    <tr><td>{{ _('Punto della Sera') }}</td>{% for p in plans %}<td class="num">{{ _('Sì') if p.evening else _('No') }}</td>{% endfor %}</tr>
     <tr><td>{{ _('Redazioni con questo piano') }}</td>{% for p in plans %}<td class="num">{{ subs.values()|selectattr('plan_code', 'equalto', p.code)|list|length }}</td>{% endfor %}</tr>
     <tr><td></td>{% for p in plans %}<td class="num"><button class="btn sm" type="button" command="show-modal" commandfor="p-{{ p.code }}">{{ _('Modifica') }}</button></td>{% endfor %}</tr>
     </tbody>
@@ -87,6 +88,7 @@
         <label class="field">{{ _('Articoli al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ p.max_drafts_month if p.max_drafts_month is not none else '' }}"></label>
         <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ p.credits_month if p.credits_month is not none else '' }}"></label>
         <label class="field">{{ _('Redazione automatica') }}<select name="autopilot"><option value="1" {% if p.autopilot is not false %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if p.autopilot is false %}selected{% endif %}>{{ _('No') }}</option></select></label>
+        <label class="field">{{ _('Punto della Sera') }}<select name="evening"><option value="1" {% if p.evening %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if not p.evening %}selected{% endif %}>{{ _('No') }}</option></select></label>
         <label class="field">{{ _('Sul sito') }}<select name="public"><option value="1" {% if p.public %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if not p.public %}selected{% endif %}>{{ _('No') }}</option></select></label>
         <label class="field full">{{ _('Descrizione') }}<input name="description" value="{{ p.description }}"></label>
       </div>

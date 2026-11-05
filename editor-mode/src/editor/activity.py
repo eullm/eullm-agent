@@ -32,6 +32,7 @@ KINDS = {
     "tick": N_("Giro orario automatico"),
     "auto": N_("Redazione automatica"),
     "brief": N_("Profilo dal contesto"),
+    "evening": N_("Il Punto della Sera"),
 }
 RECENT = timedelta(minutes=15)  # how long an ended job stays on every page
 STALLED = timedelta(minutes=3)  # queued this long with nothing running: the worker is not taking work
@@ -52,6 +53,15 @@ def _site_link(site_id, back: str) -> str:
 
 def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tuple[list[str], str | None, str | None]:
     """Sentences on what the job produced, and a link to it."""
+    if kind == "evening":
+        if r.get("skipped"):
+            return [t("Il Punto della Sera non è stato scritto: oggi gli articoli pubblicati sono troppo pochi.")
+                    if r["skipped"] == "few articles" else humanize(r["skipped"])], _site_link(site_id, "/site?tab=auto"), \
+                t("Impostazioni")
+        if not r.get("discarded") and not r.get("held") and not r.get("target") and not r.get("approved"):
+            return [t("Il Punto della Sera è pronto da rileggere: «{title}».", title=r.get("title", ""))], \
+                f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Leggi la bozza")
+        kind = "auto"
     if kind == "analysis":
         if r.get("status") == "failed":
             return [t("Il sito non si è potuto leggere.")] + [humanize(p) for p in r.get("problems") or []], \

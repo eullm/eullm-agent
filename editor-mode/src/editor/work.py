@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
-from . import autopilot, delivery, drafts, images, models as m, picks, profile as prof, proposals, sources, translate as tr
+from . import autopilot, delivery, drafts, evening as ev, images, models as m, picks, profile as prof, proposals, quotas, sources, translate as tr
 from .i18n import N_
 from .progress import step
 from .queue import Handlers, enqueue
@@ -117,6 +117,41 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                                     "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
                                 rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover)
 
+    def evening(tenant: str, subject: str, args: dict) -> dict:
+        """Il Punto della Sera: the director's analysis of the site's day.
+        With the automatic newsroom on it goes through the same checks and
+        out by itself; otherwise it waits in Drafts for the director."""
+        need(core, "model (Core)")
+        site_id, tz = args["site_id"], args.get("tz") or "UTC"
+        now = datetime.now(UTC)
+        try:
+            did = ev.write(db, tenant, site_id, core_for(tenant), now, tz)
+        except quotas.QuotaExceeded as e:
+            return {"site_id": site_id, "skipped": str(e)}
+        if did is None:
+            return {"site_id": site_id, "skipped": "few articles"}
+        with db.tenant(tenant) as s:
+            d = s.execute(select(m.drafts.c.title, m.drafts.c.status, m.drafts.c.proposal_id)
+                          .where(m.drafts.c.id == did)).first()
+            auto = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id,
+                m.editorial_profiles.c.status == "approved")).scalar())["enabled"] and quotas.autopilot_allowed(s)
+        if not auto:
+            if imager is not None:
+                enqueue(db, tenant, "image", f"draft {did}", {"draft_id": did, "site_id": site_id})
+            return {"draft_id": did, "title": d.title, "status": d.status, "site_id": site_id}
+
+        def cover(draft_id):
+            if imager is not None:
+                images.make(db, tenant, draft_id, imager, core_for(tenant))
+
+        return autopilot.finish(db, tenant, did, core_for(tenant), publish_job(tenant, site_id),
+                                lambda language, final: enqueue(db, tenant, "translate", f"draft {final} {language}", {
+                                    "draft_id": final, "language": language, "site_id": site_id, "auto": True}),
+                                rewrite=lambda _old, notes: ev.write(db, tenant, site_id, core_for(tenant), now, tz,
+                                                                     notes=notes, proposal_id=d.proposal_id),
+                                cover=cover)
+
     def publish_job(tenant: str, site_id):
         return lambda pub_id: enqueue(db, tenant, "publish", f"publication {pub_id}",
                                       {"publication_id": pub_id, "site_id": site_id})
@@ -224,4 +259,4 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
     return {"analysis": analysis, "discovery": discovery, "draft": draft, "publish": publish, "change": change, "tick": tick,
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
-            "deliver": deliver, "auto": auto, "brief": brief}
+            "deliver": deliver, "auto": auto, "brief": brief, "evening": evening}

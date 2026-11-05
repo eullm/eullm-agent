@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.30.0
+
+### Added
+
+- **Il Punto della Sera.** Ogni sera, all'ora scelta (21 di default, nel
+  fuso della redazione), un direttore AI legge tutti gli articoli pubblicati
+  dal sito nelle 24 ore. Sceglie il fatto che pesa di più, cioè l'agenda
+  setting: per le conseguenze, non per quanti articoli ha avuto. Scrive
+  un'analisi che apre con quel fatto e ci ruota intorno, collega le altre
+  notizie e lascia sport e cronaca minore a un breve "In breve" finale. Il
+  tono è da Sole 24 Ore o Economist. Ogni frase cita gli articoli del giorno,
+  che diventano i link dell'analisi. Il caporedattore AI la rilegge con
+  regole sue: un collegamento che nessun articolo afferma va scritto come
+  lettura della redazione, mai come notizia, e non entra nessun fatto
+  nuovo. Esce nella rubrica "Analisi e Approfondimenti" (su WordPress la
+  crea Redazia), con copertina e traduzioni. Con la redazione automatica
+  accesa esce da solo, altrimenti resta tra le bozze. Parte solo se nella
+  giornata sono usciti abbastanza articoli (6 di default). Si imposta in
+  Sito e profilo › Redazione automatica › Come scrive il sito. È compreso
+  nei piani Pro, Business e Agency (/admin › Piani › Punto della Sera;
+  migrazione 0042).
+- **Articoli più critici.** In fondo all'articolo una sezione breve ("Cosa
+  cambia", "Perché conta") collega i fatti tra loro e con le notizie di
+  contesto, e li pesa: chi lo dice e che interesse ha, promesse senza data,
+  numeri senza confronto, fonti in disaccordo. Si regge solo sui fatti delle
+  fonti. Una causa, un effetto o una previsione che nessuna fonte afferma
+  si scrive come lettura, mai come notizia, e il caporedattore AI ha una
+  regola per toglierla. Si spegne per sito ("Analisi negli articoli").
+
+### Fixed
+
+- **Le formule da testo scritto da una macchina.** Oltre al divieto nel
+  prompt, ora un controllo a regole in cinque lingue trova le formule
+  ("non si tratta solo di", "in un contesto in cui", "rappresenta un passo",
+  "gioca un ruolo chiave", "resta da vedere", "in conclusione",
+  "underscores the importance", "marks a turning point"...). Le frasi che
+  le contengono vengono riformulate sul posto, con gli stessi numeri e nomi
+  e le stesse fonti; se la riformulazione cambia qualcosa, la frase resta
+  com'era. Il controllo è gratuito: il modello lavora solo sulle frasi
+  colpite. La lista si allunga in `editor/style.py`.
+- **La rubrica non si perde più dopo una correzione.** Una correzione frase
+  per frase nella pagina della bozza toglieva la rubrica dall'articolo, e
+  «Aggiorna sul sito» lo mandava senza.
+
 ## 0.29.0
 
 ### Fixed

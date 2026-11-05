@@ -164,6 +164,7 @@ class Runner:
                               lambda: searchconsole.sync(self.db, tenant, gsc, today=local.date()))
             self.retry_profiles(tenant, now)
             self.autopilot(tenant, now, tz, done, failed)
+            self.evening(tenant, now, tz, done, failed)
             if review_due(local, last_review):
                 self.step(tenant, "review", done, failed, lambda: self.review(tenant, client))
             with self.db.tenant(tenant) as s:
@@ -300,6 +301,27 @@ class Runner:
                                                                     {"proposal_id": pid, "site_id": site_id, "paid": paid}))
                 autopilot.remember(self.db, tenant, site_id, res, now)
             self.step(tenant, "autopilot", done, failed, go)
+
+    def evening(self, tenant: str, now: datetime, tz: str, done: list[str], failed: list[str]) -> None:
+        """Il Punto della Sera of each site that has it on, once a day past
+        its hour, as an `evening` job (evening.py)."""
+        from . import evening
+        from .profile import _set_settings
+        from .queue import enqueue
+
+        local = now.astimezone(ZoneInfo(tz))
+        p = m.editorial_profiles.c
+        with self.db.tenant(tenant) as s:
+            if not evening.allowed(s):
+                return
+            due = [r.site_id for r in s.execute(select(p.site_id, p.body).where(p.status == "approved")).all()
+                   if evening.due(r.body, local)]
+            for site_id in due:
+                _set_settings(s, site_id, evening_last=local.date().isoformat())
+        for site_id in due:
+            enqueue(self.db, tenant, "evening", f"evening {site_id} {local.date().isoformat()}",
+                    {"site_id": site_id, "tz": tz})
+            done.append("evening")
 
     def review(self, tenant: str, client) -> None:
         from .site import SiteCrawler
