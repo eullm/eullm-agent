@@ -693,20 +693,30 @@ class Publisher:
         place is used, or one is created there; a missing category is
         created; entries already there are left as they are.
 
-        Returns {menu, location, added, present, missing} or {error}:
+        Returns {menu, location, added, present, categories, missing}, or
+        {error, categories, missing}:
         "role" when the user may not change menus (WordPress gives that to
         administrators only), "block_theme" when the theme has no menu places
         (its navigation is edited in the site editor)."""
         base = target.config["url"].rstrip("/")
         check_public_url(base, self.resolver)
         auth = (target.config["user"], _need(resolve_secret(db, target), target))
+        # The categories first: an editor may create them, even where the menu is not theirs to change.
+        cats, missing = {}, []
+        for name in sections:
+            cat = self._wordpress_category(base, auth, name)
+            if cat is None:
+                missing.append(name)
+            else:
+                cats[name] = cat
+        made = {"categories": len(cats), "missing": missing}
         r = self._wp("GET", base, "wp/v2/menu-locations", auth=auth)
         if r.status_code in (401, 403):
-            return {"error": "role"}
+            return {"error": "role", **made}
         r.raise_for_status()
         places = r.json() if isinstance(r.json(), dict) else {}
         if not places:
-            return {"error": "block_theme"}
+            return {"error": "block_theme", **made}
         location = next((k for k in MENU_PLACES if k in places), next(iter(places)))
         menu = int((places[location] or {}).get("menu") or 0)
         if not menu:
@@ -718,30 +728,30 @@ class Publisher:
             else:
                 r = self._wp("POST", base, "wp/v2/menus", auth=auth, json={"name": MENU_NAME, "locations": [location]})
             if r.status_code in (401, 403):
-                return {"error": "role"}
+                return {"error": "role", **made}
             r.raise_for_status()
             menu = int(r.json()["id"])
         r = self._wp("GET", base, "wp/v2/menu-items", f"menus={menu}&per_page=100&_fields=id,object,object_id",
                      auth=auth)
         r.raise_for_status()
         there = {int(x.get("object_id") or 0) for x in r.json() if x.get("object") == "category"}
-        added, missing, present = [], [], 0
+        added, present = [], 0
         for n, name in enumerate(sections):
-            cat = self._wordpress_category(base, auth, name)
+            cat = cats.get(name)
             if cat is None:
-                missing.append(name)
-            elif cat in there:
+                continue
+            if cat in there:
                 present += 1
             else:
                 r = self._wp("POST", base, "wp/v2/menu-items", auth=auth, json={
                     "title": name, "menus": menu, "type": "taxonomy", "object": "category", "object_id": cat,
                     "status": "publish", "menu_order": n + 1})
                 if r.status_code in (401, 403):
-                    return {"error": "role"}
+                    return {"error": "role", **made}
                 r.raise_for_status()
                 there.add(cat)
                 added.append(name)
-        return {"menu": menu, "location": location, "added": added, "present": present, "missing": missing}
+        return {"menu": menu, "location": location, "added": added, "present": present, **made}
 
     def _wordpress_media(self, base: str, auth, slug: str | None, image) -> int:
         """The cover image to the media library, with its alternative text:

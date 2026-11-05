@@ -121,7 +121,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         """The WordPress menu with the site's sections."""
         site_id = args["site_id"]
         with db.tenant(tenant) as s:
-            sections = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+            # Those just confirmed (the profile from the context may not be approved yet), or the profile's.
+            sections = args.get("sections") or autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())["sections"]
             targets = s.execute(select(m.publish_targets).where(
                 m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")

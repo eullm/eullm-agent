@@ -413,7 +413,7 @@ def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
         entry = router.post(f"{WP}/wp-json/wp/v2/menu-items").mock(return_value=httpx.Response(201, json={"id": 1}))
         out = p.wordpress_menu(db, target, ["Strumenti AI", "Casi pratici"])
     assert out == {"menu": 21, "location": "primary", "added": ["Strumenti AI", "Casi pratici"], "present": 0,
-                   "missing": []}
+                   "categories": 2, "missing": []}
     assert json.loads(made.calls[0].request.content) == {"name": pub.MENU_NAME, "locations": ["primary"]}
     sent = [json.loads(x.request.content) for x in entry.calls]
     assert [(x["object_id"], x["menus"], x["object"], x["type"]) for x in sent] == [
@@ -428,13 +428,18 @@ def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
         out = p.wordpress_menu(db, target, ["Strumenti AI", "Casi pratici"])
     assert out["added"] == ["Casi pratici"] and out["present"] == 1 and not made.called and entry.call_count == 1
 
-    # An editor may not change menus; a block theme has no menu places.
+    # An editor may not change menus, but makes the categories; a block theme has no menu places.
     with respx.mock(assert_all_called=False) as router:
+        _menu_router(router, {})
         router.get(f"{WP}/wp-json/wp/v2/menu-locations").mock(return_value=httpx.Response(403, json={}))
-        assert p.wordpress_menu(db, target, ["Strumenti AI"]) == {"error": "role"}
+        made = router.post(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(201, json={"id": 9}))
+        assert p.wordpress_menu(db, target, ["Strumenti AI", "Casi pratici"]) == {
+            "error": "role", "categories": 2, "missing": []}
+        assert json.loads(made.calls[0].request.content) == {"name": "Casi pratici"}
     with respx.mock(assert_all_called=False) as router:
-        router.get(f"{WP}/wp-json/wp/v2/menu-locations").mock(return_value=httpx.Response(200, json=[]))
-        assert p.wordpress_menu(db, target, ["Strumenti AI"]) == {"error": "block_theme"}
+        _menu_router(router, [])
+        assert p.wordpress_menu(db, target, ["Strumenti AI"]) == {"error": "block_theme", "categories": 1,
+                                                                 "missing": []}
 
     # The job reads the sections and the site's WordPress, and says what it did.
     from editor import activity, autopilot, work
@@ -450,8 +455,9 @@ def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
     assert res["sites"][0]["added"] == ["Strumenti AI"]
     lines, _, _ = activity._result("wpmenu", res, site_id, str)
     assert "voci aggiunte: 1" in lines[0]
-    lines, _, _ = activity._result("wpmenu", {"sites": [{"name": "Blog", "error": "role"}]}, site_id, str)
-    assert "amministratore" in lines[0]
+    lines, _, _ = activity._result("wpmenu", {"sites": [{"name": "Blog", "error": "role", "categories": 2}]},
+                                   site_id, str)
+    assert "categorie pronte (2)" in lines[0] and "amministratore" in lines[0]
 
     # Saving new sections queues the menu, and so does the button.
     c = logged_in(db, tenant, "owner")
@@ -460,4 +466,13 @@ def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
     assert c.post(f"/ui/sites/{site_id}/auto", data=form, follow_redirects=False).status_code == 303
     with db.tenant(tenant) as s:
         assert s.execute(select(func.count()).select_from(m.jobs).where(m.jobs.c.kind == "wpmenu")).scalar() == 1
-    assert "Metti le rubriche nel menu del sito" in c.get("/site?tab=auto").text
+    assert "Crea categorie e menu su WordPress" in c.get("/site?tab=auto").text
+
+    # Confirming the context with its sections makes them at once, before the profile is approved.
+    with db.tenant(tenant) as s:
+        s.execute(m.jobs.delete().where(m.jobs.c.kind == "wpmenu"))
+    assert c.post(f"/ui/sites/{site_id}/brief", data={"brief": "AI per le PMI italiane", "sections": "Casi pratici\nNorme",
+                                                      "back": "/start"}, follow_redirects=False).status_code == 303
+    with db.tenant(tenant) as s:
+        args = s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "wpmenu")).scalars().all()
+    assert args == [{"site_id": site_id, "sections": ["Casi pratici", "Norme"]}]

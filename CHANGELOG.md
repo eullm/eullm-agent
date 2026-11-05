@@ -14,12 +14,15 @@
   Attività, con i link che non si sono potuti leggere. Conta come un
   articolo del piano; la bozza si rilegge, si approva e si pubblica come le
   altre.
-- **Le rubriche nel menu del sito WordPress.** In Redazione automatica ›
-  Regole, salvando rubriche nuove (o con «Metti le rubriche nel menu del
-  sito») Redazia mette una voce per ogni rubrica nel menu principale del
-  tema, creando il menu se manca e le categorie che non ci sono; le voci già
-  presenti restano come sono. Su WordPress i menu li cambia solo un
-  amministratore: con un utente editore Attività lo dice e spiega come fare.
+- **Le rubriche come categorie e menu del sito WordPress, subito.** Appena
+  si confermano il contesto e le rubriche (Primi passi, o «Crea il profilo
+  dal contesto»), e ogni volta che le rubriche cambiano in Redazione
+  automatica › Regole, Redazia crea su WordPress le categorie che mancano e
+  mette una voce per ciascuna nel menu principale del tema, creando il menu
+  se non c'è; le voci già presenti restano come sono. Per un sito già
+  collegato c'è il bottone «Crea categorie e menu su WordPress» in Regole.
+  Le categorie le crea anche un utente editore; i menu su WordPress li
+  cambia solo un amministratore, e con un editore Attività lo dice.
 - **Rubrica scelta anche per le bozze scritte a mano.** Lo scrittore indica
   la rubrica del sito a cui appartiene l'articolo (prima la sceglieva solo il
   caporedattore della redazione automatica), e nella pagina della bozza la

@@ -1346,6 +1346,7 @@ def register(app, ctx) -> None:
             autopilot.save(s, site_id, values)
         queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
                       {"site_id": site_id, "language": language if language in autopilot.LANGS else "it", "auto": values})
+        menu_from_sections(c, site_id, values["sections"])
         return done(to, t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui."))
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
@@ -1408,22 +1409,19 @@ def register(app, ctx) -> None:
             queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
                           {"site_id": site_id, "language": language if language in autopilot.LANGS else "it",
                            "auto": values})
+            menu_from_sections(c, site_id, values["sections"])
             return done("/site", t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, "
                                    "poi lo approvi qui sotto."))
-        if not saved:
-            return done("/site?tab=auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
         if action == "menu" or (values["sections"] and values["sections"] != before):
-            # The rubrics as the WordPress site's menu: when they change, or when asked.
-            with db.tenant(c.tenant_id) as s:
-                wp = s.execute(select(m.publish_targets.c.id).where(
-                    m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")).first()
-            if wp is not None and values["sections"]:
-                queue.enqueue(db, c.tenant_id, "wpmenu", f"site {site_id}", {"site_id": site_id})
+            # The rubrics as the WordPress site's categories and menu: when they change, or when asked.
+            if menu_from_sections(c, site_id, values["sections"]):
                 if action == "menu":
                     return done("/site?tab=auto", t("Le rubriche vanno nel menu del sito WordPress: lo segui nel "
                                                   "riquadro Attività."))
             elif action == "menu":
                 return done("/site?tab=auto", t("Per il menu servono le rubriche e un sito WordPress collegato."))
+        if not saved:
+            return done("/site?tab=auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
         if values["enabled"]:
             return done("/site?tab=auto", t("Redazione automatica accesa: dal prossimo giro orario sceglie, scrive e "
                                           "pubblica fino a {n} articoli al giorno, dalle {start} alle {end}.",
@@ -2040,6 +2038,18 @@ def register(app, ctx) -> None:
             return done("/site?tab=publish", t("Gli articoli restano solo nella lingua del sito."))
         return done("/site?tab=publish", t("Ogni articolo approvato sarà tradotto in: {languages}.",
                                            languages=", ".join(tr.LANGUAGES[x] for x in chosen)))
+
+    def menu_from_sections(c: auth.Caller, site_id: int, sections: list[str]) -> bool:
+        """The sections as categories and menu entries on the site's
+        WordPress, right when they are confirmed (Francesco 2026-11-05:
+        "perché aspettare"). False when the site has no WordPress."""
+        with db.tenant(c.tenant_id) as s:
+            wp = s.execute(select(m.publish_targets.c.id).where(
+                m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")).first()
+        if wp is None or not sections:
+            return False
+        queue.enqueue(db, c.tenant_id, "wpmenu", f"site {site_id}", {"site_id": site_id, "sections": sections})
+        return True
 
     def file_under(c: auth.Caller, draft_id: int, section: str) -> None:
         """The site's section the article goes under (its category on

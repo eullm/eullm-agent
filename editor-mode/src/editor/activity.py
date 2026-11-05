@@ -134,19 +134,20 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         out = []
         for x in r.get("sites") or []:
             if x.get("error") == "role":
-                out.append(t("{name}: l'utente collegato non può cambiare i menu, su WordPress lo può fare solo un "
-                             "amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.",
-                             name=x["name"]))
+                line = t("{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo "
+                         "può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente "
+                         "amministratore.", name=x["name"], n=x.get("categories", 0))
             elif x.get("error") == "block_theme":
-                out.append(t("{name}: il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le "
-                             "categorie da Aspetto › Editor › Navigazione.", name=x["name"]))
+                line = t("{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i "
+                         "menu: aggiungi le categorie da Aspetto › Editor › Navigazione.", name=x["name"],
+                         n=x.get("categories", 0))
             else:
                 line = t("{name}: menu aggiornato (voci aggiunte: {a}, già presenti: {p}).", name=x["name"],
                          a=len(x.get("added") or []), p=x.get("present", 0))
-                if x.get("missing"):
-                    line += " " + t("Categorie non create (serve un utente che possa crearle): {names}.",
-                                    names=", ".join(x["missing"]))
-                out.append(line)
+            if x.get("missing"):
+                line += " " + t("Categorie non create (serve un utente che possa crearle): {names}.",
+                                names=", ".join(x["missing"]))
+            out.append(line)
         return out, _site_link(site_id, "/site?tab=auto"), t("Rubriche")
     if kind == "request":
         unread = r.get("unread") or []

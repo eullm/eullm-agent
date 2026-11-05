@@ -2611,16 +2611,16 @@
  "Nessun Core configurato: per scrivere serve un modello.": "Aucun Core configuré : pour écrire il faut un modèle.",
  "Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono.": "Approuve d'abord le profil du site : l'article est écrit dans sa langue et son ton.",
  "Nessuna": "Aucune",
- "Una voce per ogni rubrica nel menu principale del sito; le categorie mancanti si creano. Su WordPress i menu li cambia solo un amministratore.": "Une entrée par rubrique dans le menu principal du site ; les catégories manquantes sont créées. Sur WordPress, seul un administrateur peut modifier les menus.",
- "Metti le rubriche nel menu del sito": "Mettre les rubriques dans le menu du site",
  "Menu del sito WordPress": "Menu du site WordPress",
  "Rubriche": "Rubriques",
  "Il sito non ha rubriche: scrivile in Redazione automatica › Regole.": "Le site n'a pas de rubriques : écris-les dans Rédaction automatique › Règles.",
  "Il sito non ha una destinazione WordPress.": "Le site n'a pas de destination WordPress.",
- "{name}: l'utente collegato non può cambiare i menu, su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name} : l'utilisateur connecté ne peut pas modifier les menus, sur WordPress seul un administrateur le peut. Crée le menu depuis Apparence › Menus, ou connecte un utilisateur administrateur.",
  "{name}: menu aggiornato (voci aggiunte: {a}, già presenti: {p}).": "{name} : menu mis à jour (entrées ajoutées : {a}, déjà présentes : {p}).",
- "{name}: il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name} : le thème utilise la navigation en blocs, sans emplacements de menu : ajoute les catégories depuis Apparence › Éditeur › Navigation.",
  "Categorie non create (serve un utente che possa crearle): {names}.": "Catégories non créées (il faut un utilisateur qui puisse les créer) : {names}.",
  "Le rubriche vanno nel menu del sito WordPress: lo segui nel riquadro Attività.": "Les rubriques vont dans le menu du site WordPress : tu le suis dans l'encadré Activité.",
- "Per il menu servono le rubriche e un sito WordPress collegato.": "Pour le menu, il faut les rubriques et un site WordPress connecté."
+ "Per il menu servono le rubriche e un sito WordPress collegato.": "Pour le menu, il faut les rubriques et un site WordPress connecté.",
+ "Crea categorie e menu su WordPress": "Créer catégories et menu sur WordPress",
+ "Una categoria per ogni rubrica e una voce per ciascuna nel menu principale del sito. Le categorie le crea anche un editore, i menu li cambia solo un amministratore.": "Une catégorie par rubrique et une entrée pour chacune dans le menu principal du site. Un éditeur peut créer les catégories, seul un administrateur modifie les menus.",
+ "{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name} : catégories prêtes ({n}), mais l'utilisateur connecté ne peut pas modifier les menus : sur WordPress seul un administrateur le peut. Crée le menu depuis Apparence › Menus, ou connecte un utilisateur administrateur.",
+ "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name} : catégories prêtes ({n}), mais le thème utilise la navigation en blocs, sans emplacements de menu : ajoute les catégories depuis Apparence › Éditeur › Navigation."
 }
