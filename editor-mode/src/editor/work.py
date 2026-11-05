@@ -96,6 +96,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             outlets = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == args["site_id"],
                 m.editorial_profiles.c.status == "approved")).scalar())["min_sources"]
+            # As many as the news has: one outlet's story is written from that one.
+            outlets = min(outlets, max(1, autopilot.source_count(s, args["proposal_id"], outlets)))
 
         def write(purpose="draft", notes=None):
             if http_factory is None:

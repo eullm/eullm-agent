@@ -435,7 +435,11 @@ def discover(db, tenant_id: str, site_id: int, client: httpx.Client, core: CoreC
             report.failed += 1
             report.notes.append(f"{cand.name}: {type(e).__name__}")
             continue
-        ev = rate(result.items, keywords, known=known, cited_by_site=cand.evidence.get("cited_by_site", 0),
+        # Hacker News and Reddit tell again news others tell, with their points and comments:
+        # that is the hype they measure, not a copy (Francesco 2026-11-05: "HN sempre scartata").
+        signal = cand.kind == "hackernews" or "reddit.com/" in (cand.url or "")
+        ev = rate(result.items, keywords, known=() if signal else known,
+                  cited_by_site=cand.evidence.get("cited_by_site", 0),
                   https=cand.url.startswith("https://") or not cand.url)
         # What it was judged on, shown next to the source.
         ev["examples"] = [{"title": i.title[:200], "url": i.url} for i in result.items[:3] if i.title]

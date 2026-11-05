@@ -154,13 +154,18 @@ def is_story(opportunity: float, items) -> bool:
     return bool(items) and opportunity >= STRONG_OPPORTUNITY and max(it.source_score or 0 for it in items) >= STRONG_SOURCE
 
 
-def made_today(s, site_id: int, since: datetime) -> int:
+def made_today(s, site_id: int, since: datetime, outlets: bool = False) -> int:
+    """Proposals made for the site since `since`; with `outlets`, only those
+    planned for the automatic newsroom with its minimum of outlets."""
+    if outlets:
+        return sum(1 for b in s.execute(select(m.proposals.c.basis).where(
+            m.proposals.c.site_id == site_id, m.proposals.c.created_at >= since)).scalars() if (b or {}).get("outlets"))
     return s.execute(select(func.count()).select_from(m.proposals).where(
         m.proposals.c.site_id == site_id, m.proposals.c.created_at >= since)).scalar() or 0
 
 
 def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], core: CoreClient | None = None,
-            limit: int | None = None) -> list[int]:
+            limit: int | None = None, outlets: int = 0) -> list[int]:
     """Create proposals for the best opportunities; returns their ids."""
     p = m.editorial_profiles
     created = []
@@ -206,7 +211,8 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
             pid = s.execute(insert(m.proposals).values(
                 tenant_id=tenant_id, site_id=site_id, topic_id=o.topic_id, profile_id=prof.id,
                 opportunity=o.score, title=value["title"], angle=value["angle"], why_now=value["why_now"],
-                format=value["format"], generated_by=by, basis={"kind": "topic"},
+                format=value["format"], generated_by=by,
+                basis={"kind": "topic"} | ({"outlets": len({it.source_id for it in items})} if outlets > 1 else {}),
             ).returning(m.proposals.c.id)).scalar_one()
             s.execute(insert(m.proposal_citations).values(
                 [{"tenant_id": tenant_id, "proposal_id": pid, "item_id": i} for i in value["citations"]]))
@@ -215,10 +221,11 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
 
 
 def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit: int | None = None,
-         now: datetime | None = None) -> list[int]:
+         now: datetime | None = None, outlets: int = 0) -> list[int]:
     """The day's proposals: first the topics told by several sources, then,
     for what is left of the number, the best single news for the site
-    (picks.fill). Never empty while news comes in."""
+    (picks.fill). Never empty while news comes in. With `outlets` (the
+    automatic newsroom's minimum), the news that many outlets tell come first."""
     from . import opportunity, picks
 
     with db.tenant(tenant_id) as s:
@@ -230,8 +237,9 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit
     limit = limit or body.get("settings", {}).get("proposals_per_day", PER_DAY)
     if only:
         limit = min(limit, quotas.PROPOSALS_ONLY_PER_DAY)
-    ids = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=limit)
-    return ids + picks.fill(db, tenant_id, site_id, limit - len(ids), core, now=now)
+    ids = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=limit,
+                  outlets=outlets)
+    return ids + picks.fill(db, tenant_id, site_id, limit - len(ids), core, now=now, outlets=outlets)
 
 
 TITLES_SYSTEM = (

@@ -272,3 +272,18 @@ def test_a_job_cut_by_a_restart_goes_back_in_the_queue_at_once(db, tenant):
     row = status(db, tenant, jid)
     assert row.status == "queued" and row.attempts == job.attempts - 1
     assert queue.claim(db, "w2", tenant).id == jid
+
+
+def test_a_step_cut_short_by_a_restart_does_not_stay_running(db, tenant):
+    """On the server, collections cut short by restarts showed "running" for
+    days: the next step of the same kind closes them."""
+    from editor import jobs
+
+    with db.tenant(tenant) as s:
+        s.execute(m.jobs.insert().values(tenant_id=tenant, kind="collect", status="running",
+                                         started_at=datetime.now(UTC) - timedelta(hours=5)))
+    with jobs.track(db, tenant, "collect"):
+        pass
+    with db.tenant(tenant) as s:
+        rows = s.execute(select(m.jobs.c.status).where(m.jobs.c.kind == "collect").order_by(m.jobs.c.id)).scalars().all()
+    assert rows == ["failed", "done"]

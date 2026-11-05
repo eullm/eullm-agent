@@ -20,7 +20,7 @@ from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import and_, case, func, select, update
+from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, update
 
 from . import credits, drafts, models as m, proposals, publishing, quotas, translate as tr, usage
 from .core_client import CoreClient, CoreError
@@ -208,22 +208,39 @@ def due_by(cfg: dict, local: datetime) -> int:
     return math.ceil(morning + (cfg["per_day"] - morning) * (done - 1) / max(1, total - 1))
 
 
-def made_since(s, site_id: int, since: datetime) -> tuple[int, int]:
+def _auto_jobs(proposal_id, statuses: tuple[str, ...]):
+    """Whether the proposal has an `auto` job in one of these states."""
+    j = m.jobs.c
+    return select(j.id).where(j.kind == "auto", j.status.in_(statuses),
+                              j.subject == literal("proposal ").concat(cast(proposal_id, Text))).exists()
+
+
+def made_since(s, site_id: int, since: datetime, fix: bool = False) -> tuple[int, int]:
     """Articles of the automatic newsroom since the given time, as (kept,
     tried): kept are those not discarded (published, on their way or held
     for a person), tried every article it took on, discarded ones included.
     An article written again counts once; those accepted and still being
-    written count in both."""
+    written count in both.
+
+    Not kept, so another article takes their place (Francesco 2026-11-05:
+    20 a day, 9 published by 13:00, then nothing): an accepted proposal
+    whose job ended in an error without a draft, and, with `fix` (nothing
+    waits for a person), a draft no job is working on any more that was
+    neither approved nor discarded."""
     pr, dr = m.proposals.c, m.drafts.c
-    mine = (select(dr.proposal_id, func.max(case((dr.status != "rejected", 1), else_=0)).label("kept"))
+    working = _auto_jobs(dr.proposal_id, ("queued", "running"))
+    alive = (dr.status != "rejected") if not fix else or_(dr.status == "approved", and_(dr.status != "rejected", working))
+    mine = (select(dr.proposal_id, func.max(case((alive, 1), else_=0)).label("kept"))
             .join(m.proposals, pr.id == dr.proposal_id)
             .where(pr.site_id == site_id, pr.decided_by == AUTO, dr.translation_of.is_(None), dr.created_at >= since)
             .group_by(dr.proposal_id).subquery())
     tried, kept = s.execute(select(func.count(), func.coalesce(func.sum(mine.c.kept), 0)).select_from(mine)).one()
-    writing = s.execute(select(func.count()).select_from(m.proposals).where(
-        pr.site_id == site_id, pr.decided_by == AUTO, pr.status == "accepted",
-        pr.created_at >= since - timedelta(days=1))).scalar() or 0
-    return int(kept) + writing, int(tried) + writing
+    accepted = (pr.site_id == site_id, pr.decided_by == AUTO, pr.status == "accepted",
+                pr.created_at >= since - timedelta(days=1))
+    writing = s.execute(select(func.count()).select_from(m.proposals).where(*accepted)).scalar() or 0
+    lost = s.execute(select(func.count()).select_from(m.proposals).where(
+        *accepted, _auto_jobs(pr.id, ("failed",)), ~_auto_jobs(pr.id, ("queued", "running")))).scalar() or 0
+    return int(kept) + writing - lost, int(tried) + writing
 
 
 # How many articles a day the newsroom may try, for each one it should keep:
@@ -238,20 +255,11 @@ def source_count(s, proposal_id: int, need: int = 0) -> int:
     sector that are about something else do not count: counted, they made
     articles join separate stories to reach two sources. With `need`, the
     wider search runs only when the main news alone is short of it."""
-    from .drafts import event_items
-
-    pc, si = m.proposal_citations.c, m.source_items.c
-    title = s.execute(select(m.proposals.c.title).where(m.proposals.c.id == proposal_id)).scalar() or ""
+    pc = m.proposal_citations.c
+    row = s.execute(select(m.proposals.c.title, m.proposals.c.basis).where(m.proposals.c.id == proposal_id)).first()
     cited = list(s.execute(select(pc.item_id).where(pc.proposal_id == proposal_id)).scalars())
-
-    def count(items: list[int]) -> int:
-        return s.execute(select(func.count(func.distinct(si.source_id))).where(si.id.in_(items))).scalar() or 0 if items else 0
-
-    main, same = event_items(s, cited, title)
-    n = count(main)
-    if need and n >= need:
-        return n
-    return count(main + same)
+    return drafts.outlets(s, cited, row.title or "" if row else "", need,
+                          also=((row.basis if row else None) or {}).get("same_event") or ())
 
 
 # Below the minimum opportunity, the best proposals still go out down to
@@ -305,18 +313,25 @@ def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[in
     return [(_angle_terms(r.title, r.angle), used.get(r.id, set())) for r in rows]
 
 
+# Proposals read each round: enough to get past a day of news that only one outlet tells,
+# kept until they lapse, to the ones planned for the automatic newsroom.
+CHOOSE_FROM = 250
+
+
 def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False) -> list:
     """The best proposals of the last day and a half that pass the
     guardrails, those over the minimum opportunity first; those on a topic
     to avoid are turned down for good, those only telling again what a
-    recent article told wait; a new development of the same subject goes on."""
+    recent article told wait; a new development of the same subject goes on.
+    News told by the outlets the site asks for come first, then, to make
+    up the number, the best ones fewer outlets tell."""
     pr = m.proposals.c
     seen = recent_angles(s, site_id, now)
     rows = s.execute(select(m.proposals).where(
         pr.site_id == site_id, pr.status == "proposed", pr.created_at >= now - timedelta(hours=36),
         pr.opportunity >= (cfg["min_opportunity"] * OPPORTUNITY_FLOOR if minimum is None else minimum))
-        .order_by(pr.opportunity.desc(), pr.id.desc()).limit(80)).all()
-    out = []
+        .order_by(pr.opportunity.desc(), pr.id.desc()).limit(CHOOSE_FROM)).all()
+    out, fewer = [], []
     for r in rows:
         if len(out) >= n:
             break
@@ -335,6 +350,18 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
         if overlaps(terms, items, seen):
             continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
+            out.append(r)
+            seen.append((terms, items))
+        else:
+            fewer.append((r, terms, items))
+    # The outlets the site asks for are a preference, not a wall (Francesco 2026-11-05: "se non
+    # c'è la seconda testata va fatto comunque una scrematura e la pubblicazione"): when the news
+    # told by enough outlets are not enough, the best of the others follow, and the
+    # editor-in-chief reads them like any other.
+    for r, terms, items in fewer:
+        if len(out) >= n:
+            break
+        if not overlaps(terms, items, seen):
             out.append(r)
             seen.append((terms, items))
     return out
@@ -395,10 +422,16 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         return {"waiting": "month"}
     if not in_hours(cfg, local):
         return {"waiting": "hours"}
+    if cfg["min_sources"] > 1 and not month_over:
+        # Other outlets telling the same event in other words or languages, confirmed by the
+        # model once per proposal, so that choose finds the second outlet where it is.
+        from . import same_event
+
+        same_event.confirm(db, tenant_id, site_id, core, now, floor=cfg["min_opportunity"] * OPPORTUNITY_FLOOR)
     since = datetime.combine(local.date(), time(), local.tzinfo).astimezone(UTC)
     paid = False
     with db.tenant(tenant_id) as s:
-        kept, tried = made_since(s, site_id, since)
+        kept, tried = made_since(s, site_id, since, fix=cfg["on_problem"] == "fix")
         # What it brought forward yesterday it does not make today.
         target = max(1, cfg["per_day"] - over["debt"])
         extra = None
@@ -423,7 +456,7 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
                 return {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
             want = 1
             paid = extra == "paid"
-            planned_today = proposals.made_today(s, site_id, since)
+            planned_today = proposals.made_today(s, site_id, since, outlets=cfg["min_sources"] > 1)
         else:
             left = min(target - kept, cfg["per_day"] * TRIES_PER_ARTICLE - tried)
             # Spread over the hours left, so the day does not go in the first hour.
@@ -435,9 +468,11 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             if month_left is not None:
                 want = min(want, int(month_left))
             picked = choose(s, site_id, cfg, now, want)
-            planned_today = proposals.made_today(s, site_id, since)
+            planned_today = proposals.made_today(s, site_id, since, outlets=cfg["min_sources"] > 1)
     if extra is None and len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
-        proposals.plan(db, tenant_id, site_id, core, limit=max(3, 2 * want), now=now)
+        # Only news it can take: told by as many outlets as the site asks (Francesco 2026-11-05: 167
+        # proposals from single news, none with two outlets, and nothing written from 13:00 on).
+        proposals.plan(db, tenant_id, site_id, core, limit=max(3, 2 * want), now=now, outlets=cfg["min_sources"])
         with db.tenant(tenant_id) as s:
             picked = choose(s, site_id, cfg, now, want)
     accepted = []
@@ -783,6 +818,10 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         body = s.execute(select(m.editorial_profiles.c.body).where(
             m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
         cfg = settings_of(body)
+        # The outlets the article must cite: those the site asks for, when the news has them
+        # (a story one outlet tells goes on, with one: choose).
+        need = min(cfg["min_sources"], max(1, source_count(s, d.proposal_id, cfg["min_sources"]))) \
+            if d.proposal_id else cfg["min_sources"]
     out = {"draft_id": draft_id, "title": d.title, "site_id": d.site_id}
     lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
     if not cfg["enabled"]:
@@ -803,8 +842,8 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         fixable.append(t("alcune frasi non superano i controlli sulle fonti: {detail}", lang, detail="; ".join(
             t("frase {n}: {problems}", lang, n=f.get("claim"), problems=", ".join(drafts.flag_text(x, lang) for x in f.get("problems") or []))
             for f in (d.flags or [])))[:1500])
-    if cited < cfg["min_sources"]:
-        fixable.append(t("fonti diverse citate: {n}, ne servono almeno {min}", lang, n=cited, min=cfg["min_sources"]))
+    if cited < need:
+        fixable.append(t("fonti diverse citate: {n}, ne servono almeno {min}", lang, n=cited, min=need))
     if not fixable:
         step(N_("Il caporedattore AI rilegge l'articolo"))
         try:
@@ -821,7 +860,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             else:
                 d, cited = load()
                 out["cut"] = out.get("cut", 0) + len(verdict["cut"])
-                if d.status == "needs_review" or cited < cfg["min_sources"]:
+                if d.status == "needs_review" or cited < need:
                     fixable += verdict["problems"] or [t("dopo i tagli l'articolo non supera i controlli", lang)]
         section = next((x for x in cfg["sections"] if x.lower() == verdict["section"].lower()), None)
         if section:  # the site files the article under it
@@ -835,7 +874,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if fixable:
         if cfg["on_problem"] != "fix":
             return _stop(db, tenant_id, d, fixable, out, discard=False)
-        if not corrected and cited >= cfg["min_sources"]:  # a missing outlet is not corrected: it is written again
+        if not corrected and cited >= need:  # a missing outlet is not corrected: it is written again
             step(N_("Il caporedattore AI corregge l'articolo invece di scartarlo: {why}"), why="; ".join(fixable)[:300])
             if correct(db, tenant_id, d, fixable, core):
                 res = finish(db, tenant_id, draft_id, core, publish, translate, rewrite, cover, rounds, corrected=True)

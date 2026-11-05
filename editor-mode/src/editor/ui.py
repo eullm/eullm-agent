@@ -806,7 +806,8 @@ def register(app, ctx) -> None:
                     m.publications.c.status == "published", m.publications.c.withdrawn_at.is_(None))).all())
                 cfg = autopilot.settings_of(body)
                 auto_cards.append({"site": x, "cfg": cfg, "day": day, "urls": urls,
-                                   "kept": autopilot.made_since(s, x.id, start_of_day(s))[0],
+                                   "kept": autopilot.made_since(s, x.id, start_of_day(s),
+                                                                fix=cfg["on_problem"] == "fix")[0],
                                    "last": auto_last((body.get("settings") or {})),
                                    "left_out": (auto_last((body.get("settings") or {})) or {}).get("left_out", 0)
                                    if (auto_last((body.get("settings") or {})) or {}).get("done") else 0})

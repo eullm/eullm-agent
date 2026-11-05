@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.28.47
+
+### Fixed
+
+- **La redazione automatica non si ferma più a metà giornata** (Francesco:
+  20 articoli al giorno, 9 pubblicati fino alle 13, poi più niente). Il sito
+  chiedeva almeno 2 testate sullo stesso fatto, ma dalle 13 tutte le 167
+  proposte risultavano da una sola testata, quindi ogni ora non ne passava
+  nessuna. Ora le testate sono una preferenza, non un blocco ("se non c'è la
+  seconda testata va fatto comunque"): passano prima le notizie confermate
+  da più testate, poi le migliori delle altre, e il caporedattore AI le
+  rilegge come tutte. L'articolo cita tante testate quante la notizia ne ha.
+  Il giro legge fino a 250 proposte, non più le prime 80. Il campo in Sito e
+  profilo si chiama "Testate sullo stesso fatto".
+- **Lo stesso fatto in qualsiasi lingua.** Il controllo confrontava le
+  parole dei titoli: un titolo italiano non trovava mai la stessa notizia
+  raccontata in inglese da BBC o Guardian. Adesso le notizie che hanno in
+  comune nomi e numeri vengono mostrate al modello, che con una chiamata per
+  giro conferma quali raccontano lo stesso fatto. Ogni proposta viene
+  controllata una volta sola.
+- **Hacker News e Reddit.** Entrano nella base comune le storie di HN sopra
+  i 100 punti e i post più votati del giorno di tre gruppi di subreddit
+  (mondo, tecnologia e AI, scienza ed economia), letti con una richiesta per
+  gruppo perché Reddit limita le richieste. Nella ricerca delle fonti, HN e
+  Reddit non vengono più scartati perché "ripetono" notizie già note: è
+  proprio l'hype che misurano.
+- **Gli articoli persi vengono sostituiti.** Un articolo il cui lavoro è
+  finito in errore prima della bozza, o una bozza rimasta a metà e mai
+  approvata (con "tutto automatico"), non conta più tra quelli fatti: al
+  giro dopo ne viene scritto un altro.
+- **Niente più passaggi "in corso" da giorni.** Un passaggio interrotto da
+  un riavvio si chiude da solo quando ne parte uno uguale.
+- **Conservazione di 30 giorni anche nel compose del server.** Il valore
+  predefinito era ancora 365. Su un server già installato aggiungere
+  `EDITOR_RETENTION_DAYS=30` al file `.env`.
+
 ## 0.28.46
 
 ### Fixed

@@ -676,14 +676,18 @@ def _same_event(anchor: set[str], terms: set[str]) -> bool:
     return len(anchor & terms) >= min(len(anchor), max(EVENT_MIN, math.ceil(len(anchor) * EVENT_SHARE)))
 
 
-def event_items(s, cited: list[int], title: str = "", limit: int = RELATED) -> tuple[list[int], list[int]]:
+def event_items(s, cited: list[int], title: str = "", limit: int = RELATED,
+                also: list[int] | tuple = ()) -> tuple[list[int], list[int]]:
     """The news an article is about and other outlets' reports of the same
     event. The main news is the cited item closest to the proposal's title;
     the other cited items stay only if they are about the same event, so a
     proposal built on a sector (two companies, two attacks, a figure and an
     unrelated deal) is written about one story. Items from the same sector
     that are not the same event are left out: they made articles that joined
-    separate news (found by an external audit, 2026-11-03)."""
+    separate news (found by an external audit, 2026-11-03).
+
+    `also`: reports of the same event the model confirmed (any language,
+    other words: same_event), kept among the others."""
     si = m.source_items
     rows = s.execute(select(si.c.id, si.c.title, si.c.summary, si.c.fetched_at).where(si.c.id.in_(cited))).all()
     if not rows:
@@ -705,7 +709,24 @@ def event_items(s, cited: list[int], title: str = "", limit: int = RELATED) -> t
         terms = item_terms(r.title, r.summary or "")
         if _same_event(anchor, terms):
             scored.append((len(anchor & terms), r.id))
-    return main, [i for _, i in sorted(scored, reverse=True)[:limit]]
+    confirmed = [i for i in dict.fromkeys(also) if i not in main]
+    return main, (confirmed + [i for _, i in sorted(scored, reverse=True) if i not in confirmed])[:max(limit, len(confirmed))]
+
+
+def outlets(s, items: list[int], title: str = "", need: int = 0, also: list[int] | tuple = ()) -> int:
+    """Distinct outlets telling the event of these news items (event_items:
+    the main news and the other outlets' reports of the same event). With
+    `need`, the wider search runs only when the main news alone is short."""
+    si = m.source_items.c
+
+    def count(ids: list[int]) -> int:
+        return s.execute(select(func.count(func.distinct(si.source_id))).where(si.id.in_(ids))).scalar() or 0 if ids else 0
+
+    main, same = event_items(s, items, title, also=also)
+    n = count(main)
+    if need and n >= need:
+        return n
+    return count(main + same)
 
 
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
@@ -720,7 +741,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
-        cited, same = event_items(s, cited, prop.title)
+        cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
         context = context_items(s, cited, same)
         ids = cited + same + context
         profile = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.id == prop.profile_id)).scalar()

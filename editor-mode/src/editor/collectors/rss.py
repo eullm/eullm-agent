@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import feedparser
 import httpx
 
@@ -7,6 +9,8 @@ from ..normalize import clean_text
 from .base import FetchResult, Item, SourceSpec, from_struct_time
 
 MAX_SUMMARY = 2000
+# Reddit's feeds put only this in a link post's summary: nothing to read, the title tells it.
+REDDIT_NOISE = re.compile(r"^submitted by /u/\S+ to r/\S+\s*(\[link\])?\s*(\[comments\])?$")
 
 
 def parse_feed(content: bytes) -> list[Item]:
@@ -21,7 +25,7 @@ def parse_feed(content: bytes) -> list[Item]:
             Item(
                 url=link,
                 title=title,
-                summary=clean_text(e.get("summary"))[:MAX_SUMMARY],
+                summary=REDDIT_NOISE.sub("", clean_text(e.get("summary")))[:MAX_SUMMARY],
                 external_id=e.get("id") or link,
                 author=e.get("author"),
                 published_at=from_struct_time(e.get("published_parsed") or e.get("updated_parsed")),

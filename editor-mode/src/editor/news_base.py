@@ -45,6 +45,16 @@ BASE = [
     ("The Register", "https://www.theregister.com/headlines.atom", "en", "tech"),
     ("Engadget", "https://www.engadget.com/rss.xml", "en", "tech"),
     ("Hacker News", "https://hnrss.org/frontpage", "en", "tech"),
+    # What goes into hype: Hacker News stories past 100 points, Reddit's most voted posts of the
+    # day (Francesco 2026-11-05). Reddit is read as a few multi-subreddit feeds, one request each,
+    # because it limits how often one address may ask.
+    ("Hacker News · 100+ punti", "https://hnrss.org/newest?points=100", "en", "tech"),
+    ("Reddit · World", "https://www.reddit.com/r/worldnews+news+europe+geopolitics+UpliftingNews/top/.rss?t=day&limit=50",
+     "en", "world"),
+    ("Reddit · Tech e AI", "https://www.reddit.com/r/technology+artificial+OpenAI+LocalLLaMA+singularity+programming"
+     "/top/.rss?t=day&limit=50", "en", "tech"),
+    ("Reddit · Scienza ed economia", "https://www.reddit.com/r/science+space+Futurology+Economics+environment"
+     "/top/.rss?t=day&limit=50", "en", "science"),
     ("BleepingComputer", "https://www.bleepingcomputer.com/feed/", "en", "tech"),
     ("The Hacker News", "https://feeds.feedburner.com/TheHackersNews", "en", "tech"),
     # The world beyond Europe: United States, China, Japan, India, Asia, Oceania (November 2026).

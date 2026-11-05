@@ -2551,5 +2551,8 @@
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Le rédacteur en chef IA l'a corrigé au lieu de l'écarter : {why}",
  "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Le rédacteur en chef IA corrige l'article au lieu de l'écarter : {why}",
  "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposition acceptée : « {title} » est en rédaction, suivez-le dans l'encadré Activité.",
- "Il modello riformula le frasi copiate dalle fonti": "Le modèle reformule les phrases copiées des sources"
+ "Il modello riformula le frasi copiate dalle fonti": "Le modèle reformule les phrases copiées des sources",
+ "Testate sullo stesso fatto": "Médias sur le même fait",
+ "prima queste; se mancano, le notizie migliori con meno testate": "d'abord celles-ci ; sinon, les meilleures nouvelles relayées par moins de médias",
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "aucune proposition adaptée cette heure : il faut une opportunité d'au moins {o} et une nouvelle pas déjà racontée. Nouvel essai au prochain tour."
 }

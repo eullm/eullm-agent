@@ -2551,5 +2551,8 @@
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "The AI editor-in-chief corrected it instead of discarding it: {why}",
  "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "The AI editor-in-chief corrects the article instead of discarding it: {why}",
  "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposal accepted: “{title}” is being written, follow it in the Activity box.",
- "Il modello riformula le frasi copiate dalle fonti": "The model rewords the sentences copied from the sources"
+ "Il modello riformula le frasi copiate dalle fonti": "The model rewords the sentences copied from the sources",
+ "Testate sullo stesso fatto": "Outlets on the same event",
+ "prima queste; se mancano, le notizie migliori con meno testate": "these first; if there are none, the best news fewer outlets tell",
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "no suitable proposal this hour: it needs an opportunity of at least {o} and news not told already. It tries again next round."
 }
