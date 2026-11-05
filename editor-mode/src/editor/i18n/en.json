@@ -2550,5 +2550,6 @@
  "leggi tutto": "read all",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "The AI editor-in-chief corrected it instead of discarding it: {why}",
  "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "The AI editor-in-chief corrects the article instead of discarding it: {why}",
- "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposal accepted: “{title}” is being written, follow it in the Activity box."
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposal accepted: “{title}” is being written, follow it in the Activity box.",
+ "Il modello riformula le frasi copiate dalle fonti": "The model rewords the sentences copied from the sources"
 }
