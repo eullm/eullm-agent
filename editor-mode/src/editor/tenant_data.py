@@ -8,7 +8,7 @@ collected from growing for ever.
   transaction, with the owner connection. What the Core holds for the
   tenant (usage and audit of `editor/<tenant>`) stays there.
 - Retention: collected items, their observations and finished jobs older
-  than EDITOR_RETENTION_DAYS (default 365) are deleted at the daily
+  than EDITOR_RETENTION_DAYS (default 30) are deleted at the daily
   maintenance. Items a proposal or a draft cites are kept, so every
   sentence keeps its source; model usage is kept for accounting.
 """
@@ -48,7 +48,7 @@ ACCOUNT_TABLES = ("memberships", "sessions", "invites", "subscriptions", "paymen
 # Never exported: what would let someone act as the tenant.
 WITHHELD = {"access_tokens": {"token_sha256"}, "feeds": {"token"}, "secrets": {"ciphertext", "key_id"}}
 
-DEFAULT_RETENTION_DAYS = 365
+DEFAULT_RETENTION_DAYS = 30
 
 
 def _plain(value):

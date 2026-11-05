@@ -96,12 +96,12 @@ def cmd_tenant_plan(a):
     from .runtime import settings
     fields = {k: v for k, v in {
         "plan": a.plan, "max_sites": a.max_sites, "max_active_sources": a.max_sources,
-        "max_items_per_day": a.max_items_day, "max_llm_cost_month": a.max_cost_month,
+        "max_llm_cost_month": a.max_cost_month,
         "max_drafts_month": a.max_drafts_month, "max_languages": a.max_languages, "timezone": a.timezone, "briefing_hour": a.briefing_hour,
         "language": a.language, "core_token_env": a.core_token_env,
     }.items() if v is not None}
     if a.unlimited:
-        fields |= {"max_sites": None, "max_active_sources": None, "max_items_per_day": None,
+        fields |= {"max_sites": None, "max_active_sources": None,
                    "max_llm_cost_month": None, "max_drafts_month": None, "max_languages": None}
     if not fields:
         sys.exit("nothing to change")
@@ -376,7 +376,7 @@ def main(argv=None):
     sp = add("tenant-add", cmd_tenant_add, "create a tenant"); sp.add_argument("tenant"); sp.add_argument("--name")
     sp = add("tenant-plan", cmd_tenant_plan, "set a tenant's plan, limits and settings (owner connection)")
     sp.add_argument("tenant"); sp.add_argument("--plan"); sp.add_argument("--max-sites", type=int)
-    sp.add_argument("--max-sources", type=int); sp.add_argument("--max-items-day", type=int)
+    sp.add_argument("--max-sources", type=int)
     sp.add_argument("--max-cost-month", type=float); sp.add_argument("--max-drafts-month", type=int)
     sp.add_argument("--max-languages", type=int, help="languages per site, its own included")
     sp.add_argument("--timezone"); sp.add_argument("--briefing-hour", type=int); sp.add_argument("--language")

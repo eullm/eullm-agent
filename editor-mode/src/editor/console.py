@@ -45,7 +45,6 @@ class LimitsIn(BaseModel):
     """A missing field leaves the limit as it is; null removes it."""
     max_sites: int | None = Field(None, ge=0)
     max_active_sources: int | None = Field(None, ge=0)
-    max_items_per_day: int | None = Field(None, ge=0)
     max_llm_cost_month: float | None = Field(None, ge=0)
     max_drafts_month: int | None = Field(None, ge=0)
     max_languages: int | None = Field(None, ge=1)
@@ -693,7 +692,7 @@ def register(app, ctx) -> None:
 
     @app.post("/admin/newsrooms", response_class=HTMLResponse)
     def ui_create(request: Request, name: str = Form(...), owner_email: str = Form(""), plan: str = Form(""),
-                  max_sites: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
+                  max_sites: str = Form(""), max_active_sources: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
                   credits_month: str = Form(""), customer: str = Form(""), customer_mode: str = Form(""),
                   customer_id: str = Form(""), c_kind: str = Form("company"), c_name: str = Form(""),
@@ -714,7 +713,7 @@ def register(app, ctx) -> None:
         mode = customer_mode.strip() or ("existing" if customer_id.strip().isdigit()
                                          else "new" if c_name.strip() or c_email.strip() else "none")
         form = {"name": name, "owner_email": owner_email, "plan": plan, "max_sites": max_sites,
-                "max_active_sources": max_active_sources, "max_items_per_day": max_items_per_day,
+                "max_active_sources": max_active_sources,
                 "max_llm_cost_month": max_llm_cost_month, "max_drafts_month": max_drafts_month,
                 "max_languages": max_languages, "credits_month": credits_month, "customer_mode": mode,
                 "customer_id": customer_id.strip(), "c_reseller": c_reseller.strip(),
@@ -724,7 +723,6 @@ def register(app, ctx) -> None:
             return page(request, s, status, view="nuova", error=error, form={**form, **more.pop("form", {})}, **more)
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
-                      "max_items_per_day": _num(max_items_per_day),
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
                       "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
                       "credits_month": _num(credits_month)}
@@ -789,12 +787,11 @@ def register(app, ctx) -> None:
 
     @app.post("/admin/newsrooms/{tenant_id}")
     def ui_update(tenant_id: str, name: str = Form(""), plan: str = Form(""), max_sites: str = Form(""),
-                  max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
+                  max_active_sources: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
                   credits_month: str = Form(""), s=Depends(need_console)):
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
-                      "max_items_per_day": _num(max_items_per_day),
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
                       "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
                       "credits_month": _num(credits_month)}

@@ -48,7 +48,7 @@ STATUS_LABELS = {
 }
 CUSTOMER_FIELDS = ("kind", "name", "email", "phone", "vat_number", "tax_code", "address", "postal_code", "city",
                    "province", "country", "sdi_code", "pec")
-PLAN_LIMITS = ("max_sites", "max_active_sources", "max_items_per_day", "max_drafts_month", "max_llm_cost_month",
+PLAN_LIMITS = ("max_sites", "max_active_sources", "max_drafts_month", "max_llm_cost_month",
                "max_languages", "credits_month")
 
 
@@ -103,7 +103,7 @@ def save_plan(admin, code: str, fields: dict) -> None:
     shown on the public site or not). Newsrooms already on it keep their
     limits until their plan is applied again (the next payment)."""
     allowed = {"name", "description", "price_month_cents", "price_year_cents", "trial_days", "max_sites",
-               "max_languages", "max_active_sources", "max_items_per_day", "max_drafts_month", "max_llm_cost_month",
+               "max_languages", "max_active_sources", "max_drafts_month", "max_llm_cost_month",
                "public", "sort", "autopilot", "credits_month"}
     values = {k: v for k, v in fields.items() if k in allowed}
     for k, v in values.items():

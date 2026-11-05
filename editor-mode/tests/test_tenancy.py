@@ -122,8 +122,8 @@ def test_tenant_cannot_change_its_plan(db, tenant):
             s.execute(text("INSERT INTO editor.tenants (tenant_id, name, max_sites) VALUES (:t, 'x', 99)"), {"t": tenant + "x"})
 
 
-def test_site_and_item_limits(db, tenant):
-    set_plan(db, tenant, max_sites=1, max_items_per_day=3)
+def test_site_limit_and_no_limit_on_news(db, tenant):
+    set_plan(db, tenant, max_sites=1)
     with db.tenant(tenant) as s:
         repo.ensure_site(s, tenant, "a.example", "A")
         repo.ensure_site(s, tenant, "a.example", "A again")  # same site: fine
@@ -133,13 +133,12 @@ def test_site_and_item_limits(db, tenant):
     with db.tenant(tenant) as s:
         sid = repo.upsert_source(s, tenant, kind="rss", name="x", url="https://x.example/f")
     rep = feed(db, tenant, sid, [Item(url=f"https://x.example/{i}", title=f"Titolo numero {i} diverso {i * 7}") for i in range(5)])
-    # The shared archive reads for every newsroom, so one newsroom's limit
-    # does not stop it; a newsroom that is its own archive (SQLite) stops.
-    stored = 3 if db.sqlite else 5
-    assert (rep.new, rep.over_quota) == (stored, 5 - stored)
+    # The archive reads once for every newsroom: the news of the day is a
+    # number to read, never a limit (0.28.44), on the server and on SQLite.
+    assert rep.new == 5
     with db.tenant(tenant) as s:
         u = quotas.usage(s)
-    assert u.used["items_today"] == stored and u.remaining("items") == 0
+    assert u.used["items_today"] == 5 and "items" not in quotas.LIMITS
 
 
 def test_model_budget_stops_calls_before_they_reach_the_core(db, tenant):

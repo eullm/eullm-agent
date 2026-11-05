@@ -52,7 +52,6 @@ TARGET_KINDS = {"wordpress": "WordPress", "github": N_("GitHub (repo del sito)")
 QUOTA_LABELS = {
     "sites": N_("Siti"),
     "sources": N_("Fonti attive"),
-    "items": N_("Notizie oggi"),
     "drafts": N_("Articoli del mese"),
     "llm_cost": N_("Costo modello nel mese"),
 }
@@ -669,7 +668,7 @@ def register(app, ctx) -> None:
             out += [box(t("Articoli del mese"), u.get("drafts_month", 0), pl.get("max_drafts_month")),
                     box(t("Fonti attive"), u.get("active_sources", 0), pl.get("max_active_sources")),
                     box(t("Siti"), u.get("sites", 0), pl.get("max_sites")),
-                    box(t("Notizie lette oggi"), u.get("items_today", 0), pl.get("max_items_per_day"))]
+                    ]
         if credit and credit.get("enabled"):
             out.append(box(t("Crediti del mese"), credit["month_used"], credit["month"]))
         return [x for x in out if x]
@@ -2197,8 +2196,7 @@ def register(app, ctx) -> None:
             return render(request, "plan.html.j2", c, s, "plan", usage=usage, cr=cr, moves=moves,
                           credit_prices=credits.prices(s), free_redraws=credits.FREE_REDRAWS,
                           packs=credits.packs(admin, active_only=True, s=s) if cr["enabled"] else [],
-                          meters=[x for x in meters_of(usage, money=c.operator)
-                                  if c.operator or x["label"] != QUOTA_LABELS["items"]],
+                          meters=meters_of(usage, money=c.operator),
                           room=room, me_email=email,
                           plans=billing.plans(admin, public_only=True), money=billing.money,
                           online=ctx.gateway is not None)

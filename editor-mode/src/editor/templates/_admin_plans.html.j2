@@ -23,7 +23,7 @@
     <tr><td>{{ label }}</td>{% for p in plans %}<td class="num">{{ money(p[key], p.currency) if p[key] is not none else '–' }}</td>{% endfor %}</tr>
     {% endfor %}
     <tr><td>{{ _('Giorni di prova') }}</td>{% for p in plans %}<td class="num">{{ p.trial_days or '–' }}</td>{% endfor %}</tr>
-    {% for label, key in [(_('Siti'), 'max_sites'), (_('Lingue per sito'), 'max_languages'), (_('Fonti attive'), 'max_active_sources'), (_('Notizie al giorno'), 'max_items_per_day'), (_('Articoli al mese'), 'max_drafts_month'), (_('Crediti al mese'), 'credits_month')] %}
+    {% for label, key in [(_('Siti'), 'max_sites'), (_('Lingue per sito'), 'max_languages'), (_('Fonti attive'), 'max_active_sources'), (_('Articoli al mese'), 'max_drafts_month'), (_('Crediti al mese'), 'credits_month')] %}
     <tr><td>{{ label }}</td>{% for p in plans %}<td class="num">{{ p[key] if p[key] is not none else unlimited }}</td>{% endfor %}</tr>
     {% endfor %}
     <tr><td>{{ _('Redazione automatica') }}</td>{% for p in plans %}<td class="num">{{ _('Sì') if p.autopilot is not false else _('No') }}</td>{% endfor %}</tr>
@@ -84,7 +84,6 @@
         <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" value="{{ p.max_sites if p.max_sites is not none else '' }}"></label>
         <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" value="{{ p.max_languages if p.max_languages is not none else '' }}"></label>
         <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" value="{{ p.max_active_sources if p.max_active_sources is not none else '' }}"></label>
-        <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ p.max_items_per_day if p.max_items_per_day is not none else '' }}"></label>
         <label class="field">{{ _('Articoli al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ p.max_drafts_month if p.max_drafts_month is not none else '' }}"></label>
         <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ p.credits_month if p.credits_month is not none else '' }}"></label>
         <label class="field">{{ _('Redazione automatica') }}<select name="autopilot"><option value="1" {% if p.autopilot is not false %}selected{% endif %}>{{ _('Sì') }}</option><option value="0" {% if p.autopilot is false %}selected{% endif %}>{{ _('No') }}</option></select></label>

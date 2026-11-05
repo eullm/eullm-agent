@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.28.44
+
+### Removed
+
+- **Il limite di notizie lette al giorno**. L'archivio delle notizie è uno per
+  tutto il server e legge ogni fonte una volta sola per tutte le redazioni,
+  anche quelle aggiunte da una redazione: sul server il limite non fermava
+  niente ed era solo un numero nel Desk. Tolto dai piani, dalla scheda della
+  redazione, dalla nuova redazione, dall'API dei rivenditori (il campo
+  `max_items_per_day` viene ignorato) e dal comando `tenant-plan`
+  (`--max-items-day`). Il Desk mostra ancora quante notizie sono arrivate oggi
+  dalle fonti seguite, come informazione. Il limite che conta resta il numero
+  di fonti attive.
+
+### Changed
+
+- **L'archivio tiene le notizie 30 giorni invece di 365**
+  (`EDITOR_RETENTION_DAYS`, `0` tiene tutto). Il sistema usa al massimo
+  gli ultimi 14 giorni (doppioni della stessa notizia da altre testate);
+  proposte, trend e temi guardano 2-7 giorni. Le notizie citate da una
+  proposta o da un articolo restano per sempre, così ogni frase pubblicata
+  conserva la sua fonte.
+
 ## 0.28.43
 
 ### Changed
