@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.29.0
+
+### Fixed
+
+- **La redazione automatica non si ferma più a metà giornata** (Francesco:
+  20 articoli al giorno, 9 pubblicati fino alle 13, poi più niente). Il sito
+  chiedeva almeno 2 testate sullo stesso fatto, ma dalle 13 tutte le 167
+  proposte risultavano da una sola testata, quindi ogni ora non ne passava
+  nessuna. Ora le testate sono una preferenza, non un blocco ("se non c'è la
+  seconda testata va fatto comunque"): passano prima le notizie confermate
+  da più testate, poi le migliori delle altre, e il caporedattore AI le
+  rilegge come tutte. L'articolo cita tante testate quante la notizia ne ha.
+  Il giro legge fino a 250 proposte, non più le prime 80. Il campo in Sito e
+  profilo si chiama "Testate sullo stesso fatto".
+- **Lo stesso fatto in qualsiasi lingua.** Il controllo confrontava le
+  parole dei titoli: un titolo italiano non trovava mai la stessa notizia
+  raccontata in inglese da BBC o Guardian. Adesso le notizie che hanno in
+  comune nomi e numeri vengono mostrate al modello, che con una chiamata per
+  giro conferma quali raccontano lo stesso fatto. Ogni proposta viene
+  controllata una volta sola.
+- **Hacker News e Reddit.** Entrano nella base comune le storie di HN sopra
+  i 100 punti e i post più votati del giorno di tre gruppi di subreddit
+  (mondo, tecnologia e AI, scienza ed economia), letti con una richiesta per
+  gruppo perché Reddit limita le richieste. Nella ricerca delle fonti, HN e
+  Reddit non vengono più scartati perché "ripetono" notizie già note: è
+  proprio l'hype che misurano.
+- **WordPress senza permalink "belli".** Dove `/wp-json/` risponde 404
+  (permalink semplici, o un server che non legge il `.htaccess`, come
+  wp.aitoday.it), il collegamento e la pubblicazione passano da soli a
+  `?rest_route=`. Prima il controllo dell'utente falliva con "WordPress ha
+  risposto con un errore (404)". Sotto "Utente WordPress" la pagina dice che
+  serve lo username di wp-admin, non il nome dato alla password, e il
+  messaggio di accesso rifiutato indica la riga del `.htaccess` per i server
+  che non passano l'accesso a WordPress.
+- **Collegare WordPress, passo per passo.** La pagina del collegamento (e
+  la guida per i clienti) va in quattro passi: permalink «Nome articolo»,
+  un utente solo per Redazia con ruolo Editore (perché è più sicuro
+  dell'amministratore e cosa può fare), la password applicativa con i nomi
+  esatti dei menu di WordPress, la prova con lo username giusto e la riga
+  del `.htaccess` se l'accesso viene rifiutato.
+- **Sito WordPress nuovo, senza articoli.** Il collegamento conta gli
+  articoli già pubblicati: se non ce n'è nessuno l'analisi non parte (non
+  troverebbe nulla) e la pagina porta a "Scrivi il contesto", da cui si crea
+  il profilo.
+- **Le categorie le crea Redazia.** Se su WordPress manca la categoria della
+  rubrica di un articolo, alla pubblicazione Redazia la cerca per nome e, se
+  non c'è, la crea. Non serve più prepararle prima.
+- **Gli articoli persi vengono sostituiti.** Un articolo il cui lavoro è
+  finito in errore prima della bozza, o una bozza rimasta a metà e mai
+  approvata (con "tutto automatico"), non conta più tra quelli fatti: al
+  giro dopo ne viene scritto un altro.
+- **Niente più passaggi "in corso" da giorni.** Un passaggio interrotto da
+  un riavvio si chiude da solo quando ne parte uno uguale.
+- **Conservazione di 30 giorni anche nel compose del server.** Il valore
+  predefinito era ancora 365. Su un server già installato aggiungere
+  `EDITOR_RETENTION_DAYS=30` al file `.env`.
+
 ## 0.28.46
 
 ### Fixed

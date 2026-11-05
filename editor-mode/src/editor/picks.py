@@ -194,8 +194,9 @@ def _prompt(profile: dict, cands: list[Candidate], learned: list[str] | None = N
 
 
 def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = None,
-         now: datetime | None = None) -> list[int]:
-    """Up to `n` proposals from single news items; returns their ids."""
+         now: datetime | None = None, outlets: int = 0) -> list[int]:
+    """Up to `n` proposals from single news items; returns their ids. With
+    `outlets`, news told by at least that many outlets come first."""
     if n <= 0:
         return []
     now = now or datetime.now(UTC)
@@ -205,6 +206,14 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
         if prof is None:
             return []
         cands = candidates(s, site_id, prof.body, now)
+        told: dict[int, int] = {}
+        if outlets > 1:
+            # For the automatic newsroom, the news more outlets tell come first; the others
+            # follow, so that a day of single stories still has its articles.
+            from .drafts import outlets as count
+
+            told = {c.item_id: count(s, [c.item_id], c.title, outlets) for c in cands[:SHOWN * 2]}
+            cands = sorted(cands[:SHOWN * 2], key=lambda c: told[c.item_id] < outlets) + cands[SHOWN * 2:]
         from .proposals import lessons
         learned = lessons(s, site_id)
     if not cands:
@@ -245,7 +254,7 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
                 title=o["title"], angle=o["angle"], why_now=o["why_now"], format=o["format"],
                 generated_by="model" if by == "model" else "heuristic",
                 basis={"kind": "news", "picked_by": by, "score": c.score, "matched": c.matched,
-                       "sources": c.sources, "followed": c.followed},
+                       "sources": c.sources, "followed": c.followed} | ({"outlets": told.get(c.item_id, 1)} if outlets > 1 else {}),
             ).returning(m.proposals.c.id)).scalar_one()
             s.execute(insert(m.proposal_citations).values(
                 [{"tenant_id": tenant_id, "proposal_id": pid, "item_id": i} for i in cites]))

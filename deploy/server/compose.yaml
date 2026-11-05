@@ -33,7 +33,7 @@ x-editor-env: &editor-env
   EDITOR_GSC_KEY: ${EDITOR_GSC_KEY:-}
   EDITOR_WORKER_CONCURRENCY: ${EDITOR_WORKER_CONCURRENCY:-4}
   EDITOR_SECRET_KEY: ${EDITOR_SECRET_KEY:-}
-  EDITOR_RETENTION_DAYS: ${EDITOR_RETENTION_DAYS:-365}
+  EDITOR_RETENTION_DAYS: ${EDITOR_RETENTION_DAYS:-30}
   # Updates from the console: the folder shared with update.sh (README.md).
   EDITOR_UPDATES_DIR: /var/lib/editor/updates
 

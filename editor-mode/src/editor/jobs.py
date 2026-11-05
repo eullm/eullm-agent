@@ -30,6 +30,13 @@ def track(db, tenant_id: str, kind: str, subject: str | None = None, reraise: bo
     """Record a job around the block. Errors are recorded and logged; they
     propagate only with ``reraise``."""
     with db.tenant(tenant_id) as s:
+        # A step cut short by a restart never recorded its end: closed here, so it does not
+        # stay "running" for ever (the server had collections "running" since days).
+        j = m.jobs.c
+        s.execute(update(m.jobs).where(
+            j.kind == kind, j.status == "running", j.heartbeat_at.is_(None),
+            j.started_at < datetime.now(UTC) - STALE_AFTER).values(
+            status="failed", error="interrupted: no result after two hours", finished_at=datetime.now(UTC)))
         job_id = s.execute(insert(m.jobs).values(tenant_id=tenant_id, kind=kind, subject=subject)
                            .returning(m.jobs.c.id)).scalar_one()
     try:

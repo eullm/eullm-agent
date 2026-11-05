@@ -79,7 +79,8 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
     """Try a WordPress site with the application password of `user`.
 
     Returns {base, name, user, can_publish, can_upload, categories: [{id,
-    name, slug, count}], sections: [names worth filling]}; raises ConnectError.
+    name, slug, count}], sections: [names worth filling], posts: published
+    articles or None}; raises ConnectError.
     """
     base = wordpress_base(address)
     user, password = (user or "").strip(), (password or "").strip()
@@ -93,9 +94,16 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
     http = http or publishing.pinned_client(resolver)
     try:
         auth = (user, password)
-        root = _get(http, f"{base}/wp-json/", base, resolver)
-        if root.status_code == 404:
-            root = _get(http, f"{base}/?rest_route=/", base, resolver)
+        # Without pretty permalinks (or with a server that ignores .htaccess) /wp-json/ is a 404:
+        # every call then goes by ?rest_route= (wp.aitoday.it, 2026-11-05).
+        root = _get(http, publishing.wp_url(base, ""), base, resolver)
+        plain = publishing.not_rest(root)
+        if plain:
+            root = _get(http, publishing.wp_url(base, "", plain=True), base, resolver)
+
+        def api(route: str, query: str = "", **kw) -> httpx.Response:
+            return _get(http, publishing.wp_url(base, route, query, plain=plain), base, resolver, **kw)
+
         info = {}
         if root.status_code == 200:
             try:
@@ -104,7 +112,7 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
                 info = {}
         if root.status_code != 200 or not isinstance(info, dict) or "namespaces" not in info:
             raise ConnectError("not_wordpress", status=root.status_code)
-        me = _get(http, f"{base}/wp-json/wp/v2/users/me?context=edit", base, resolver, auth=auth)
+        me = api("wp/v2/users/me", "context=edit", auth=auth)
         if me.status_code in (401, 403):
             raise ConnectError("auth", status=me.status_code)
         if me.status_code >= 400:
@@ -117,8 +125,8 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
             raise ConnectError("role", roles=who.get("roles") or [])
         categories = []
         for page in (1, 2, 3):
-            r = _get(http, f"{base}/wp-json/wp/v2/categories?per_page=100&page={page}&orderby=count&order=desc"
-                           "&hide_empty=false&_fields=id,name,slug,count,parent", base, resolver, auth=auth)
+            r = api("wp/v2/categories", f"per_page=100&page={page}&orderby=count&order=desc"
+                    "&hide_empty=false&_fields=id,name,slug,count,parent", auth=auth)
             if r.status_code >= 400:
                 break
             rows = r.json()
@@ -130,11 +138,16 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
             if len(rows) < 100:
                 break
         sections = [c["name"] for c in categories if c["slug"] not in DEFAULT_CATEGORIES][:30]
+        # How many articles there are to read: a new site has none, and its analysis would find nothing.
+        posts = None
+        r = api("wp/v2/posts", "per_page=1&_fields=id")
+        if r.status_code == 200 and r.headers.get("x-wp-total", "").isdigit():
+            posts = int(r.headers["x-wp-total"])
         return {"base": base, "name": html.unescape(str(info.get("name") or "")).strip(),
                 "description": html.unescape(str(info.get("description") or "")).strip(),
                 "user": user, "display_name": who.get("name") or user,
                 "can_publish": can_publish if caps else True, "can_upload": can_upload if caps else True,
-                "categories": categories, "sections": sections}
+                "categories": categories, "sections": sections, "posts": posts}
     finally:
         if own:
             http.close()

@@ -29,17 +29,61 @@ traduzione di un articolo va da sola alla destinazione della sua lingua.
 
 ## WordPress
 
-1. In WordPress crea un utente con ruolo **Autore** (può pubblicare e
-   caricare immagini). Non usare l'amministratore.
-2. Nel profilo di quell'utente, sotto **Password per le applicazioni**,
-   crea una password chiamata "Redazia" e copiala.
-3. In Redazia › Pubblicazioni aggiungi una destinazione WordPress con
-   l'indirizzo del sito (`https://tuosito.it`), il nome utente e la
-   password.
+Il percorso guidato (**Primi passi › Collega il sito › WordPress**) mostra
+gli stessi quattro passi.
 
-Il sito deve rispondere su `https://tuosito.it/wp-json/` (è attivo di
-serie; alcuni plugin di sicurezza lo chiudono: va lasciato aperto per
-quell'utente). Redazia invia titolo, testo, riassunto, slug e immagine di
+**1 · I permalink.** In wp-admin › **Impostazioni › Permalink** scegli
+**Nome articolo** e salva. Redazia parla con WordPress attraverso
+`https://tuosito.it/wp-json/`, che con i permalink semplici, o su server che
+non leggono il `.htaccess`, risponde 404. Redazia se ne accorge e passa da
+sola all'indirizzo di riserva `?rest_route=`, ma con «Nome articolo» anche
+gli articoli hanno indirizzi leggibili, che piacciono di più a Google.
+
+**2 · Un utente solo per Redazia (consigliato).** In **Utenti › Aggiungi
+nuovo utente** crea per esempio `redazia`, con un'email tua e ruolo
+**Editore**. È più sicuro dell'amministratore: l'Editore pubblica articoli,
+carica immagini e crea categorie, ma non può installare plugin, cambiare
+tema o impostazioni, né toccare gli altri utenti. Se un giorno la password
+uscisse, il danno resta negli articoli, e con un utente a parte vedi subito
+cosa ha scritto Redazia e puoi spegnerla da sola togliendo la sua password.
+L'**Autore** non basta se vuoi che Redazia crei le rubriche: non può creare
+categorie. Funziona anche con l'amministratore, ma non serve.
+
+**3 · La password applicativa.** Entra in WordPress con l'utente del passo
+2, apri **Utenti › Profilo**, scorri fino a **Password delle applicazioni**,
+scrivi un nome (per esempio "Redazia") e premi **Aggiungi la password
+dell'applicazione**. Copia la password che compare: WordPress la mostra una
+volta sola. Non è la password con cui entri in wp-admin. Il sito deve
+essere in HTTPS, altrimenti WordPress non mostra la sezione.
+
+**4 · Prova il collegamento.** In Redazia scrivi l'indirizzo del sito, lo
+**username** dell'utente del passo 2 (quello con cui entri in wp-admin,
+**non** il nome dato alla password, errore frequente) e la password
+applicativa. Redazia prova davvero: accesso, permessi, categorie e articoli
+già pubblicati. Se l'accesso viene rifiutato con la password giusta, il
+server non passa l'intestazione di accesso a WordPress: aggiungi al
+`.htaccess`, sopra le regole di WordPress:
+
+```
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+```
+
+Alcuni plugin di sicurezza chiudono `/wp-json/`: va lasciato aperto per
+l'utente di Redazia.
+
+**Sito nuovo, senza articoli.** Se il sito non ha ancora articoli non c'è
+niente da analizzare: dopo il collegamento Redazia ti porta a **Sito e
+profilo › Redazione automatica**, dove scrivi il contesto (di cosa parla il
+sito, per chi, con che tono, quali rubriche) e premi **Crea il profilo dal
+contesto**. Da lì il profilo nasce come per gli altri siti.
+
+**Le categorie.** Non devi crearle prima. Se WordPress ne ha già, diventano
+le rubriche di Redazia; altrimenti le rubriche le decidi in Redazia (o le
+ricava l'analisi) e alla prima uscita di ogni rubrica Redazia crea su
+WordPress la categoria con lo stesso nome, o usa quella che esiste già con
+quel nome. Serve il ruolo Editore o Amministratore.
+
+Redazia invia titolo, testo, riassunto, slug, categoria e immagine di
 copertina come immagine in evidenza. Con l'opzione `jsonld` aggiunge i dati
 strutturati per Google, utile se non usi già Yoast o Rank Math.
 

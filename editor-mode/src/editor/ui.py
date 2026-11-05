@@ -806,7 +806,8 @@ def register(app, ctx) -> None:
                     m.publications.c.status == "published", m.publications.c.withdrawn_at.is_(None))).all())
                 cfg = autopilot.settings_of(body)
                 auto_cards.append({"site": x, "cfg": cfg, "day": day, "urls": urls,
-                                   "kept": autopilot.made_since(s, x.id, start_of_day(s))[0],
+                                   "kept": autopilot.made_since(s, x.id, start_of_day(s),
+                                                                fix=cfg["on_problem"] == "fix")[0],
                                    "last": auto_last((body.get("settings") or {})),
                                    "left_out": (auto_last((body.get("settings") or {})) or {}).get("left_out", 0)
                                    if (auto_last((body.get("settings") or {})) or {}).get("done") else 0})
@@ -1195,7 +1196,7 @@ def register(app, ctx) -> None:
             "redirect": t("Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser)."),
             "credentials_missing": t("Mancano le credenziali: compila tutti i campi."),
             "not_wordpress": t("A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.", status=i.get("status", "")),
-            "auth": t("WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata."),
+            "auth": t("WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo username dell'utente per cui l'hai creata, non il nome dato alla password. Se sono giusti, il server non passa l'accesso a WordPress: nel .htaccess del sito serve SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1."),
             "rest": t("WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.", status=i.get("status", "")),
             "role": t("Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.", roles=", ".join(i.get("roles") or []) or "?"),
             "repo_name": t("Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub."),
@@ -1296,10 +1297,13 @@ def register(app, ctx) -> None:
             return again(e)
         except (vault.VaultError, publishing.PublishError) as e:
             return again(t("Collegamento non salvato: {e}.", e=e))
-        started = start_analysis_once(c.tenant_id, site_id, site.domain)
+        # A WordPress with no articles yet: its analysis would read nothing, the profile starts
+        # from what the owner writes (Francesco 2026-11-05, wp.aitoday.it).
+        empty = kind == "wordpress" and found.get("posts") == 0
+        started = False if empty else start_analysis_once(c.tenant_id, site_id, site.domain)
         with db.tenant(c.tenant_id) as s:
             return connect_page(request, c, s, sites, site, kind=kind, host=host,
-                                result={"kind": kind, "found": found, "started": started})
+                                result={"kind": kind, "found": found, "started": started, "empty": empty})
 
     @app.post("/ui/sites/{site_id}/review")
     def ui_review(site_id: int, back: str = "/site", c: auth.Caller = Depends(ctx.need("owner"))):

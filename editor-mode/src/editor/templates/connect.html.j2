@@ -41,7 +41,7 @@
   <p>{% for c in f.categories %}<span class="chip">{{ c.name }}{% if c.count %} · {{ c.count }}{% endif %}</span> {% endfor %}</p>
   <p class="hint">{{ _('Sono le rubriche che la redazione riempie: la rubrica di ogni articolo diventa la categoria del post. Le modifichi in Sito e profilo › Redazione automatica.') }}</p>
   {% else %}
-  <p class="hint">{{ _('Il sito ha solo la categoria predefinita: le rubriche le ricava la redazione dall\'analisi.') }}</p>
+  <p class="hint">{{ _('Il sito ha solo la categoria predefinita: le rubriche le decidi in Redazia (o le ricava l\'analisi) e la redazione crea su WordPress la categoria di ciascuna quando esce il suo primo articolo.') }}</p>
   {% endif %}
   {% elif result.kind == 'github' %}
   <div class="list-row"><span>{{ _('Repository') }}</span><span>{{ f.repo }} <small class="hint">{{ _('ramo {branch}', branch=f.branch) }}{% if f.private %} · {{ _('privato') }}{% endif %}</small></span></div>
@@ -61,12 +61,15 @@
 </section>
 <section class="card pad">
   <h2>{{ _('E adesso') }}</h2>
-  {% if result.started %}
+  {% if result.empty %}
+  <p>{{ _('Il sito non ha ancora articoli: un\'analisi non troverebbe niente da leggere. Scrivi tu di cosa parla, per chi e con quali rubriche: il profilo si ricava da lì, e le rubriche diventano categorie di WordPress quando esce il primo articolo di ciascuna.') }}</p>
+  <p><a class="btn pri" href="/site?tab=auto">{{ _('Scrivi il contesto') }}</a> <a class="btn" href="/start">{{ _('Primi passi') }}</a></p>
+  {% elif result.started %}
   <p>{{ _('L\'analisi di {domain} è partita: la redazione legge il sito, ne ricava settore, pubblico e tono, e tiene conto di quanto ho trovato. La segui passo per passo nel riquadro Attività.', domain=site.domain) }}</p>
   {% else %}
   <p>{{ _('{domain} era già stato analizzato: il collegamento è pronto per la prossima pubblicazione.', domain=site.domain) }}</p>
   {% endif %}
-  <p><a class="btn pri" href="/start">{{ _('Continua con i primi passi') }}</a></p>
+  {% if not result.empty %}<p><a class="btn pri" href="/start">{{ _('Continua con i primi passi') }}</a></p>{% endif %}
 </section>
 
 {% elif not kind %}
@@ -99,28 +102,46 @@
 
 {% elif kind == 'wordpress' %}
 <section class="card pad">
-  <h2>{{ _('1 · La password applicativa') }}</h2>
+  <h2>{{ _('1 · I permalink') }}</h2>
+  <ol class="how">
+    <li>{{ _('Entra in wp-admin e apri Impostazioni › Permalink.') }}</li>
+    <li>{{ _('Scegli «Nome articolo» (va bene qualsiasi struttura tranne «Semplice») e premi «Salva le modifiche».') }}</li>
+  </ol>
+  <p class="hint">{{ _('Servono per indirizzi degli articoli leggibili, che contano anche per Google. Con «Semplice» la redazione pubblica lo stesso.') }}</p>
+</section>
+<section class="card pad">
+  <h2>{{ _('2 · Un utente solo per Redazia') }}</h2>
+  <p class="hint">{{ _('Consigliato: con il ruolo Editore la redazione pubblica, carica le copertine e crea le categorie delle rubriche, ma non può installare plugin, cambiare le impostazioni del sito o toccare gli altri utenti.') }}</p>
+  <ol class="how">
+    <li>{{ _('Apri Utenti › Aggiungi nuovo utente.') }}</li>
+    <li>{{ _('Nome utente: redazia (o quello che preferisci); un indirizzo email che leggi; ruolo: Editore. Premi «Aggiungi nuovo utente».') }}</li>
+    <li>{{ _('Esci ed entra con il nuovo utente, oppure da amministratore apri il suo profilo in Utenti › Tutti gli utenti.') }}</li>
+  </ol>
+  <p class="hint">{{ _('Puoi usare anche il tuo utente amministratore: funziona, ma la chiave che crei al passo 3 avrebbe tutti i tuoi permessi.') }}</p>
+</section>
+<section class="card pad">
+  <h2>{{ _('3 · La password applicativa') }}</h2>
   <p class="hint">{{ _('Non è la password con cui entri: è una chiave a parte, che puoi revocare in qualsiasi momento senza cambiare la tua.') }}</p>
   <ol class="how">
-    <li>{{ _('Entra nell\'area di amministrazione del sito come l\'utente che pubblicherà gli articoli (Editor o Amministratore).') }}</li>
-    <li>{{ _('Apri Utenti › Profilo e scendi fino a «Password applicazioni».') }}</li>
-    <li>{{ _('Scrivi un nome, per esempio Redazia, e premi «Aggiungi nuova password applicazione».') }}</li>
+    <li>{{ _('Nel profilo dell\'utente del passo 2 scendi fino a «Password delle applicazioni».') }}</li>
+    <li>{{ _('Scrivi un nome, per esempio Redazia, e premi «Aggiungi la password dell\'applicazione».') }}</li>
     <li>{{ _('Copia la password che compare (24 caratteri, con gli spazi): WordPress la mostra una volta sola.') }}</li>
   </ol>
   <p class="hint">{{ _('Non vedi la sezione? Serve WordPress 5.6 o successivo e il sito in https; alcuni plugin di sicurezza la nascondono.') }}</p>
 </section>
 <section class="card pad">
-  <h2>{{ _('2 · Provo il collegamento') }}</h2>
+  <h2>{{ _('4 · Provo il collegamento') }}</h2>
   <form method="post" action="/ui/connect/{{ site.id }}/check" class="target-form">
     <input type="hidden" name="kind" value="wordpress">
     <div class="cols">
       <label class="field">{{ _('Indirizzo del sito') }}<input name="address" value="{{ form.address or ('https://' ~ site.domain) }}" required placeholder="https://esempio.it"></label>
-      <label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ form.user or '' }}" autocomplete="off" required></label>
+      <label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ form.user or '' }}" autocomplete="off" required><span class="hint">{{ _('lo username dell\'utente del passo 2, non il nome dato alla password') }}</span></label>
       <label class="field">{{ _('Password applicativa') }}<input name="secret" type="password" autocomplete="new-password" required></label>
     </div>
     <div class="row"><button class="btn pri" type="submit">{{ _('Verifica e collega') }}</button> <a class="btn" href="/connect">{{ _('Indietro') }}</a></div>
   </form>
   <p class="hint">{{ _('Provo l\'accesso, vedo se l\'utente può pubblicare e caricare immagini e scarico le categorie. La password viene salvata cifrata e non è più mostrata.') }}</p>
+  <p class="hint">{{ _('Accesso rifiutato con username e password giusti? Alcuni server non passano l\'accesso a WordPress: aggiungi in cima al file .htaccess del sito la riga') }} <code>SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1</code></p>
 </section>
 
 {% elif kind == 'github' %}

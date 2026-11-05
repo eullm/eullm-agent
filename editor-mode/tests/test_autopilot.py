@@ -55,6 +55,60 @@ def test_settings_and_guardrails():
     assert lines == ["Newsroom brief: Notizie dal mondo", "Never write about: calcio"]
 
 
+def test_news_one_outlet_tells_still_make_the_day(db, tenant, monkeypatch):
+    """Francesco 2026-11-05: "se non c'è la seconda testata va fatto
+    comunque una scrematura e la pubblicazione". With no news told by the
+    outlets the site asks for, the best of the others are taken."""
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=1, min_sources=3)
+    monkeypatch.setattr(ap, "source_count", lambda s, pid, need=0: 1)
+    now = datetime(2026, 10, 28, 11, tzinfo=UTC)
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": now})
+    queued = []
+    assert ap.run(db, tenant, site_id, None, now, "Europe/Rome", queued.append)["accepted"] == queued and queued
+
+
+def test_articles_lost_on_the_way_are_replaced(db, tenant):
+    """Francesco 2026-11-05: 20 a day, 9 published by 13:00, then nothing.
+    An article whose job failed before any draft, or a draft no job works
+    on any more that nobody approved, does not count as made: another
+    article takes its place. With a person to decide ("hold") a draft
+    waiting for them still counts."""
+    from editor import queue
+
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    since = datetime(2026, 10, 27, 23, tzinfo=UTC)
+    with db.tenant(tenant) as s:
+        first = s.execute(select(m.proposals).order_by(m.proposals.c.id).limit(1)).one()
+        s.execute(insert(m.proposals).values(tenant_id=tenant, site_id=site_id, topic_id=first.topic_id,
+                                             profile_id=first.profile_id, opportunity=50, title="y",
+                                             generated_by="model", status="proposed"))
+        ids = list(s.execute(select(m.proposals.c.id).order_by(m.proposals.c.id).limit(2)).scalars())
+        s.execute(update(m.proposals).where(m.proposals.c.id.in_(ids)).values(
+            status="accepted", decided_by=ap.AUTO, created_at=datetime(2026, 10, 28, 8, tzinfo=UTC)))
+    jobs = {pid: queue.enqueue(db, tenant, "auto", f"proposal {pid}", {"proposal_id": pid}) for pid in ids}
+    with db.tenant(tenant) as s:
+        assert ap.made_since(s, site_id, since, fix=True) == (2, 2)
+        # The first fails before writing: lost, still tried.
+        s.execute(update(m.jobs).where(m.jobs.c.id == jobs[ids[0]]).values(status="failed"))
+        assert ap.made_since(s, site_id, since, fix=True) == (1, 2)
+        # The second is written, then the job ends without approving it.
+        s.execute(update(m.proposals).where(m.proposals.c.id == ids[1]).values(status="drafted"))
+        s.execute(insert(m.drafts).values(tenant_id=tenant, proposal_id=ids[1], site_id=site_id, version=1,
+                                          title="x", body_md="x", status="draft", generated_by="model",
+                                          created_at=datetime(2026, 10, 28, 8, tzinfo=UTC)))
+        assert ap.made_since(s, site_id, since, fix=True) == (1, 2)  # its job still runs
+        s.execute(update(m.jobs).where(m.jobs.c.id == jobs[ids[1]]).values(status="done"))
+        assert ap.made_since(s, site_id, since, fix=True) == (0, 2)
+        assert ap.made_since(s, site_id, since) == (1, 2)  # held for a person: it counts
+        s.execute(update(m.drafts).where(m.drafts.c.proposal_id == ids[1]).values(
+            status="approved", decided_by=ap.AUTO, decided_at=datetime(2026, 10, 28, 9, tzinfo=UTC)))
+        assert ap.made_since(s, site_id, since, fix=True) == (1, 2)
+
+
 def test_each_hour_takes_its_share_of_the_day(db, tenant):
     site_id = setup_site(db, tenant)
     props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
@@ -203,13 +257,14 @@ def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch
         s.execute(text("UPDATE editor.proposals SET decided_by = :a"), {"a": ap.AUTO})
         day = ap.today(s, site_id, datetime(2000, 1, 1, tzinfo=UTC))
     assert day["held"] == 1 and len(sent) == 2
-    # Too few sources: stopped before asking the model.
+    # Too few sources: stopped before asking the model. The site asks for three outlets, the
+    # news has two: the article must cite those two.
     settings(db, tenant, site_id, min_sources=3, on_problem="hold")
     did3, _, _ = _written(db, tenant, prop)
     with respx.mock(assert_all_called=False) as router:
         llm = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True})))
         out = ap.finish(db, tenant, did3, core(), sent.append)
-    assert not llm.calls and "fonti diverse citate: 1, ne servono almeno 3" in out["held"]
+    assert not llm.calls and "fonti diverse citate: 1, ne servono almeno 2" in out["held"]
 
 
 def test_the_automatic_newsroom_fixes_or_discards_and_draws_only_what_passes(db, tenant, monkeypatch):
@@ -300,7 +355,7 @@ def test_the_switch_on_the_site_page(db, tenant):
     ap.remember(db, tenant, site_id, {"waiting": "hours"}, datetime(2026, 11, 2, 4, tzinfo=UTC))
     ap.remember(db, tenant, site_id, {"accepted": [], "wanted": 1}, datetime(2026, 11, 2, 9, tzinfo=UTC))
     page = c.get("/site?tab=auto").text
-    assert "nessuna proposta adatta" in page and "almeno 40" in page
+    assert "nessuna proposta adatta" in page and "almeno 20" in page
     with db.tenant(tenant) as s:  # saving the settings keeps the last round
         assert ap.save(s, site_id, {**cfg, "per_day": 5}) and prof_body(s, site_id)["settings"]["auto_last"]["wanted"] == 1
     assert "Redazione automatica fermata" in c.post(f"/ui/sites/{site_id}/auto/stop").text
