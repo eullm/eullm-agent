@@ -2090,7 +2090,6 @@
  "Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser).": "The site redirects to another address: write the final one (usually with https and www as you see it in the browser).",
  "Mancano le credenziali: compila tutti i campi.": "Credentials are missing: fill in all the fields.",
  "A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.": "I cannot find the WordPress API at this address (answer {status}). Check the address, or that a security plugin is not blocking it.",
- "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata.": "WordPress rejected the user or password. You need the application password (not the one you sign in with) and the same user it was created for.",
  "WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.": "WordPress answered with an error ({status}): try again, or check the security plugins.",
  "Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.": "This user cannot write articles (role {roles}): Author, Editor or Administrator is needed.",
  "Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub.": "Write the repository as owner/name, for example me/mysite, or paste its GitHub address.",
@@ -2554,5 +2553,7 @@
  "Il modello riformula le frasi copiate dalle fonti": "The model rewords the sentences copied from the sources",
  "Testate sullo stesso fatto": "Outlets on the same event",
  "prima queste; se mancano, le notizie migliori con meno testate": "these first; if there are none, the best news fewer outlets tell",
- "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "no suitable proposal this hour: it needs an opportunity of at least {o} and news not told already. It tries again next round."
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "no suitable proposal this hour: it needs an opportunity of at least {o} and news not told already. It tries again next round.",
+ "lo username con cui entri in wp-admin, non il nome dato alla password": "the username you log in to wp-admin with, not the name you gave the password",
+ "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo username dell'utente per cui l'hai creata, non il nome dato alla password. Se sono giusti, il server non passa l'accesso a WordPress: nel .htaccess del sito serve SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1.": "WordPress refused the user or the password. It needs the application password (not the one you log in with) and the username of the user you created it for, not the name you gave the password. If they are right, the server does not pass the login to WordPress: the site's .htaccess needs SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1."
 }

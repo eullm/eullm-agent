@@ -1196,7 +1196,7 @@ def register(app, ctx) -> None:
             "redirect": t("Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser)."),
             "credentials_missing": t("Mancano le credenziali: compila tutti i campi."),
             "not_wordpress": t("A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.", status=i.get("status", "")),
-            "auth": t("WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata."),
+            "auth": t("WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo username dell'utente per cui l'hai creata, non il nome dato alla password. Se sono giusti, il server non passa l'accesso a WordPress: nel .htaccess del sito serve SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1."),
             "rest": t("WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.", status=i.get("status", "")),
             "role": t("Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.", roles=", ".join(i.get("roles") or []) or "?"),
             "repo_name": t("Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub."),

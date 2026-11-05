@@ -108,6 +108,21 @@ class _PinnedTransport(httpx.HTTPTransport):
                                              network_backend=_PinnedBackend(resolver))
 
 
+
+def wp_url(base: str, route: str, query: str = "", plain: bool = False) -> str:
+    """A WordPress REST address. With `plain`, the form that works without
+    pretty permalinks (?rest_route=), where /wp-json/ answers 404."""
+    route = route.lstrip("/")
+    if plain:
+        return f"{base}/?rest_route=/{route}" + (f"&{query}" if query else "")
+    return f"{base}/wp-json/{route}" + (f"?{query}" if query else "")
+
+
+def not_rest(r: httpx.Response) -> bool:
+    """A 404 from the web server, not from the REST API: /wp-json/ is not
+    routed (plain permalinks, or a server that ignores .htaccess)."""
+    return r.status_code == 404 and "json" not in r.headers.get("content-type", "")
+
 def pinned_client(resolver=None) -> httpx.Client:
     """The client publications go out with: no proxy from the environment
     (it would resolve the name itself), no redirects, pinned addresses."""
@@ -516,6 +531,16 @@ class Publisher:
             return {"status": "failed", "error": msg}
         return {"status": "ok", "url": url}
 
+    def _wp(self, method: str, base: str, route: str, query: str = "", **kw) -> httpx.Response:
+        """A call to the WordPress REST API; where /wp-json/ is not routed
+        (wp.aitoday.it, 2026-11-05) the same call goes by ?rest_route=."""
+        r = self.http.request(method, wp_url(base, route, query), **kw)
+        _ensure_no_redirect(r, base, self.resolver)
+        if not_rest(r):
+            r = self.http.request(method, wp_url(base, route, query, plain=True), **kw)
+            _ensure_no_redirect(r, base, self.resolver)
+        return r
+
     def _wordpress_update(self, target, pub, payload, secret, image=None):
         base = target.config["url"].rstrip("/")
         check_public_url(base, self.resolver)
@@ -527,8 +552,7 @@ class Publisher:
             # A cover made after the last send goes up with the text; an
             # unchanged one is not uploaded again at every update.
             post["featured_media"] = self._wordpress_media(base, auth, payload.get("slug"), image)
-        r = self.http.post(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}", auth=auth, json=post)
-        _ensure_no_redirect(r, base, self.resolver)
+        r = self._wp("POST", base, f"wp/v2/posts/{quote(pub.external_id)}", auth=auth, json=post)
         r.raise_for_status()
         return r.json().get("link")
 
@@ -538,9 +562,8 @@ class Publisher:
         if not pub.external_id:
             raise PublishError("the post's id on WordPress is unknown: remove it from WordPress")
         # To WordPress's bin: it can still be restored from there.
-        r = self.http.delete(f"{base}/wp-json/wp/v2/posts/{quote(pub.external_id)}",
-                             auth=(target.config["user"], _need(secret, target)))
-        _ensure_no_redirect(r, base, self.resolver)
+        r = self._wp("DELETE", base, f"wp/v2/posts/{quote(pub.external_id)}",
+                     auth=(target.config["user"], _need(secret, target)))
         if r.status_code not in (404, 410):  # gone already counts as withdrawn
             r.raise_for_status()
         return None
@@ -612,8 +635,7 @@ class Publisher:
         post = self._wordpress_post(target, pub.payload, pub.mode)
         if image is not None:
             post["featured_media"] = self._wordpress_media(base, auth, pub.payload.get("slug"), image)
-        r = self.http.post(f"{base}/wp-json/wp/v2/posts", auth=auth, json=post)
-        _ensure_no_redirect(r, base, self.resolver)
+        r = self._wp("POST", base, "wp/v2/posts", auth=auth, json=post)
         r.raise_for_status()
         body = r.json()
         return str(body["id"]), body.get("link")
@@ -622,14 +644,12 @@ class Publisher:
         """The cover image to the media library, with its alternative text:
         its id, for the post's featured image."""
         ext = "png" if image.mime == "image/png" else "jpg"
-        r = self.http.post(f"{base}/wp-json/wp/v2/media", auth=auth, content=image.content, headers={
+        r = self._wp("POST", base, "wp/v2/media", auth=auth, content=image.content, headers={
             "Content-Type": image.mime, "Content-Disposition": f'attachment; filename="{slug or "cover"}.{ext}"'})
-        _ensure_no_redirect(r, base, self.resolver)
         r.raise_for_status()
         media = r.json()["id"]
         if image.alt:
-            r = self.http.post(f"{base}/wp-json/wp/v2/media/{media}", auth=auth, json={"alt_text": image.alt})
-            _ensure_no_redirect(r, base, self.resolver)
+            r = self._wp("POST", base, f"wp/v2/media/{media}", auth=auth, json={"alt_text": image.alt})
         return media
 
     @staticmethod

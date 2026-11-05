@@ -45,6 +45,24 @@ def test_wordpress_is_tried_and_its_categories_read():
     assert found["sections"] == ["Tecnologia & AI", "Economia"]  # the default category says nothing about the site
 
 
+def test_wordpress_without_pretty_permalinks_goes_by_rest_route():
+    """wp.aitoday.it, 2026-11-05: /wp-json/ answered 404 from the web server,
+    ?rest_route= worked; the user check went to /wp-json/ and failed."""
+    page404 = httpx.Response(404, text="<h1>Not Found</h1>", headers={"content-type": "text/html"})
+    with respx.mock(assert_all_called=False) as router:
+        router.route(host="blog.example", path__startswith="/wp-json/").mock(return_value=page404)
+        router.get(f"{WP}/", params={"rest_route": "/"}).mock(return_value=httpx.Response(200, json={
+            "name": "Blog", "namespaces": ["wp/v2"]}))
+        me = router.get(f"{WP}/", params__contains={"rest_route": "/wp/v2/users/me"}).mock(
+            return_value=httpx.Response(200, json={"name": "R", "capabilities": {"edit_posts": True}}))
+        router.get(f"{WP}/", params__contains={"rest_route": "/wp/v2/categories"}).mock(
+            return_value=httpx.Response(200, json=[{"id": 9, "name": "Economia", "slug": "economia", "count": 4}]))
+        found = connect.wordpress(WP, "redazione", "abcd efgh", resolver=public_resolver)
+    assert me.called and dict(me.calls[0].request.url.params)["context"] == "edit"
+    assert found["sections"] == ["Economia"]
+    assert pub.wp_url(WP, "wp/v2/posts", "a=1", plain=True) == f"{WP}/?rest_route=/wp/v2/posts&a=1"
+
+
 def test_wordpress_says_what_is_wrong():
     with respx.mock(assert_all_called=False) as router:
         wp_site(router, auth=False)
@@ -269,3 +287,15 @@ def test_the_desk_of_an_automatic_site_shows_its_day_and_does_not_ask_to_decide(
     with db.tenant(tenant) as s:
         assert not s.execute(text("SELECT 1 FROM editor.proposals WHERE site_id = :s AND status = 'proposed'"),
                              {"s": site_id}).first()
+
+
+def test_publishing_goes_by_rest_route_where_wp_json_is_not_routed():
+    page404 = httpx.Response(404, text="<h1>Not Found</h1>", headers={"content-type": "text/html"})
+    with respx.mock(assert_all_called=False) as router:
+        router.route(host="blog.example", path__startswith="/wp-json/").mock(return_value=page404)
+        post = router.post(f"{WP}/", params__contains={"rest_route": "/wp/v2/posts"}).mock(
+            return_value=httpx.Response(201, json={"id": 7, "link": f"{WP}/articolo"}))
+        r = pub.Publisher(http=httpx.Client(), resolver=public_resolver)._wp("POST", WP, "wp/v2/posts", json={"title": "x"})
+    assert post.called and r.json()["id"] == 7
+    # A REST 404 (a post that is not there) is an answer, not a missing route.
+    assert not pub.not_rest(httpx.Response(404, json={"code": "rest_post_invalid_id"}))

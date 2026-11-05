@@ -2090,7 +2090,6 @@
  "Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser).": "El sitio redirige a otra dirección: escribe la definitiva (normalmente con https y www como la ves en el navegador).",
  "Mancano le credenziali: compila tutti i campi.": "Faltan las credenciales: rellena todos los campos.",
  "A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.": "No encuentro la API de WordPress en esta dirección (respuesta {status}). Comprueba la dirección, o que un plugin de seguridad no la bloquee.",
- "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata.": "WordPress rechazó el usuario o la contraseña. Hace falta la contraseña de aplicación (no la de entrada) y el mismo usuario para el que se creó.",
  "WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.": "WordPress respondió con un error ({status}): inténtalo de nuevo, o revisa los plugins de seguridad.",
  "Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.": "Este usuario no puede escribir artículos (rol {roles}): hace falta Autor, Editor o Administrador.",
  "Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub.": "Escribe el repositorio como propietario/nombre, por ejemplo yo/misitio, o pega su dirección de GitHub.",
@@ -2554,5 +2553,7 @@
  "Il modello riformula le frasi copiate dalle fonti": "El modelo reformula las frases copiadas de las fuentes",
  "Testate sullo stesso fatto": "Medios sobre el mismo hecho",
  "prima queste; se mancano, le notizie migliori con meno testate": "primero estas; si faltan, las mejores noticias con menos medios",
- "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "ninguna propuesta adecuada en esta hora: hace falta una oportunidad de al menos {o} y una noticia no contada ya. Lo intenta en la próxima ronda."
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "ninguna propuesta adecuada en esta hora: hace falta una oportunidad de al menos {o} y una noticia no contada ya. Lo intenta en la próxima ronda.",
+ "lo username con cui entri in wp-admin, non il nome dato alla password": "el nombre de usuario con el que entras en wp-admin, no el nombre que diste a la contraseña",
+ "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo username dell'utente per cui l'hai creata, non il nome dato alla password. Se sono giusti, il server non passa l'accesso a WordPress: nel .htaccess del sito serve SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1.": "WordPress rechazó el usuario o la contraseña. Hace falta la contraseña de aplicación (no la de acceso) y el nombre de usuario para el que la creaste, no el nombre que diste a la contraseña. Si son correctos, el servidor no pasa el acceso a WordPress: en el .htaccess del sitio hace falta SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1."
 }

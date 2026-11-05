@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.28.47
+## 0.29.0
 
 ### Fixed
 
@@ -26,6 +26,14 @@
   gruppo perché Reddit limita le richieste. Nella ricerca delle fonti, HN e
   Reddit non vengono più scartati perché "ripetono" notizie già note: è
   proprio l'hype che misurano.
+- **WordPress senza permalink "belli".** Dove `/wp-json/` risponde 404
+  (permalink semplici, o un server che non legge il `.htaccess`, come
+  wp.aitoday.it), il collegamento e la pubblicazione passano da soli a
+  `?rest_route=`. Prima il controllo dell'utente falliva con "WordPress ha
+  risposto con un errore (404)". Sotto "Utente WordPress" la pagina dice che
+  serve lo username di wp-admin, non il nome dato alla password, e il
+  messaggio di accesso rifiutato indica la riga del `.htaccess` per i server
+  che non passano l'accesso a WordPress.
 - **Gli articoli persi vengono sostituiti.** Un articolo il cui lavoro è
   finito in errore prima della bozza, o una bozza rimasta a metà e mai
   approvata (con "tutto automatico"), non conta più tra quelli fatti: al

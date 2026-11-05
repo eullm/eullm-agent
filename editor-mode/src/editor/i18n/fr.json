@@ -2090,7 +2090,6 @@
  "Il sito rimanda a un altro indirizzo: scrivi quello definitivo (di solito con https e www come lo vedi nel browser).": "Le site redirige vers une autre adresse : écrivez l'adresse définitive (en général avec https et www comme dans le navigateur).",
  "Mancano le credenziali: compila tutti i campi.": "Identifiants manquants : remplissez tous les champs.",
  "A questo indirizzo non trovo l'API di WordPress (risposta {status}). Controlla l'indirizzo, oppure che un plugin di sicurezza non la blocchi.": "Je ne trouve pas l'API de WordPress à cette adresse (réponse {status}). Vérifiez l'adresse, ou qu'un plugin de sécurité ne la bloque pas.",
- "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo stesso utente per cui l'hai creata.": "WordPress a refusé l'utilisateur ou le mot de passe. Il faut le mot de passe d'application (pas celui de connexion) et l'utilisateur pour lequel il a été créé.",
  "WordPress ha risposto con un errore ({status}): riprova, o controlla i plugin di sicurezza.": "WordPress a répondu par une erreur ({status}) : réessayez, ou vérifiez les plugins de sécurité.",
  "Questo utente non può scrivere articoli (ruolo {roles}): serve Autore, Editor o Amministratore.": "Cet utilisateur ne peut pas écrire d'articles (rôle {roles}) : il faut Auteur, Éditeur ou Administrateur.",
  "Scrivi il repository come proprietario/nome, per esempio primoco/miosito, oppure incolla il suo indirizzo GitHub.": "Écrivez le dépôt sous la forme propriétaire/nom, par exemple moi/monsite, ou collez son adresse GitHub.",
@@ -2554,5 +2553,7 @@
  "Il modello riformula le frasi copiate dalle fonti": "Le modèle reformule les phrases copiées des sources",
  "Testate sullo stesso fatto": "Médias sur le même fait",
  "prima queste; se mancano, le notizie migliori con meno testate": "d'abord celles-ci ; sinon, les meilleures nouvelles relayées par moins de médias",
- "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "aucune proposition adaptée cette heure : il faut une opportunité d'au moins {o} et une nouvelle pas déjà racontée. Nouvel essai au prochain tour."
+ "nessuna proposta adatta in quest'ora: servono opportunità almeno {o} e una notizia non già raccontata. Riprova al prossimo giro.": "aucune proposition adaptée cette heure : il faut une opportunité d'au moins {o} et une nouvelle pas déjà racontée. Nouvel essai au prochain tour.",
+ "lo username con cui entri in wp-admin, non il nome dato alla password": "l'identifiant avec lequel tu te connectes à wp-admin, pas le nom donné au mot de passe",
+ "WordPress ha rifiutato utente o password. Serve la password applicativa (non quella con cui entri) e lo username dell'utente per cui l'hai creata, non il nome dato alla password. Se sono giusti, il server non passa l'accesso a WordPress: nel .htaccess del sito serve SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1.": "WordPress a refusé l'utilisateur ou le mot de passe. Il faut le mot de passe d'application (pas celui de connexion) et l'identifiant de l'utilisateur pour qui tu l'as créé, pas le nom donné au mot de passe. S'ils sont justes, le serveur ne transmet pas l'accès à WordPress : il faut dans le .htaccess du site SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=$1."
 }

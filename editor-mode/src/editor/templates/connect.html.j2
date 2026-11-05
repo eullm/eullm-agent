@@ -115,7 +115,7 @@
     <input type="hidden" name="kind" value="wordpress">
     <div class="cols">
       <label class="field">{{ _('Indirizzo del sito') }}<input name="address" value="{{ form.address or ('https://' ~ site.domain) }}" required placeholder="https://esempio.it"></label>
-      <label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ form.user or '' }}" autocomplete="off" required></label>
+      <label class="field">{{ _('Utente WordPress') }}<input name="user" value="{{ form.user or '' }}" autocomplete="off" required><span class="hint">{{ _('lo username con cui entri in wp-admin, non il nome dato alla password') }}</span></label>
       <label class="field">{{ _('Password applicativa') }}<input name="secret" type="password" autocomplete="new-password" required></label>
     </div>
     <div class="row"><button class="btn pri" type="submit">{{ _('Verifica e collega') }}</button> <a class="btn" href="/connect">{{ _('Indietro') }}</a></div>
