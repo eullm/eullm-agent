@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.28.43
+
+### Changed
+
+- **Un articolo con motivi correggibili si corregge, non si butta**
+  (Francesco: "sono motivi che si possono correggere, non credo sia tutta da
+  buttare la notizia"). Quando il caporedattore AI lo ferma, prima di
+  riscriverlo o scartarlo lo corregge dov'è: toglie o riformula solo le
+  frasi indicate nei motivi, sistema titolo e sommario, e non aggiunge
+  niente. Una "correzione" che porta frasi nuove non vale. L'articolo
+  corretto ripassa tutti i controlli e il caporedattore; se ancora non va, lo
+  riscrive il modello più forte come prima, e solo dopo viene scartato. Il
+  riquadro Attività dice cosa è stato corretto. La correzione usa il modello
+  scelto in Consumi per "Correzione degli articoli scartati".
+- La riscrittura resta sulla notizia del titolo: niente argomenti, aziende o
+  sezioni nuove che i motivi non chiedono (era successo con le azioni di
+  Ørsted in un articolo sulle elezioni americane).
+
+### Fixed
+
+- **Il motivo dello scarto si legge nella bozza**: in cima alla pagina
+  dell'articolo scartato o fermato ci sono i motivi interi, il link alla
+  versione riscritta e come recuperarlo («Modifica», poi approvi tu). Nel Desk
+  il motivo lungo finisce con "…" e "leggi tutto".
+
 ## 0.28.42
 
 La console dell'amministratore rifatta come un vero gestionale, e la parte

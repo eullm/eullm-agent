@@ -657,7 +657,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         prompt += (f"\n\nCite items of at least {need} different outlets (the name in brackets after each item's "
                    "title), each for what it adds about the event.")
     if notes:  # a version written again: what was wrong with the last one
-        prompt += f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}"
+        prompt += (f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}. "
+                   "Keep to the one event of the title: add no topic, company or section the reasons do not ask for.")
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
     article = None
     from .core_client import extract_json

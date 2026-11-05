@@ -1832,11 +1832,20 @@ def register(app, ctx) -> None:
                 j.kind == "draft", j.status.in_(("queued", "running")))).scalars())
             have = {x.language for x in family}
             wanted = [x for x in tr.site_languages(s, d.site_id) if x not in have]
+            # Why the automatic newsroom discarded or stopped it, and the version it wrote instead.
+            fb = m.feedback.c
+            auto_note = s.execute(select(fb.note).where(
+                fb.target == "draft", fb.target_id == draft_id, fb.given_by == autopilot.AUTO, fb.note.is_not(None))
+                .order_by(fb.id.desc()).limit(1)).scalar() if d.status != "approved" else None
+            newer = s.execute(select(m.drafts.c.id, m.drafts.c.version, m.drafts.c.status).where(
+                m.drafts.c.proposal_id == d.proposal_id, m.drafts.c.version > d.version,
+                m.drafts.c.translation_of.is_(None)).order_by(m.drafts.c.version)).first() \
+                if auto_note and d.proposal_id and not d.translation_of else None
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
-                          cover=cover, stale_cover=stale_cover,
+                          cover=cover, stale_cover=stale_cover, auto_note=auto_note, newer=newer,
                           body_html=to_html(delivery.body_md(d.body_md)),
                           sources=[{"n": refs[i], **items[i]._mapping} for i in order if i in items],
                           flags=flags, checks=checks, targets=targets, pubs=pubs, kinds=TARGET_KINDS,

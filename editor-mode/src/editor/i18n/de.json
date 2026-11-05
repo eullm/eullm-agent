@@ -2541,5 +2541,13 @@
  "Nuovo invito a {newsroom} per {email}": "Neue Einladung zu {newsroom} für {email}",
  "Dati del cliente da correggere: {error}.": "Kundendaten korrigieren: {error}.",
  "L'ho scelto in «Cliente esistente»: controlla e crea la redazione.": "Ich habe ihn unter „Vorhandener Kunde“ ausgewählt: Prüfen Sie und legen Sie die Redaktion an.",
- "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} war schon angemeldet: Wer das Passwort vergessen hat, ändert es über „Passwort vergessen?“ auf der Anmeldeseite."
+ "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} war schon angemeldet: Wer das Passwort vergessen hat, ändert es über „Passwort vergessen?“ auf der Anmeldeseite.",
+ "Perché la redazione automatica l'ha scartata": "Warum die automatische Redaktion ihn verworfen hat",
+ "Perché la redazione automatica l'ha fermata": "Warum die automatische Redaktion ihn angehalten hat",
+ "Al suo posto ha scritto la versione {n}:": "Stattdessen hat sie Version {n} geschrieben:",
+ "aprila": "öffnen",
+ "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "Wenn sich die Gründe beheben lassen, klicken Sie auf „Bearbeiten“, korrigieren Sie die Sätze und geben Sie den Entwurf frei: Sie veröffentlichen ihn.",
+ "leggi tutto": "alles lesen",
+ "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Der KI-Chefredakteur hat ihn korrigiert, statt ihn zu verwerfen: {why}",
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Der KI-Chefredakteur korrigiert den Artikel, statt ihn zu verwerfen: {why}"
 }

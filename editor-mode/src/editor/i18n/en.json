@@ -2541,5 +2541,13 @@
  "Nuovo invito a {newsroom} per {email}": "New invitation to {newsroom} for {email}",
  "Dati del cliente da correggere: {error}.": "Customer details to correct: {error}.",
  "L'ho scelto in «Cliente esistente»: controlla e crea la redazione.": "I selected it in “Existing customer”: check and create the newsroom.",
- "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} has already signed in: if they forgot the password, they change it from “Forgot your password?” on the sign-in page."
+ "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} has already signed in: if they forgot the password, they change it from “Forgot your password?” on the sign-in page.",
+ "Perché la redazione automatica l'ha scartata": "Why the automatic newsroom discarded it",
+ "Perché la redazione automatica l'ha fermata": "Why the automatic newsroom stopped it",
+ "Al suo posto ha scritto la versione {n}:": "In its place it wrote version {n}:",
+ "aprila": "open it",
+ "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "If the reasons can be fixed, press “Edit”, correct the sentences and approve the draft: you publish it.",
+ "leggi tutto": "read all",
+ "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "The AI editor-in-chief corrected it instead of discarding it: {why}",
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "The AI editor-in-chief corrects the article instead of discarding it: {why}"
 }
