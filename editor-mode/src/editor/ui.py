@@ -1708,7 +1708,10 @@ def register(app, ctx) -> None:
             return done(safe_path(back, "/trends"), t("Questa proposta era già stata decisa."))
         if accept == "1" and ctx.core is not None:
             ctx.run_draft(c.tenant_id, proposal_id)
-            return done(safe_path(back, "/trends"), t("Proposta accettata: la bozza è in scrittura, la segui nel riquadro Attività."))
+            with db.tenant(c.tenant_id) as s:
+                title = s.execute(select(m.proposals.c.title).where(m.proposals.c.id == proposal_id)).scalar() or ""
+            return done(safe_path(back, "/trends"), t("Proposta accettata: «{title}» è in scrittura, la segui nel riquadro "
+                                                      "Attività.", title=title))
         if accept != "1" and reason in props.REASONS:
             return done(safe_path(back, "/trends"), {
                 "already_covered": t("Proposta scartata: i temi già trattati sul sito scendono nelle prossime proposte."),

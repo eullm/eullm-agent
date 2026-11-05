@@ -211,9 +211,14 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
     domains = dict(s.execute(select(m.sites.c.id, m.sites.c.domain)).all())
     by_domain = {d: i for i, d in domains.items()}
     proposal_ids = [r.args.get("proposal_id") for r in rows if r.kind in ("draft", "auto") and r.args]
-    proposal_site = dict(s.execute(select(m.proposals.c.id, m.proposals.c.site_id)
-                                   .where(m.proposals.c.id.in_([x for x in proposal_ids if x]))).all()) \
-        if proposal_ids else {}
+    proposal_rows = s.execute(select(m.proposals.c.id, m.proposals.c.site_id, m.proposals.c.title)
+                              .where(m.proposals.c.id.in_([x for x in proposal_ids if x]))).all() if proposal_ids else []
+    proposal_site = {p.id: p.site_id for p in proposal_rows}
+    # The article each job is about, so a person who asked for it knows which one is running.
+    proposal_title = {p.id: p.title for p in proposal_rows}
+    draft_ids = [r.args.get("draft_id") for r in rows if r.kind in ("translate", "image") and r.args]
+    draft_title = dict(s.execute(select(m.drafts.c.id, m.drafts.c.title).where(
+        m.drafts.c.id.in_([x for x in draft_ids if x]))).all()) if draft_ids else {}
     # Something running or just ended, among all the jobs and not only those
     # shown: a long queue pushes the running ones out of the list, and the
     # worker is not stalled because of that.
@@ -235,7 +240,9 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
                 step = t(r.progress["text"], **(r.progress.get("values") or {}))
             except (KeyError, IndexError, ValueError):
                 step = r.progress["text"]
+        title = res.get("title") or proposal_title.get(args.get("proposal_id")) or draft_title.get(args.get("draft_id"))
         item = {"id": r.id, "what": t(KINDS[r.kind]), "where": where, "status": r.status, "step": step,
+                "title": title if r.kind in ("draft", "auto", "translate", "image") else None,
                 "lines": [], "href": None, "link": None, "warn": None,
                 # The hour it ended, or since when it waits or runs: the compact box's last column.
                 "at": _aware(r.finished_at or r.started_at or r.run_after, now).astimezone(tz).strftime("%H:%M")}
