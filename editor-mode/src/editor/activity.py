@@ -128,6 +128,9 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
             return [t("Fermato dal caporedattore AI: «{title}». Resta una bozza da rileggere.", title=r.get("title", "")),
                     t("Motivi: {why}", why="; ".join(humanize(x) for x in r["held"]))], link, t("Leggi la bozza")
         out = []
+        if r.get("corrected"):
+            out.append(t("Il caporedattore AI l'ha corretto invece di scartarlo: {why}",
+                         why="; ".join(humanize(x) for x in r["corrected"])))
         if r.get("rewritten_from"):
             out.append(t("La prima versione non passava: riscritto dal modello più forte."))
         out += [t("«{title}» approvato dal caporedattore AI e inviato a {target}.", title=r.get("title", ""),

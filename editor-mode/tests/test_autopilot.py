@@ -226,9 +226,11 @@ def test_the_automatic_newsroom_fixes_or_discards_and_draws_only_what_passes(db,
 
     refuse = chat(json.dumps({"publish": False, "problems": ["the title promises what the article does not say"]}))
     ok = chat(json.dumps({"publish": True, "problems": []}))
-    # Refused, written again by the stronger model, then let through: one cover, for the new one.
+    no_fix = chat(json.dumps({"title": "Bari", "subtitle": "", "text": "Una frase tutta nuova. [1]"}))
+    # Refused, not correctable where it stands, written again by the stronger model, then let
+    # through: one cover, for the new one.
     with respx.mock() as router:
-        router.post(CORE).mock(side_effect=[refuse, ok])
+        router.post(CORE).mock(side_effect=[refuse, no_fix, ok])
         out = ap.finish(db, tenant, did, core(), sent.append, rewrite=rewrite, cover=covers.append)
     new = out["draft_id"]
     assert out["rewritten_from"] == did and new != did and covers == [new] and len(sent) == 1
@@ -239,11 +241,17 @@ def test_the_automatic_newsroom_fixes_or_discards_and_draws_only_what_passes(db,
     # Refused twice: discarded, no cover, nothing published, nobody asked.
     did2, _, _ = _written(db, tenant, prop)
     with respx.mock() as router:
-        router.post(CORE).mock(side_effect=[refuse, refuse])
+        router.post(CORE).mock(side_effect=[refuse, no_fix, refuse, no_fix])
         out = ap.finish(db, tenant, did2, core(), sent.append, rewrite=rewrite, cover=covers.append)
     assert out["discarded"] and covers == [new] and len(sent) == 1
     with db.tenant(tenant) as s:
         assert s.execute(select(m.drafts.c.status).where(m.drafts.c.id == out["draft_id"])).scalar() == "rejected"
+    # The director reads why on the article's page, with the version written in its place.
+    c = TestClient(create_app(db, core=core()))
+    c.post("/login", data={"token": auth.create_token(db, tenant, "owner-user", "owner")}, follow_redirects=False)
+    page = c.get(f"/drafts/{did2}").text
+    assert "Perché la redazione automatica l'ha scartata" in page and "<li>the title promises" in page
+    assert "premi «Modifica»" in page
 
 
 def test_a_new_site_gets_its_profile_from_the_brief(db, tenant):
@@ -467,6 +475,54 @@ def test_a_few_wrong_sentences_are_cut_not_paid_for_again(db, tenant, monkeypatc
         # Discarded by the automatic newsroom, refused by a person: shown apart.
     from editor.ui import draft_state
     assert draft_state("rejected", ap.AUTO) == "discarded" and draft_state("rejected", "Francesco") == "rejected"
+
+
+def test_reasons_that_can_be_fixed_are_fixed_not_thrown_away(db, tenant, monkeypatch):
+    """Francesco 2026-11-05: "sono motivi che si possono correggere, non credo
+    sia tutta da buttare la notizia". A refused article is corrected where it
+    stands for those reasons; only a correction that adds sentences of its own
+    is not one, and then the article is written again as before."""
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    _, site_id, prop = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=1)
+    pub.add_target(db, tenant, site_id, "webhook", "sito", {"url": "https://hooks.example/it"}, None)
+    did = _long(db, tenant, prop)
+    refuse = chat(json.dumps({"publish": False, "problems": ["la rete non è completa in ogni quartiere: va detto"]}))
+    ok = chat(json.dumps({"publish": True, "problems": []}))
+
+    def fixed(text):
+        with db.tenant(tenant) as s:
+            now = drafts.as_text(drafts.stored_claims(s, did))
+        return chat(json.dumps({"title": "Bari in fibra", "subtitle": "La rete è quasi completa",
+                                "text": now.replace("La rete in fibra è completa.", text)}))
+
+    asked, rewrites, sent = [], [], []
+
+    def answers(request):
+        asked.append(json.loads(request.content)["messages"][-1]["content"])
+        return [refuse, fixed("La rete in fibra è quasi completa."), ok][len(asked) - 1]
+
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=answers)
+        out = ap.finish(db, tenant, did, core(), sent.append, rewrite=lambda *a: rewrites.append(a))
+    assert out["approved"] and out["corrected"] and not rewrites and len(sent) == 1
+    assert "va detto" in asked[1] and "[1]" in asked[1]  # the reasons and the numbered sources
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+    assert d.status == "approved" and "quasi completa" in d.body_md and d.subtitle == "La rete è quasi completa"
+
+    # A "correction" with a sentence of its own is a rewrite: refused, the article is written again.
+    did2 = _long(db, tenant, prop)
+    with db.tenant(tenant) as s:
+        text = drafts.as_text(drafts.stored_claims(s, did2))
+    invented = chat(json.dumps({"title": "Bari in fibra", "subtitle": "",
+                                "text": text + "Le azioni di Open Fiber sono salite del dodici per cento. [1]\n"}))
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=[refuse, invented])
+        out = ap.finish(db, tenant, did2, core(), sent.append, rewrite=None)
+    assert out["discarded"] and "corrected" not in out
+    with db.tenant(tenant) as s:
+        assert "dodici" not in s.execute(select(m.drafts.c.body_md).where(m.drafts.c.id == did2)).scalar()
 
 
 def test_the_writer_never_talks_about_its_sources():

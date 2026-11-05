@@ -2541,5 +2541,13 @@
  "Nuovo invito a {newsroom} per {email}": "Nueva invitación a {newsroom} para {email}",
  "Dati del cliente da correggere: {error}.": "Datos del cliente por corregir: {error}.",
  "L'ho scelto in «Cliente esistente»: controlla e crea la redazione.": "Lo he elegido en «Cliente existente»: revisa y crea la redacción.",
- "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} ya ha entrado: si no recuerda la contraseña, la cambia desde «¿Has olvidado la contraseña?» en la página de acceso."
+ "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} ya ha entrado: si no recuerda la contraseña, la cambia desde «¿Has olvidado la contraseña?» en la página de acceso.",
+ "Perché la redazione automatica l'ha scartata": "Por qué la redacción automática lo descartó",
+ "Perché la redazione automatica l'ha fermata": "Por qué la redacción automática lo detuvo",
+ "Al suo posto ha scritto la versione {n}:": "En su lugar escribió la versión {n}:",
+ "aprila": "ábrela",
+ "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "Si los motivos se pueden corregir, pulsa «Editar», arregla las frases y aprueba el borrador: lo publicas tú.",
+ "leggi tutto": "leer todo",
+ "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "El redactor jefe de IA lo corrigió en lugar de descartarlo: {why}",
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "El redactor jefe de IA corrige el artículo en lugar de descartarlo: {why}"
 }

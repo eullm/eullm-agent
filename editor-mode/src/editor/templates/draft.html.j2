@@ -24,6 +24,17 @@
   {% endif %}
 </header>
 
+{% if auto_note and not editing %}
+<section class="card pad why-auto">
+  <h2>{{ _("Perché la redazione automatica l'ha scartata") if d.status == 'rejected' else _("Perché la redazione automatica l'ha fermata") }}</h2>
+  <ul>{% for x in auto_note.split('; ') if x.strip() %}<li>{{ x }}</li>{% endfor %}</ul>
+  <p class="hint">
+    {% if newer %}{{ _('Al suo posto ha scritto la versione {n}:', n=newer.version) }} <a href="/drafts/{{ newer.id }}">{{ _('aprila') }}</a>. {% endif %}
+    {% if caller.can('editor') %}{{ _("Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.") }}{% endif %}
+  </p>
+</section>
+{% endif %}
+
 {% if editing %}
 <form method="post" action="/ui/drafts/{{ d.id }}/edit" class="card pad" style="display: flex; flex-direction: column; gap: 12px;" lang="{{ d.language or 'it' }}">
   <h2>{{ _('Modifica la bozza') }}</h2>

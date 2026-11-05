@@ -2541,5 +2541,13 @@
  "Nuovo invito a {newsroom} per {email}": "Nouvelle invitation à {newsroom} pour {email}",
  "Dati del cliente da correggere: {error}.": "Données du client à corriger : {error}.",
  "L'ho scelto in «Cliente esistente»: controlla e crea la redazione.": "Je l'ai sélectionné dans « Client existant » : vérifiez et créez la rédaction.",
- "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} s'est déjà connecté : en cas d'oubli, le mot de passe se change depuis « Mot de passe oublié ? » sur la page de connexion."
+ "{email} è già entrato: se non ricorda la password, la cambia da «Password dimenticata?» nella pagina di accesso.": "{email} s'est déjà connecté : en cas d'oubli, le mot de passe se change depuis « Mot de passe oublié ? » sur la page de connexion.",
+ "Perché la redazione automatica l'ha scartata": "Pourquoi la rédaction automatique l'a écarté",
+ "Perché la redazione automatica l'ha fermata": "Pourquoi la rédaction automatique l'a arrêté",
+ "Al suo posto ha scritto la versione {n}:": "À sa place, elle a écrit la version {n} :",
+ "aprila": "l'ouvrir",
+ "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "Si les motifs peuvent être corrigés, cliquez sur « Modifier », corrigez les phrases et approuvez le brouillon : c'est vous qui le publiez.",
+ "leggi tutto": "tout lire",
+ "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Le rédacteur en chef IA l'a corrigé au lieu de l'écarter : {why}",
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Le rédacteur en chef IA corrige l'article au lieu de l'écarter : {why}"
 }

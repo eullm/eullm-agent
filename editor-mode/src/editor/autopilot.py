@@ -597,6 +597,85 @@ def proofread(db, tenant_id: str, d, fixes: dict) -> bool:
 
 EXCERPT = 2500  # characters of each cited source the editor-in-chief reads
 
+# A refused article is corrected where it stands before it is written again
+# or thrown away (Francesco 2026-11-05: "sono motivi che si possono
+# correggere, non credo sia tutta da buttare la notizia"). The correction
+# changes only what the reasons name and adds nothing: a sentence that is
+# not one of the article's, reworded, makes it a rewrite and it is refused.
+FIX_SYSTEM = (
+    "You are the editor-in-chief of a news site. The article below was refused for the problems listed after "
+    "it. Correct it so that every problem is gone, changing only what the problems name: remove a detail, a "
+    "sentence or a section that the sources do not support or that belongs to another story; reword a sentence "
+    "that says more than its sources (a forecast told as a fact, a cause or a figure they do not give); make "
+    "the title and the subtitle say what the article says. Never add a fact, a number, a name or a sentence "
+    "that is not already in the article, and check what you keep against the numbered source excerpts. Keep "
+    "the article's language and its format: one sentence per line, \"## \" before a heading, and after each "
+    "sentence its sources as [1] [2], numbered as in the article; every sentence keeps at least one. Reply "
+    'with JSON only: {"title": "<the title>", "subtitle": "<the subtitle>", '
+    '"text": "<the whole corrected article in that format>"}'
+)
+FIX_MIN_LIKENESS = 0.5  # how close each sentence stays to one of the article's
+
+
+def _fix_validator(v) -> dict:
+    if not isinstance(v, dict) or not isinstance(v.get("text"), str) or not v["text"].strip():
+        raise ValueError('expected {"title": ..., "subtitle": ..., "text": "<the article>"}')
+    return {"title": " ".join(str(v.get("title") or "").split()), "subtitle": " ".join(str(v.get("subtitle") or "").split()),
+            "text": v["text"]}
+
+
+def _numbered(db, tenant_id: str, order: list[int]) -> list[str]:
+    """The cited sources with the numbers the article gives them."""
+    si = m.source_items.c
+    with db.tenant(tenant_id) as s:
+        rows = {r.id: r for r in s.execute(select(si.id, si.title, si.summary, si.content, si.published_at)
+                                           .where(si.id.in_(order or [0])))}
+    out = ["Sources (the number the article cites, title, date and what was read of each):"]
+    for n, i in enumerate(order, 1):
+        r = rows.get(i)
+        if r is None:
+            continue
+        text = " ".join(f"{r.summary or ''} {r.content or ''}".split())[:EXCERPT]
+        date = r.published_at.date().isoformat() if r.published_at else "undated"
+        out.append(f"[{n}] {r.title} ({date}): {text or 'only the title was read'}")
+    return out
+
+
+def correct(db, tenant_id: str, d, problems: list[str], core: CoreClient) -> bool:
+    """The article corrected in place for these problems, by the model the
+    console sets for corrections. False, and nothing changed, when the
+    answer is not a correction: a sentence without sources, one that is not
+    among the article's, or too little left."""
+    import difflib
+
+    with db.tenant(tenant_id) as s:
+        claims = drafts.stored_claims(s, d.id)
+    if not claims:
+        return False
+    order = drafts.source_order(claims)
+    prompt = "\n".join([f"Language: {d.language}", f"Title: {d.title}", f"Subtitle: {d.subtitle or ''}", "Article:",
+                        drafts.as_text(claims), "Problems:", *[f"- {p}" for p in problems],
+                        *_numbered(db, tenant_id, order)])
+    try:
+        with usage.tagged(db, tenant_id, "auto_fix", site_id=d.site_id, ref=f"draft:{d.id}"):
+            fixed, _calls = core.chat_json(FIX_SYSTEM, prompt, _fix_validator)
+        new = drafts.parse_text(fixed["text"], order)
+    except (CoreError, ValueError) as e:
+        log.info("draft %s not corrected: %s", d.id, e)
+        return False
+    old = [c["text"] for c in claims]
+    if len(new) < CUT_MIN_LEFT or any(not c.sources for c in new):
+        return False
+    for c in new:
+        if c.text not in old and max(difflib.SequenceMatcher(None, c.text, o).ratio() for o in old) < FIX_MIN_LIKENESS:
+            return False  # a sentence of its own: that is writing again, not correcting
+    try:
+        drafts.edit_text(db, tenant_id, d.id, fixed["title"] or d.title, fixed["subtitle"] or (d.subtitle or ""),
+                         fixed["text"])
+    except (ValueError, LookupError):
+        return False
+    return True
+
 
 def _excerpts(db, tenant_id: str, draft_id: int) -> list[str]:
     """What the cited sources say, in the order of their notes, so the
@@ -679,7 +758,7 @@ def _send(db, tenant_id: str, d, cfg: dict, main: bool, publish) -> dict:
 
 
 def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, translate=lambda language, draft_id: None,
-           rewrite=None, cover=None, rounds: int = 0) -> dict:
+           rewrite=None, cover=None, rounds: int = 0, corrected: bool = False) -> dict:
     """After the draft: the guardrails, the editor-in-chief, the cover, the
     label, the approval and the publication. `publish(pub_id)` queues the
     sending, `translate(language, draft_id)` a translation into each of the site's
@@ -687,7 +766,8 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     stronger model and returns the new draft, `cover(draft_id)` draws it.
 
     With on_problem "fix" nothing waits for a person: what can be fixed is
-    written again once, what cannot is discarded. The cover is drawn only
+    corrected where it stands, then written again once, and only what still
+    does not pass is discarded. The cover is drawn only
     for an article that passed everything, so a bad day costs no images."""
     def load():
         with db.tenant(tenant_id) as s:
@@ -755,6 +835,11 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if fixable:
         if cfg["on_problem"] != "fix":
             return _stop(db, tenant_id, d, fixable, out, discard=False)
+        if not corrected and cited >= cfg["min_sources"]:  # a missing outlet is not corrected: it is written again
+            step(N_("Il caporedattore AI corregge l'articolo invece di scartarlo: {why}"), why="; ".join(fixable)[:300])
+            if correct(db, tenant_id, d, fixable, core):
+                res = finish(db, tenant_id, draft_id, core, publish, translate, rewrite, cover, rounds, corrected=True)
+                return res if res.get("discarded") or res.get("held") else {**res, "corrected": fixable}
         if rewrite is None or rounds >= FIX_ROUNDS:
             return _stop(db, tenant_id, d, fixable, out, discard=True)
         step(N_("Il modello più forte riscrive l'articolo per correggere: {why}"), why="; ".join(fixable)[:300])
