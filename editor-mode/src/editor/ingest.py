@@ -31,7 +31,6 @@ class SourceReport:
     fetched: int = 0
     new: int = 0
     duplicates: int = 0
-    over_quota: int = 0
     not_modified: bool = False
     error: str | None = None
 
@@ -52,10 +51,7 @@ def numeric_metrics(metrics: dict) -> dict:
 
 
 def store_items(s, tenant_id: str, source_id: int, items: list[Item], report: SourceReport) -> None:
-    from .quotas import remaining
-
     candidates = repo.recent_signatures(s)
-    room = remaining(s, "items")
     for it in items:
         canon = canonical_url(it.url)
         uhash = sha256_hex(canon)
@@ -63,12 +59,7 @@ def store_items(s, tenant_id: str, source_id: int, items: list[Item], report: So
         existing = s.execute(
             select(m.source_items.c.id).where(m.source_items.c.url_hash == uhash)
         ).scalar()
-        if existing is None and room is not None and room <= 0:
-            report.over_quota += 1
-            continue
         if existing is None:
-            if room is not None:
-                room -= 1
             # Only a new item needs its signature: a feed brings back mostly known ones.
             sig = minhash(f"{it.title} {it.summary}")
             same = s.execute(

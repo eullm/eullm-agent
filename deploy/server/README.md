@@ -139,7 +139,7 @@ Requirements: Docker with the compose plugin, and this repository.
         -d '{"name": "Redazione Rossi", "owner_email": "rossi@example.com", "external_ref": "sub_123",
              "plan": "pro", "limits": {"max_sites": 3, "max_llm_cost_month": 30}}'
 
-  `limits` takes `max_sites`, `max_active_sources`, `max_items_per_day`,
+  `limits` takes `max_sites`, `max_active_sources`,
   `max_drafts_month` and `max_llm_cost_month` (euro; it is also the
   newsroom's budget in the Core).
 

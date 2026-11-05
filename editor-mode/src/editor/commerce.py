@@ -494,14 +494,14 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
     @app.post("/admin/plans/{code}")
     def ui_plan(code: str, name: str = Form(...), description: str = Form(""), price_month: str = Form(""),
                 price_year: str = Form(""), trial_days: str = Form("0"), max_sites: str = Form(""),
-                max_languages: str = Form(""), max_active_sources: str = Form(""), max_items_per_day: str = Form(""),
+                max_languages: str = Form(""), max_active_sources: str = Form(""),
                 max_drafts_month: str = Form(""), credits_month: str = Form(""), public: str = Form(""),
                 autopilot: str = Form("1"), s=Depends(need_console)):
         try:
             fields = {"name": name.strip(), "description": description.strip(), "price_month_cents": _cents(price_month),
                       "price_year_cents": _cents(price_year), "trial_days": _int(trial_days) or 0,
                       "max_sites": _int(max_sites), "max_languages": _int(max_languages),
-                      "max_active_sources": _int(max_active_sources), "max_items_per_day": _int(max_items_per_day),
+                      "max_active_sources": _int(max_active_sources),
                       "max_drafts_month": _int(max_drafts_month), "credits_month": _int(credits_month),
                       "public": public == "1",
                       "autopilot": autopilot == "1"}

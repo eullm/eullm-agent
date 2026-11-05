@@ -1,7 +1,7 @@
 {# Console › a newsroom: what it does and costs on the left, who pays and
    how on the right; every change opens in a window (dialog). #}
 {% from "_admin_macros.html.j2" import dlg_head, dlg_foot, customer_fields, room_chips, pay_kind, pay_status, eur, when with context %}
-{% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'items': _('Notizie oggi'), 'drafts': _('Articoli del mese'), 'llm_cost': _('Costo modello nel mese')} %}
+{% set labels = {'sites': _('Siti'), 'sources': _('Fonti attive'), 'drafts': _('Articoli del mese'), 'llm_cost': _('Costo modello nel mese')} %}
 {% set roles_names = {'owner': _('Direttore'), 'editor': _('Redattore'), 'viewer': _('Lettura')} %}
 {% for r in rooms %}
 {% set here = 'r-' ~ r.tenant_id %}
@@ -209,7 +209,7 @@
     <div class="pad">
       {% set unlimited = _('senza limite') %}
       <dl class="dl">
-        {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_items_per_day', _('Notizie al giorno')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese'))] %}
+        {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese'))] %}
         <div><dt>{{ label }}</dt><dd {% if r[key] is not none %}class="num"{% endif %}>{{ r[key] if r[key] is not none else unlimited }}</dd></div>
         {% endfor %}
         <div><dt>{{ _('Costo modello al mese') }}</dt><dd {% if r.max_llm_cost_month is not none %}class="num"{% endif %}>{{ ('€ ' ~ r.max_llm_cost_month|num) if r.max_llm_cost_month is not none else unlimited }}</dd></div>
@@ -346,7 +346,6 @@
         <label class="field span-2">{{ _('Nome') }}<input name="name" value="{{ r.name }}" maxlength="100" required autofocus></label>
         <label class="field">{{ _('Siti') }}<input name="max_sites" inputmode="numeric" value="{{ r.max_sites if r.max_sites is not none else '' }}"></label>
         <label class="field">{{ _('Fonti attive') }}<input name="max_active_sources" inputmode="numeric" value="{{ r.max_active_sources if r.max_active_sources is not none else '' }}"></label>
-        <label class="field">{{ _('Notizie al giorno') }}<input name="max_items_per_day" inputmode="numeric" value="{{ r.max_items_per_day if r.max_items_per_day is not none else '' }}"></label>
         <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ r.max_drafts_month if r.max_drafts_month is not none else '' }}"></label>
         <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" value="{{ r.max_languages if r.max_languages is not none else '' }}"></label>
         <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ r.credits_month if r.credits_month is not none else '' }}"></label>

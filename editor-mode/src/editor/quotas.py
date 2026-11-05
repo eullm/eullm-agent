@@ -38,7 +38,6 @@ def autopilot_allowed(s) -> bool:
 LIMITS = {
     "sites": ("max_sites", "sites"),
     "sources": ("max_active_sources", "active_sources"),
-    "items": ("max_items_per_day", "items_today"),
     "llm_cost": ("max_llm_cost_month", "llm_cost_month"),
     "drafts": ("max_drafts_month", "drafts_month"),
 }
@@ -86,7 +85,8 @@ def _used(s, t, now: datetime | None = None) -> dict:
         "sites": one(select(func.count()).select_from(m.sites).where(m.sites.c.tenant_id == tid)),
         "active_sources": one(select(func.count()).select_from(m.sources).where(
             m.sources.c.tenant_id == tid, m.sources.c.status == "active", repo.own())),
-        # News of the day from the sources the newsroom follows, in the archive.
+        # News of the day from the sources the newsroom follows, in the archive: a number to read,
+        # not a limit (the archive reads once for every newsroom, whatever any of them follows).
         "items_today": one(select(func.count()).select_from(m.source_items).where(
             m.source_items.c.fetched_at >= day, repo.followed_by())),
         "llm_cost_month": one(select(func.coalesce(func.sum(u.c.cost), 0)).where(
