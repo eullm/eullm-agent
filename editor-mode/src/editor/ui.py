@@ -8,6 +8,7 @@ role the action needs. Forms answer with a redirect and a one-shot notice.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -841,7 +842,10 @@ def register(app, ctx) -> None:
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,
                           proposed_total=proposed_total, collected=collected,
                           limits=limit_boxes(s, usage, auto_cards, credits.state(s)),
-                          day=the_day(s, usage, auto_cards, sid))
+                          day=the_day(s, usage, auto_cards, sid),
+                          request_sites=[x for x in ([one] if one else sites) if x.id in set(s.execute(
+                              select(m.editorial_profiles.c.site_id).where(
+                                  m.editorial_profiles.c.status == "approved")).scalars())])
 
     def draft_jobs(s, proposal_ids: list[int]) -> dict[int, dict]:
         """The latest draft job of each accepted proposal still without a
@@ -2063,6 +2067,30 @@ def register(app, ctx) -> None:
         queue.enqueue(db, c.tenant_id, "change", f"withdraw {pub_id}",
                       {"publication_id": pub_id, "op": "withdraw", "by": c.name})
         return done(f"/drafts/{pub.draft_id}", t("Ritiro in corso: lo segui nel riquadro Attività."))
+
+    @app.post("/ui/requests")
+    def ui_request_article(site_id: int = Form(...), text: str = Form(""), links: str = Form(""),
+                           c: auth.Caller = Depends(ctx.need("editor"))):
+        """An article asked for in the newsroom's own words, with optional
+        links: written from the links and the archive's news on the subject,
+        or not written when there is nothing to cite."""
+        from . import requested
+
+        text = " ".join(text.split())[:requested.MAX_TEXT]
+        if len(text) < 15:
+            return done("/#h-request", t("Scrivi cosa vuoi nell'articolo: l'argomento, il taglio, a chi è rivolto."))
+        if ctx.core is None:
+            return done("/#h-request", t("Nessun Core configurato: per scrivere serve un modello."))
+        with db.tenant(c.tenant_id) as s:
+            if s.execute(select(m.editorial_profiles.c.id).where(
+                    m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).first() is None:
+                return done("/#h-request", t("Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono."))
+        found = requested.links_of(links)
+        key = hashlib.sha256(f"{text}|{' '.join(found)}".encode()).hexdigest()[:12]
+        queue.enqueue(db, c.tenant_id, "request", f"request {site_id} {key}",
+                      {"site_id": site_id, "text": text, "links": found, "by": c.name})
+        return done("/", t("Richiesta presa: la redazione legge i link, cerca le notizie sull'argomento e scrive la "
+                           "bozza. La trovi in Bozze tra qualche minuto; se non trova fonti te lo dice in Attività."))
 
     @app.post("/ui/drafts/{draft_id}/redo")
     def ui_redo_draft(draft_id: int, note: str = Form(""), c: auth.Caller = Depends(ctx.need("editor"))):

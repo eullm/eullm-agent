@@ -117,6 +117,26 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                                     "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
                                 rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover)
 
+    def request(tenant: str, subject: str, args: dict) -> dict:
+        """An article asked for in the newsroom's own words: its links read,
+        the archive searched, the draft written, or why there is none."""
+        from . import requested
+
+        need(core, "model (Core)")
+        try:
+            if http_factory is None:
+                out = requested.ask(db, tenant, args["site_id"], args["text"], args.get("links") or [],
+                                    args.get("by") or "persona", core_for(tenant), None)
+            else:
+                with http_factory() as client:
+                    out = requested.ask(db, tenant, args["site_id"], args["text"], args.get("links") or [],
+                                        args.get("by") or "persona", core_for(tenant), client)
+        except quotas.QuotaExceeded as e:
+            return {"site_id": args["site_id"], "skipped": str(e)}
+        if out.get("draft_id") and imager is not None:  # the cover follows, as a job of its own
+            enqueue(db, tenant, "image", f"draft {out['draft_id']}", {"draft_id": out["draft_id"], "site_id": out["site_id"]})
+        return out
+
     def evening(tenant: str, subject: str, args: dict) -> dict:
         """Il Punto della Sera: the director's analysis of the site's day.
         With the automatic newsroom on it goes through the same checks and
@@ -259,4 +279,5 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
     return {"analysis": analysis, "discovery": discovery, "draft": draft, "publish": publish, "change": change, "tick": tick,
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
-            "deliver": deliver, "auto": auto, "brief": brief, "evening": evening}
+            "deliver": deliver, "auto": auto, "brief": brief, "evening": evening,
+            "request": request}

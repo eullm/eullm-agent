@@ -61,6 +61,22 @@
 </section>
 {% endif %}
 
+{% if request_sites and caller.can('editor') %}
+<section class="card pad" aria-labelledby="h-request">
+  <h2 id="h-request">{{ _('Chiedi un articolo') }}</h2>
+  <p class="lead">{{ _('Scrivi cosa vuoi: l\'argomento, il taglio, a chi è rivolto. Se hai uno o più link (un comunicato, una notizia, un documento) incollali sotto. La redazione legge i link, cerca nell\'archivio delle ultime due settimane le notizie sull\'argomento e scrive la bozza con i soliti controlli. Ogni frase deve avere una fonte: se non trova niente da citare te lo dice, invece di inventare.') }}</p>
+  <form method="post" action="/ui/requests" class="form-grid">
+    {% if request_sites|length > 1 %}
+    <label class="field">{{ _('Sito') }}<select name="site_id" required>{% for x in request_sites %}<option value="{{ x.id }}">{{ x.domain }}</option>{% endfor %}</select></label>
+    {% else %}<input type="hidden" name="site_id" value="{{ request_sites[0].id }}">{% endif %}
+    <label class="field">{{ _('Cosa vuoi nell\'articolo') }}<textarea name="text" rows="3" required minlength="15" maxlength="2000" placeholder="{{ _('Es.: un articolo per titolari di piccole imprese sugli incentivi per l\'intelligenza artificiale: cosa prevedono, chi può chiederli, entro quando.') }}"></textarea></label>
+    <label class="field">{{ _('Link (facoltativi, uno per riga, al massimo 5)') }}<textarea name="links" rows="2" placeholder="https://"></textarea></label>
+    <div><button class="btn pri" type="submit">{{ _('Scrivi la bozza') }}</button>
+      <span class="hint">{{ _('Conta come un articolo del piano. La bozza arriva in Bozze: la rileggi, la approvi e la pubblichi.') }}</span></div>
+  </form>
+</section>
+{% endif %}
+
 {% for a in auto_cards %}
 {% set day = a.day %}{% set last = a.last %}{% set cfg = a.cfg %}
 <section class="card pad" aria-labelledby="h-auto-{{ a.site.id }}" style="border-left: 4px solid var(--teal);">

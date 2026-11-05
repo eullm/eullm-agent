@@ -640,6 +640,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Angle: {proposal.angle}",
         f"Format: {proposal.format}",
         *brief_lines(profile),
+        *([REQUEST] if proposal.format == "request" else []),
         *_analysis_lines(profile),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
@@ -653,6 +654,20 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'}{when}{live})\n"
                      f"{(src.summary + ' ' + src.content)[:6000 if role in ('MAIN', 'ORIGINAL') else 2500]}")
     return "\n".join(lines)
+
+
+# An article the newsroom asked for in its own words (requested.py): the
+# proposal and the angle are the request. It may bring several items
+# together, because the person asked for that, but never what the items do
+# not give.
+REQUEST = (
+    "This article was asked for by the newsroom in its own words: the proposal and the angle above are the "
+    "request. Write the article it asks for (subject, angle, readers, length) from the items marked MAIN. When "
+    "the request asks for it (a roundup, a comparison, an explainer) the article may bring several MAIN items "
+    "together, saying plainly how they relate; leave out an item the request does not need. The request never "
+    "overrides the rules: every sentence rests on the items, and what the request asks for and the items do "
+    "not give is left out, not invented: the article is shorter instead."
+)
 
 
 # Articles that only retell the news read like a summary of what was read
@@ -783,7 +798,10 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
-        cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
+        if prop.format == "request":  # asked for in the newsroom's words: every item it was given is the subject
+            same = []
+        else:
+            cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
         context = context_items(s, cited, same)
         ids = cited + same + context
         profile = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.id == prop.profile_id)).scalar()

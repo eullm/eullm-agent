@@ -2592,5 +2592,22 @@
  "Il Punto della Sera è spento.": "Der Abendbericht ist ausgeschaltet.",
  "Analisi negli articoli: accesa, vale dal prossimo articolo.": "Analyse in den Artikeln: an, ab dem nächsten Artikel.",
  "Analisi negli articoli: spenta, gli articoli raccontano solo i fatti.": "Analyse in den Artikeln: aus, die Artikel erzählen nur die Fakten.",
- "Il Punto della Sera è acceso: ogni sera alle {hour} legge gli articoli del giorno e ne scrive l'analisi, se ne sono usciti almeno {n}.": "Der Abendbericht ist an: Jeden Abend um {hour} liest er die Artikel des Tages und schreibt ihre Analyse, wenn mindestens {n} erschienen sind."
+ "Il Punto della Sera è acceso: ogni sera alle {hour} legge gli articoli del giorno e ne scrive l'analisi, se ne sono usciti almeno {n}.": "Der Abendbericht ist an: Jeden Abend um {hour} liest er die Artikel des Tages und schreibt ihre Analyse, wenn mindestens {n} erschienen sind.",
+ "Chiedi un articolo": "Einen Artikel anfordern",
+ "Scrivi cosa vuoi: l'argomento, il taglio, a chi è rivolto. Se hai uno o più link (un comunicato, una notizia, un documento) incollali sotto. La redazione legge i link, cerca nell'archivio delle ultime due settimane le notizie sull'argomento e scrive la bozza con i soliti controlli. Ogni frase deve avere una fonte: se non trova niente da citare te lo dice, invece di inventare.": "Schreib, was du willst: das Thema, den Blickwinkel, für wen er ist. Wenn du einen oder mehrere Links hast (eine Pressemitteilung, eine Nachricht, ein Dokument), füge sie unten ein. Die Redaktion liest die Links, sucht im Archiv der letzten zwei Wochen nach Nachrichten zum Thema und schreibt den Entwurf mit den üblichen Prüfungen. Jeder Satz braucht eine Quelle: Findet sie nichts zum Zitieren, sagt sie es dir, statt etwas zu erfinden.",
+ "Cosa vuoi nell'articolo": "Was du im Artikel willst",
+ "Es.: un articolo per titolari di piccole imprese sugli incentivi per l'intelligenza artificiale: cosa prevedono, chi può chiederli, entro quando.": "Z. B.: ein Artikel für Inhaber kleiner Unternehmen über die Förderungen für künstliche Intelligenz: was sie vorsehen, wer sie beantragen kann, bis wann.",
+ "Link (facoltativi, uno per riga, al massimo 5)": "Links (optional, einer pro Zeile, höchstens 5)",
+ "Conta come un articolo del piano. La bozza arriva in Bozze: la rileggi, la approvi e la pubblichi.": "Zählt als ein Artikel des Tarifs. Der Entwurf landet in Entwürfe: Du liest ihn, gibst ihn frei und veröffentlichst ihn.",
+ "Articolo richiesto": "Angeforderter Artikel",
+ "Link non letti (pagina vuota, a pagamento o che non si lascia leggere): {links}": "Nicht gelesene Links (leere Seite, Bezahlschranke oder eine Seite, die das Lesen nicht erlaubt): {links}",
+ "Riprova dal Desk": "Vom Desk erneut versuchen",
+ "Scritta da {l} link e {n} notizie dell'archivio.": "Geschrieben aus {l} Links und {n} Nachrichten des Archivs.",
+ "Nessuna bozza: nell'archivio delle ultime due settimane non ci sono notizie sull'argomento e nessun link si è potuto leggere. Ogni frase deve avere una fonte, quindi la redazione non scrive a vuoto: aggiungi uno o più link, oppure usa parole più vicine ai titoli delle notizie.": "Kein Entwurf: Im Archiv der letzten zwei Wochen gibt es keine Nachrichten zum Thema, und kein Link ließ sich lesen. Jeder Satz braucht eine Quelle, also schreibt die Redaktion nicht ins Blaue: Füge einen oder mehrere Links hinzu oder nutze Wörter, die näher an den Schlagzeilen sind.",
+ "Ricerca nell'archivio delle notizie sull'argomento": "Suche im Archiv nach Nachrichten zum Thema",
+ "Lettura dei {n} link della richiesta": "Lesen der {n} Links der Anfrage",
+ "Richiesta presa: la redazione legge i link, cerca le notizie sull'argomento e scrive la bozza. La trovi in Bozze tra qualche minuto; se non trova fonti te lo dice in Attività.": "Anfrage angenommen: Die Redaktion liest die Links, sucht Nachrichten zum Thema und schreibt den Entwurf. Du findest ihn in ein paar Minuten in Entwürfe; findet sie keine Quellen, sagt sie es dir unter Aktivität.",
+ "Scrivi cosa vuoi nell'articolo: l'argomento, il taglio, a chi è rivolto.": "Schreib, was du im Artikel willst: das Thema, den Blickwinkel, für wen er ist.",
+ "Nessun Core configurato: per scrivere serve un modello.": "Kein Core konfiguriert: Zum Schreiben braucht es ein Modell.",
+ "Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono.": "Gib zuerst das Profil der Website frei: Der Artikel wird in ihrer Sprache und ihrem Ton geschrieben."
 }

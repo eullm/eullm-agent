@@ -2,6 +2,19 @@
 
 ## 0.30.5
 
+### Added
+
+- **Chiedi un articolo, dal Desk.** Un riquadro dove scrivere cosa si vuole
+  (argomento, taglio, a chi è rivolto) e incollare fino a 5 link facoltativi.
+  La redazione legge i link, cerca nell'archivio delle ultime due settimane
+  le notizie sull'argomento tra le fonti del sito (anche quelle in inglese:
+  il modello dà le parole da cercare nelle due lingue) e scrive la bozza con
+  i soliti controlli: ogni frase cita una fonte, niente fatti che le fonti
+  non danno. Se non trova niente da citare non scrive e lo dice in
+  Attività, con i link che non si sono potuti leggere. Conta come un
+  articolo del piano; la bozza si rilegge, si approva e si pubblica come le
+  altre.
+
 ### Fixed
 
 - **Le traduzioni inglesi non vengono più scartate per una frase copiata**
