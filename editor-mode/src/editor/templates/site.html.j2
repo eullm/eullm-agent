@@ -172,6 +172,29 @@
         <button class="btn" type="submit">{{ _('Salva') }}</button>
       </div>
     </form>
+    <form method="post" action="/ui/sites/{{ site.id }}/analysis">
+      <label for="an">{{ _('Analisi negli articoli') }}</label>
+      <div class="row">
+        <select id="an" name="on">
+          <option value="1" {% if n.auto.analysis %}selected{% endif %}>{{ _('Sì: in fondo «Cosa cambia», che collega e pesa i fatti') }}</option>
+          <option value="0" {% if not n.auto.analysis %}selected{% endif %}>{{ _('No: solo i fatti') }}</option>
+        </select>
+        <button class="btn" type="submit">{{ _('Salva') }}</button>
+      </div>
+      <p class="hint">{{ _('Collegamenti e commento si reggono solo sui fatti delle fonti: niente numeri, cause o previsioni nuove. Il caporedattore AI toglie le frasi che non lo rispettano.') }}</p>
+    </form>
+    <form method="post" action="/ui/sites/{{ site.id }}/evening">
+      <label>{{ _('Il Punto della Sera') }}</label>
+      <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="enabled" value="1" {% if n.evening.enabled %}checked{% endif %}> {{ _("Ogni sera l'analisi della giornata") }}</label>
+      <div class="row">
+        <label class="field">{{ _('Alle ore') }}<input name="hour" type="number" min="0" max="23" value="{{ n.evening.hour }}" style="width: 5em;"></label>
+        <label class="field">{{ _('Se sono usciti almeno') }}<input name="min_articles" type="number" min="2" max="50" value="{{ n.evening.min_articles }}" style="width: 5em;"></label>
+      </div>
+      <label class="field">{{ _('Rubrica') }}<input name="section" maxlength="80" value="{{ n.evening.section }}" placeholder="{{ n.evening_section }}"></label>
+      <div class="row"><button class="btn" type="submit">{{ _('Salva') }}</button></div>
+      <p class="hint">{{ _("Il direttore AI legge tutti gli articoli pubblicati nelle 24 ore, sceglie il fatto che pesa di più e scrive un'analisi che ci ruota intorno e collega le altre notizie, con link agli articoli. Con la redazione automatica accesa esce da solo dopo il caporedattore AI, altrimenti lo trovi tra le bozze.") }}</p>
+      {% if not n.evening_allowed %}<p class="hint">{{ _('Il tuo piano non comprende il Punto della Sera: le impostazioni restano salvate e partono quando passi a un piano che lo comprende.') }} <a href="/plan">{{ _('Vedi i piani') }}</a></p>{% endif %}
+    </form>
   </div>
   {% if n.discards %}
   <p class="hint">{{ _('Perché hai scartato le proposte negli ultimi 30 giorni:') }}

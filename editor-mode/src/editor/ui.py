@@ -22,7 +22,7 @@ from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from . import connect, opportunity as oppo, queue
-from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
+from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
 
@@ -1035,6 +1035,9 @@ def register(app, ctx) -> None:
             "cover_style": ((body or {}).get("settings") or {}).get("cover_style") or "impact",
             "cover_text": bool(((body or {}).get("settings") or {}).get("cover_text")),
             "sources_style": ((body or {}).get("settings") or {}).get("sources_style") or "notes",
+            "evening": evening.settings_of(body),
+            "evening_allowed": evening.allowed(s),
+            "evening_section": evening.section_of(evening.settings_of(body), (body or {}).get("language")),
             "auto": autopilot.settings_of(body or s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == site.id, m.editorial_profiles.c.status == "draft")
                 .order_by(m.editorial_profiles.c.version.desc()).limit(1)).scalar()),
@@ -1383,6 +1386,9 @@ def register(app, ctx) -> None:
                   "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix",
                   "morning_share": morning_share, "borrow": borrow, "extra_credits": extra_credits,
                   "extra_min_opportunity": extra_min_opportunity}
+        with db.tenant(c.tenant_id) as s:  # set in "Come scrive il sito", not here
+            values["analysis"] = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())["analysis"]
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1416,6 +1422,33 @@ def register(app, ctx) -> None:
                 autopilot.save(s, site_id, {**autopilot.settings_of(body), "enabled": False})
         return done("/site?tab=auto", t("Redazione automatica fermata: non parte nessun articolo nuovo. Quelli già in "
                                       "scrittura restano bozze da rileggere."))
+
+    @app.post("/ui/sites/{site_id}/analysis")
+    def ui_analysis(site_id: int, on: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            body = s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
+            if body is None or not autopilot.save(s, site_id, {**autopilot.settings_of(body), "analysis": on == "1"}):
+                return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
+        return done("/site?tab=auto", t("Analisi negli articoli: accesa, vale dal prossimo articolo.") if on == "1"
+                    else t("Analisi negli articoli: spenta, gli articoli raccontano solo i fatti."))
+
+    @app.post("/ui/sites/{site_id}/evening")
+    def ui_evening(site_id: int, enabled: str = Form(""), hour: int = Form(21), min_articles: int = Form(6),
+                   section: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+        try:
+            values = evening.check_settings({"enabled": enabled == "1", "hour": hour, "min_articles": min_articles,
+                                             "section": section})
+        except ValueError as e:
+            return done("/site?tab=auto", t("Impostazioni non salvate: {e}.", e=e))
+        with db.tenant(c.tenant_id) as s:
+            if not evening.save(s, site_id, values):
+                return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
+        if values["enabled"]:
+            return done("/site?tab=auto", t("Il Punto della Sera è acceso: ogni sera alle {hour} legge gli articoli del "
+                                          "giorno e ne scrive l'analisi, se ne sono usciti almeno {n}.",
+                                          hour=values["hour"], n=values["min_articles"]))
+        return done("/site?tab=auto", t("Il Punto della Sera è spento."))
 
     @app.post("/ui/sites/{site_id}/sources-style")
     def ui_sources_style(site_id: int, style: str = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):

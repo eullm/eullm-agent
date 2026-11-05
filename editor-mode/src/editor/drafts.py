@@ -26,7 +26,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
-from . import credits, quotas, repo, seo, usage
+from . import credits, quotas, repo, seo, style, usage
 from .text import humanize
 from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
@@ -152,48 +152,60 @@ def _names(text: str, sources: tuple[str, ...] = ()) -> set[str]:
     return out
 
 
-# A sentence that copies its source is reworded in place, never rewritten:
-# the new words keep the same numbers, the same names and the same sources,
-# and pass every check again, or the sentence stays as it was
-# (Francesco 2026-11-05: "fai in modo che non falsi le frasi").
+# A sentence that copies its source, or that uses a stock phrase of
+# machine-written text (style.stock), is reworded in place, never
+# rewritten: the new words keep the same numbers, the same names and the
+# same sources, and pass every check again, or the sentence stays as it was
+# (Francesco 2026-11-05: "fai in modo che non falsi le frasi"; the same day,
+# an analysis of aitoday.it still found the phrases he had asked to avoid).
 REPHRASE_SYSTEM = (
-    "You reword sentences of a news article that copy a run of words from their source. For each sentence, "
-    "write it again in your own words, in the same language, so that it no longer repeats the quoted words "
-    "of the source. Keep exactly the same facts and meaning, with the same certainty (a forecast stays a "
+    "You reword sentences of a news article. Each one either copies a run of words from its source, or uses a "
+    "stock phrase that gives away a machine-written text; both are quoted after it. Write each sentence again "
+    "in your own words, in the same language, without the quoted words, plainly, as a journalist would: say the "
+    "fact itself instead of a framing (\"it is not just X, it is Y\" becomes what it is; \"marks a turning point\" "
+    "becomes what changes). Keep exactly the same facts and meaning, with the same certainty (a forecast stays a "
     "forecast, a claim stays attributed): the same numbers written the same way, the same names, dates and "
-    "places. Add nothing, remove nothing, do not explain. Reply with JSON only: "
+    "places. Add nothing, remove nothing, do not explain, and do not use any of these phrases: " + style.examples()
+    + ". Reply with JSON only: "
     '{"sentences": {"<n>": "<the reworded sentence>"}}'
 )
 
 
-def faithful(old: str, new: str, cited: list) -> bool:
+def faithful(old: str, new: str, cited: list, language: str | None = None) -> bool:
     """Whether a reworded sentence says what the old one said, as far as a
     check can tell: the same numbers, every name, about the same length, no
-    copied run of a source, nothing about the sources."""
+    copied run of a source, nothing about the sources, no stock phrase."""
     if not new or numbers(new) != numbers(old) or any(n not in new.lower() for n in _names(old, tuple(x.text for x in cited))):
         return False
-    if not 0.6 <= len(new) / max(1, len(old)) <= 1.6 or about_sources(new):
+    if not 0.6 <= len(new) / max(1, len(old)) <= 1.6 or about_sources(new) or style.stock(new, language):
         return False
     return not any(copied_run(new, x.text) for x in cited)
 
 
-def rephrase_copies(db, tenant_id: str, draft_id: int, core: CoreClient, purpose: str = "draft") -> int:
+def reword(db, tenant_id: str, draft_id: int, core: CoreClient, purpose: str = "draft") -> int:
     """Reword, where they stand, the draft's sentences that copy a passage of
-    their source; returns how many were reworded. Each is checked with
-    `faithful`, then the draft is checked again as after a person's edit."""
+    their source or use a stock phrase; returns how many were reworded. Each
+    is checked with `faithful`, then the draft is checked again as after a
+    person's edit."""
     with db.tenant(tenant_id) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
         stored = stored_claims(s, draft_id)
         sources = _sources(s, list({i for c in stored for i in c["sources"]}))
     copied = {f.get("claim") for f in d.flags or [] if COPIED in (f.get("problems") or [])}
-    todo = [c for c in stored if c["ordinal"] in copied]
+    lines, todo = [], []
+    for c in stored:
+        runs = [r for r in (copied_words(c["text"], sources[i].text) for i in c["sources"] if i in sources) if r] \
+            if c["ordinal"] in copied else []
+        phrases = style.stock(c["text"], d.language)
+        if not runs and not phrases:
+            continue
+        todo.append(c)
+        lines.append(f'{c["ordinal"]}. Sentence: {c["text"]}'
+                     + (f'\n   Words taken from the source: "{"; ".join(runs)}"' if runs else "")
+                     + (f'\n   Stock phrases: "{"; ".join(phrases)}"' if phrases else ""))
     if not todo:
         return 0
-    lines = []
-    for c in todo:
-        runs = [r for r in (copied_words(c["text"], sources[i].text) for i in c["sources"] if i in sources) if r]
-        lines.append(f'{c["ordinal"]}. Sentence: {c["text"]}\n   Words taken from the source: "{"; ".join(runs)}"')
-    step(N_("Il modello riformula le frasi copiate dalle fonti"))
+    step(N_("Il modello riformula le frasi copiate dalle fonti o fatte di formule"))
 
     def valid(v):
         if not isinstance(v, dict) or not isinstance(v.get("sentences"), dict):
@@ -204,16 +216,19 @@ def rephrase_copies(db, tenant_id: str, draft_id: int, core: CoreClient, purpose
         with usage.tagged(db, tenant_id, purpose, site_id=d.site_id, ref=f"draft:{draft_id}"):
             answer, _calls = core.chat_json(REPHRASE_SYSTEM, f"Language: {d.language}\n" + "\n".join(lines), valid)
     except CoreError as e:
-        log.info("draft %s: copied sentences not reworded: %s", draft_id, e)
+        log.info("draft %s: sentences not reworded: %s", draft_id, e)
         return 0
     texts = {}
     for c in todo:
         new = " ".join(str(answer.get(str(c["ordinal"])) or "").split())
-        if faithful(c["text"], new, [sources[i] for i in c["sources"] if i in sources]):
+        if faithful(c["text"], new, [sources[i] for i in c["sources"] if i in sources], d.language):
             texts[c["ordinal"]] = new
     if texts:
         edit(db, tenant_id, draft_id, d.title, d.subtitle or "", texts)
     return len(texts)
+
+
+rephrase_copies = reword  # its name before it reworded stock phrases too
 
 
 # The sentence checks' findings, stored in English (the models read them too).
@@ -424,8 +439,8 @@ SYSTEM = (
     "of sentences, prefer concrete nouns and verbs to adjectives, no stock openings or closings (\"in today's "
     "world\", \"it is worth noting\", \"in conclusion\", \"game changer\", their equivalents in any language), no "
     "em dashes, en dashes or double hyphens as pauses, no ellipses, no triplets of adjectives, no rhetorical "
-    "questions in the text, no summary of what was just said, no colon-split titles: it must read as written by a "
-    "person. "
+    "questions in the text, no summary of what was just said, no colon-split titles, none of the stock phrases "
+    "of machine-written text (" + style.examples() + "): it must read as written by a person. "
     "Write it so search engines and AI answer engines pick it up: the first section has no heading and answers "
     "the reader's main question in two or three sentences; in a longer article the other headings are the "
     "questions people search for, in plain words. Add frequently asked questions (one to three, each answered "
@@ -625,6 +640,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Angle: {proposal.angle}",
         f"Format: {proposal.format}",
         *brief_lines(profile),
+        *_analysis_lines(profile),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
          "earlier news for context only; unmarked: other outlets' reports of the same event):"),
@@ -637,6 +653,32 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'}{when}{live})\n"
                      f"{(src.summary + ' ' + src.content)[:6000 if role in ('MAIN', 'ORIGINAL') else 2500]}")
     return "\n".join(lines)
+
+
+# Articles that only retell the news read like a summary of what was read
+# (Francesco 2026-11-05: "si limita a fare una sorta di riassunto delle
+# notizie lette senza correlazioni e commenti ... controllato sarebbe un
+# ottimo passo avanti"). The last section reads the facts: it connects them
+# and weighs them, but brings nothing the items do not give, and the AI
+# editor-in-chief cuts what does (autopilot.RULES).
+ANALYSIS = (
+    "Analysis: after the facts, end with one short section that helps the reader understand what the event "
+    "means. Its heading is a plain phrase or question in the site's language (for example \"Cosa cambia\", "
+    "\"Perché conta\", \"What changes\"), and it has 2 to 4 sentences. Here you may connect the facts of the "
+    "items with each other and with the CONTEXT items, explain the consequences the items describe, compare "
+    "with a precedent, and be critical where the items allow it: a claim made by an interested party, a promise "
+    "without a date or a figure, a number without its comparison, two items that disagree. Every sentence still "
+    "cites the items whose facts it rests on and adds no fact, number, name, quote or date they do not give; "
+    "a cause, an effect or a forecast that no item states is written as a reading (\"suggests\", \"points to\", "
+    "\"could\"), never as news, and one an item states stays attributed. Do not moralise, do not address the "
+    "reader, do not end on a stock phrase. Leave the section out when the items give nothing to connect or weigh."
+)
+
+
+def _analysis_lines(profile: dict) -> list[str]:
+    from .autopilot import settings_of
+
+    return [ANALYSIS] if settings_of(profile)["analysis"] else []
 
 
 def _post_lines(posts: list[dict]) -> list[str]:
@@ -842,8 +884,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             s.execute(insert(m.draft_claim_sources).values(
                 [{"tenant_id": tenant_id, "claim_id": cid, "item_id": i} for i in c.sources]))
         s.execute(update(m.proposals).where(m.proposals.c.id == proposal_id).values(status="drafted"))
-    if any(COPIED in c.flags for c in article.claims):  # still copied after the tries: reworded where they stand
-        rephrase_copies(db, tenant_id, did, core, purpose)
+    if any(COPIED in c.flags or style.stock(c.text, profile.get("language")) for c in article.claims):
+        reword(db, tenant_id, did, core, purpose)  # still copied, or stock phrases: reworded where they stand
     return did
 
 
@@ -944,6 +986,7 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
     claims = parse_text(text, order)
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
+    keep = {k: old[k] for k in ("section", "replaces") if k in old}
     sd.links = old.get("links") or []
     sections = list(dict.fromkeys(c.section for c in claims))
     sd.faq = [q for q in old.get("faq") or [] if q in sections]
@@ -1005,6 +1048,7 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
         claims.append(Claim(text, c["sources"], c["section"]))
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
+    keep = {k: old[k] for k in ("section", "replaces") if k in old}
     sd.faq, sd.links = old.get("faq") or [], old.get("links") or []
     article = check(Article(title, " ".join((subtitle or "").split())[:300], claims, sd.faq, {}), sources)
     first = next((c.section for c in claims), None)
@@ -1018,5 +1062,5 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
                 s.execute(update(m.draft_claims).where(m.draft_claims.c.id == c["id"]).values(text=new.text))
         s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
             title=title, subtitle=article.subtitle, body_md=render(article, sources, d.language, sd.links),
-            flags=article.flags, seo=sd.as_dict(), status=status, decided_by=None, decided_at=None))
+            flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
     return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}

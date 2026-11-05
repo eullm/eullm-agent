@@ -104,10 +104,10 @@ def save_plan(admin, code: str, fields: dict) -> None:
     limits until their plan is applied again (the next payment)."""
     allowed = {"name", "description", "price_month_cents", "price_year_cents", "trial_days", "max_sites",
                "max_languages", "max_active_sources", "max_drafts_month", "max_llm_cost_month",
-               "public", "sort", "autopilot", "credits_month"}
+               "public", "sort", "autopilot", "credits_month", "evening"}
     values = {k: v for k, v in fields.items() if k in allowed}
     for k, v in values.items():
-        if k not in ("name", "description", "public", "autopilot") and v is not None and (isinstance(v, bool) or v < 0):
+        if k not in ("name", "description", "public", "autopilot", "evening") and v is not None and (isinstance(v, bool) or v < 0):
             raise BillingError(t("{field}: un numero di zero o più", field=k))
     if "name" in values and not str(values["name"]).strip():
         raise BillingError(t("il piano ha bisogno di un nome"))
@@ -138,7 +138,7 @@ def create_plan(admin, code: str, name: str) -> str:
             raise BillingError(t("il piano {code} esiste già", code=code))
         last = conn.execute(select(func.max(m.plans.c.sort))).scalar() or 0
         conn.execute(insert(m.plans).values(code=code, name=name, description="", currency="EUR", trial_days=0,
-                                            public=False, sort=last + 10, autopilot=True))
+                                            public=False, sort=last + 10, autopilot=True, evening=False))
     return code
 
 
@@ -170,7 +170,7 @@ def apply_plan(admin, tenant_id: str, plan, core=None) -> str | None:
         "plan": plan.code, "limits": {k: getattr(plan, k) for k in PLAN_LIMITS}}, core)["warning"]
     with admin.engine.begin() as conn:
         conn.execute(update(m.tenants).where(m.tenants.c.tenant_id == tenant_id)
-                     .values(autopilot=plan.autopilot is not False))
+                     .values(autopilot=plan.autopilot is not False, evening=bool(getattr(plan, "evening", False))))
     return warning
 
 

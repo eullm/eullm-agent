@@ -84,6 +84,7 @@ tenants = Table(
     Column("customer_id", BigInteger),
     Column("hold", Text),
     Column("autopilot", Boolean),  # the plan includes the automatic newsroom
+    Column("evening", Boolean),  # the plan includes the evening analysis (Il Punto della Sera)
     Column("proposals_only", _ts()),  # since: trial or period over, proposals only
     Column("weekly_report", Boolean),  # the weekly report by email (on by default)
     Column("credits_month", Integer),  # credits the plan gives every month (credits.py)
@@ -709,6 +710,7 @@ plans = Table(
     Column("sort", Integer, nullable=False),
     Column("autopilot", Boolean, nullable=False),
     Column("credits_month", Integer),
+    Column("evening", Boolean, nullable=False),
 )
 
 subscriptions = Table(
