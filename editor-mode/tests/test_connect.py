@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from editor import connect, models as m, publishing as pub, vault
 from editor.api import create_app
@@ -19,7 +19,7 @@ from test_ui import logged_in
 WP = "https://blog.example"
 
 
-def wp_site(router, *, auth=True, role_caps=None, categories=None):
+def wp_site(router, *, auth=True, role_caps=None, categories=None, posts=3):
     router.get(f"{WP}/wp-json/").mock(return_value=httpx.Response(200, json={
         "name": "Il Blog &amp; Co", "description": "Notizie", "namespaces": ["wp/v2"]}))
     me = router.get(f"{WP}/wp-json/wp/v2/users/me")
@@ -33,6 +33,8 @@ def wp_site(router, *, auth=True, role_caps=None, categories=None):
         {"id": 5, "name": "Tecnologia &amp; AI", "slug": "tecnologia-ai", "count": 12},
         {"id": 1, "name": "Senza categoria", "slug": "senza-categoria", "count": 3},
         {"id": 9, "name": "Economia", "slug": "economia", "count": 4}]))
+    router.get(f"{WP}/wp-json/wp/v2/posts").mock(return_value=httpx.Response(
+        200, json=[{"id": 1}] if posts else [], headers={"X-WP-Total": str(posts)}))
 
 
 def test_wordpress_is_tried_and_its_categories_read():
@@ -43,6 +45,7 @@ def test_wordpress_is_tried_and_its_categories_read():
     assert found["can_publish"] and found["can_upload"]
     assert [c["name"] for c in found["categories"]] == ["Tecnologia & AI", "Senza categoria", "Economia"]
     assert found["sections"] == ["Tecnologia & AI", "Economia"]  # the default category says nothing about the site
+    assert found["posts"] == 3
 
 
 def test_wordpress_without_pretty_permalinks_goes_by_rest_route():
@@ -57,6 +60,8 @@ def test_wordpress_without_pretty_permalinks_goes_by_rest_route():
             return_value=httpx.Response(200, json={"name": "R", "capabilities": {"edit_posts": True}}))
         router.get(f"{WP}/", params__contains={"rest_route": "/wp/v2/categories"}).mock(
             return_value=httpx.Response(200, json=[{"id": 9, "name": "Economia", "slug": "economia", "count": 4}]))
+        router.get(f"{WP}/", params__contains={"rest_route": "/wp/v2/posts"}).mock(
+            return_value=httpx.Response(200, json=[], headers={"X-WP-Total": "0"}))
         found = connect.wordpress(WP, "redazione", "abcd efgh", resolver=public_resolver)
     assert me.called and dict(me.calls[0].request.url.params)["context"] == "edit"
     assert found["sections"] == ["Economia"]
@@ -163,7 +168,7 @@ def test_adding_a_site_leads_to_the_connection_and_the_connection_to_the_analysi
         assert not s.execute(select(m.jobs.c.id).where(m.jobs.c.kind == "analysis")).first()  # not yet read
     page = c.get("/connect")
     assert page.status_code == 200 and "nuovo.example" in page.text and "WordPress" in page.text
-    assert "Password applicazioni" in c.get("/connect?kind=wordpress").text
+    assert "Password delle applicazioni" in c.get("/connect?kind=wordpress").text
     assert "github.com/settings/personal-access-tokens/new" in c.get("/connect?kind=github").text
     assert "vercel.com/new" in c.get("/connect?kind=github&host=vercel").text
 
@@ -201,6 +206,18 @@ def test_adding_a_site_leads_to_the_connection_and_the_connection_to_the_analysi
     assert vault.get(db, tenant, "WP_NUOVO_EXAMPLE") == "nuova password"
     steps = c.get("/start").text
     assert "Sito collegato" in steps
+
+    # A WordPress with no articles yet: nothing to read, the page asks for the context instead.
+    c.post("/ui/sites", data={"domain": "vuoto.example", "back": "/start"}, follow_redirects=False)
+    with db.tenant(tenant) as s:
+        empty_id = s.execute(select(m.sites.c.id).where(m.sites.c.domain == "vuoto.example")).scalar()
+    with respx.mock(assert_all_called=False) as router:
+        wp_site(router, posts=0)
+        done = c.post(f"/ui/connect/{empty_id}/check", data={
+            "kind": "wordpress", "address": WP, "user": "redazione", "secret": "abcd"})
+    assert "Collegamento verificato" in done.text and "Scrivi il contesto" in done.text
+    with db.tenant(tenant) as s:
+        assert s.execute(select(func.count()).select_from(m.jobs).where(m.jobs.c.kind == "analysis")).scalar() == 1
 
 
 def test_the_analysis_starts_from_the_categories_the_site_already_has(db, tenant, monkeypatch):
@@ -299,3 +316,24 @@ def test_publishing_goes_by_rest_route_where_wp_json_is_not_routed():
     assert post.called and r.json()["id"] == 7
     # A REST 404 (a post that is not there) is an answer, not a missing route.
     assert not pub.not_rest(httpx.Response(404, json={"code": "rest_post_invalid_id"}))
+
+
+def test_a_section_without_its_category_gets_one_on_wordpress():
+    """Francesco 2026-11-05: a new site has no categories; the sections are
+    decided in Redazia and their categories made on WordPress."""
+    p = pub.Publisher(http=httpx.Client(), resolver=public_resolver)
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(200, json=[]))
+        made = router.post(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(201, json={"id": 12}))
+        assert p._wordpress_category(WP, ("u", "p"), "Intelligenza artificiale") == 12
+    assert json.loads(made.calls[0].request.content) == {"name": "Intelligenza artificiale"}
+    with respx.mock(assert_all_called=False) as router:  # already there: found, not made twice
+        router.get(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(200, json=[
+            {"id": 4, "name": "Economia &amp; finanza"}]))
+        made = router.post(f"{WP}/wp-json/wp/v2/categories")
+        assert p._wordpress_category(WP, ("u", "p"), "Economia & finanza") == 4 and not made.called
+    with respx.mock(assert_all_called=False) as router:  # not allowed: the article goes out without
+        router.get(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(200, json=[]))
+        router.post(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(
+            403, json={"code": "rest_cannot_create"}))
+        assert p._wordpress_category(WP, ("u", "p"), "Mondo") is None

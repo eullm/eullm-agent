@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import hmac
 import logging
 import ipaddress
@@ -633,12 +634,41 @@ class Publisher:
         check_public_url(base, self.resolver)
         auth = (target.config["user"], _need(secret, target))
         post = self._wordpress_post(target, pub.payload, pub.mode)
+        if "categories" not in post and pub.payload.get("section"):
+            cat = self._wordpress_category(base, auth, pub.payload["section"])
+            if cat is not None:
+                post["categories"] = [cat]
         if image is not None:
             post["featured_media"] = self._wordpress_media(base, auth, pub.payload.get("slug"), image)
         r = self._wp("POST", base, "wp/v2/posts", auth=auth, json=post)
         r.raise_for_status()
         body = r.json()
         return str(body["id"]), body.get("link")
+
+    def _wordpress_category(self, base: str, auth, name: str) -> int | None:
+        """The category of a section the site did not have when it was
+        connected: found by name, or created (Francesco 2026-11-05: the
+        sections are decided in Redazia, a new site has none). None when the
+        user may not create categories: the article goes out without one."""
+        name = name.strip()[:100]
+        try:
+            r = self._wp("GET", base, "wp/v2/categories", f"search={quote(name)}&per_page=20&_fields=id,name",
+                         auth=auth)
+            if r.status_code == 200 and isinstance(r.json(), list):
+                for c in r.json():
+                    if html.unescape(str(c.get("name") or "")).strip().lower() == name.lower():
+                        return int(c["id"])
+            r = self._wp("POST", base, "wp/v2/categories", auth=auth, json={"name": name})
+            if r.status_code in (200, 201):
+                return int(r.json()["id"])
+            body = r.json() if "json" in r.headers.get("content-type", "") else {}
+            term = (body.get("data") or {}).get("term_id") if isinstance(body, dict) else None
+            if term:  # created meanwhile by someone else
+                return int(term)
+            log.warning("category %r not created on %s: HTTP %s", name, base, r.status_code)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+            log.warning("category %r on %s: %s", name, base, e)
+        return None
 
     def _wordpress_media(self, base: str, auth, slug: str | None, image) -> int:
         """The cover image to the media library, with its alternative text:

@@ -79,7 +79,8 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
     """Try a WordPress site with the application password of `user`.
 
     Returns {base, name, user, can_publish, can_upload, categories: [{id,
-    name, slug, count}], sections: [names worth filling]}; raises ConnectError.
+    name, slug, count}], sections: [names worth filling], posts: published
+    articles or None}; raises ConnectError.
     """
     base = wordpress_base(address)
     user, password = (user or "").strip(), (password or "").strip()
@@ -137,11 +138,16 @@ def wordpress(address: str, user: str, password: str, *, http: httpx.Client | No
             if len(rows) < 100:
                 break
         sections = [c["name"] for c in categories if c["slug"] not in DEFAULT_CATEGORIES][:30]
+        # How many articles there are to read: a new site has none, and its analysis would find nothing.
+        posts = None
+        r = api("wp/v2/posts", "per_page=1&_fields=id")
+        if r.status_code == 200 and r.headers.get("x-wp-total", "").isdigit():
+            posts = int(r.headers["x-wp-total"])
         return {"base": base, "name": html.unescape(str(info.get("name") or "")).strip(),
                 "description": html.unescape(str(info.get("description") or "")).strip(),
                 "user": user, "display_name": who.get("name") or user,
                 "can_publish": can_publish if caps else True, "can_upload": can_upload if caps else True,
-                "categories": categories, "sections": sections}
+                "categories": categories, "sections": sections, "posts": posts}
     finally:
         if own:
             http.close()

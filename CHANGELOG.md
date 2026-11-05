@@ -34,6 +34,19 @@
   serve lo username di wp-admin, non il nome dato alla password, e il
   messaggio di accesso rifiutato indica la riga del `.htaccess` per i server
   che non passano l'accesso a WordPress.
+- **Collegare WordPress, passo per passo.** La pagina del collegamento (e
+  la guida per i clienti) va in quattro passi: permalink «Nome articolo»,
+  un utente solo per Redazia con ruolo Editore (perché è più sicuro
+  dell'amministratore e cosa può fare), la password applicativa con i nomi
+  esatti dei menu di WordPress, la prova con lo username giusto e la riga
+  del `.htaccess` se l'accesso viene rifiutato.
+- **Sito WordPress nuovo, senza articoli.** Il collegamento conta gli
+  articoli già pubblicati: se non ce n'è nessuno l'analisi non parte (non
+  troverebbe nulla) e la pagina porta a "Scrivi il contesto", da cui si crea
+  il profilo.
+- **Le categorie le crea Redazia.** Se su WordPress manca la categoria della
+  rubrica di un articolo, alla pubblicazione Redazia la cerca per nome e, se
+  non c'è, la crea. Non serve più prepararle prima.
 - **Gli articoli persi vengono sostituiti.** Un articolo il cui lavoro è
   finito in errore prima della bozza, o una bozza rimasta a metà e mai
   approvata (con "tutto automatico"), non conta più tra quelli fatti: al

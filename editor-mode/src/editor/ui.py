@@ -1297,10 +1297,13 @@ def register(app, ctx) -> None:
             return again(e)
         except (vault.VaultError, publishing.PublishError) as e:
             return again(t("Collegamento non salvato: {e}.", e=e))
-        started = start_analysis_once(c.tenant_id, site_id, site.domain)
+        # A WordPress with no articles yet: its analysis would read nothing, the profile starts
+        # from what the owner writes (Francesco 2026-11-05, wp.aitoday.it).
+        empty = kind == "wordpress" and found.get("posts") == 0
+        started = False if empty else start_analysis_once(c.tenant_id, site_id, site.domain)
         with db.tenant(c.tenant_id) as s:
             return connect_page(request, c, s, sites, site, kind=kind, host=host,
-                                result={"kind": kind, "found": found, "started": started})
+                                result={"kind": kind, "found": found, "started": started, "empty": empty})
 
     @app.post("/ui/sites/{site_id}/review")
     def ui_review(site_id: int, back: str = "/site", c: auth.Caller = Depends(ctx.need("owner"))):
