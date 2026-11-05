@@ -2550,5 +2550,6 @@
  "leggi tutto": "tout lire",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Le rédacteur en chef IA l'a corrigé au lieu de l'écarter : {why}",
  "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Le rédacteur en chef IA corrige l'article au lieu de l'écarter : {why}",
- "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposition acceptée : « {title} » est en rédaction, suivez-le dans l'encadré Activité."
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposition acceptée : « {title} » est en rédaction, suivez-le dans l'encadré Activité.",
+ "Il modello riformula le frasi copiate dalle fonti": "Le modèle reformule les phrases copiées des sources"
 }

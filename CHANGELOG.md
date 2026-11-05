@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.46
+
+### Fixed
+
+- **Meno frasi copiate parola per parola, senza falsarle** (Francesco: "perché
+  non le cambia?" e "fai in modo che non falsi le frasi"). Quando una frase
+  copia la fonte, al nuovo tentativo il modello riceve le parole esatte da
+  dire con parole sue. Le frasi ancora copiate dopo i tre tentativi vengono
+  riformulate al loro posto, e la nuova frase vale solo se ha gli stessi
+  numeri, tutti i nomi, le stesse fonti, una lunghezza simile e non copia
+  più: altrimenti resta la frase originale, segnalata da rileggere. Vale
+  anche per la redazione automatica.
+
 ## 0.28.45
 
 ### Fixed

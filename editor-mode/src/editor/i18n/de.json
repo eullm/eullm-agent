@@ -2550,5 +2550,6 @@
  "leggi tutto": "alles lesen",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Der KI-Chefredakteur hat ihn korrigiert, statt ihn zu verwerfen: {why}",
  "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Der KI-Chefredakteur korrigiert den Artikel, statt ihn zu verwerfen: {why}",
- "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Vorschlag angenommen: „{title}“ wird geschrieben, verfolgen Sie ihn im Kasten Aktivität."
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Vorschlag angenommen: „{title}“ wird geschrieben, verfolgen Sie ihn im Kasten Aktivität.",
+ "Il modello riformula le frasi copiate dalle fonti": "Das Modell formuliert die aus den Quellen kopierten Sätze um"
 }

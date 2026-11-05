@@ -122,6 +122,100 @@ def copied_run(claim: str, source: str, run: int = COPY_RUN) -> bool:
     return any(" " + " ".join(words[i : i + run]) + " " in src for i in range(len(words) - run + 1))
 
 
+def copied_words(claim: str, source: str, run: int = COPY_RUN) -> str | None:
+    """The longest run of words the sentence takes from the source, at
+    least `run` long, as the check reads them (lower case, no punctuation)."""
+    words = normalize_text(claim).split()
+    src = " " + normalize_text(source) + " "
+    best = None
+    for i in range(len(words) - run + 1):
+        n = run
+        if " " + " ".join(words[i:i + n]) + " " not in src:
+            continue
+        while i + n < len(words) and " " + " ".join(words[i:i + n + 1]) + " " in src:
+            n += 1
+        if best is None or n > len(best.split()):
+            best = " ".join(words[i:i + n])
+    return best
+
+
+def _names(text: str, sources: tuple[str, ...] = ()) -> set[str]:
+    """Proper names and acronyms of a sentence. Its first word counts when
+    it is an acronym or a source writes it with a capital inside a sentence."""
+    words = re.findall(r"\b[^\W\d_][\w'’.-]*", text)
+    out = {w.lower().strip(".") for w in words[1:] if w[:1].isupper()}
+    if words and words[0][:1].isupper():
+        first = words[0].strip(".")
+        inside = any(re.search(r"[^.!?\s]\s+" + re.escape(first) + r"\b", x) for x in sources)
+        if inside or (len(first) > 1 and first.isupper()):
+            out.add(first.lower())
+    return out
+
+
+# A sentence that copies its source is reworded in place, never rewritten:
+# the new words keep the same numbers, the same names and the same sources,
+# and pass every check again, or the sentence stays as it was
+# (Francesco 2026-11-05: "fai in modo che non falsi le frasi").
+REPHRASE_SYSTEM = (
+    "You reword sentences of a news article that copy a run of words from their source. For each sentence, "
+    "write it again in your own words, in the same language, so that it no longer repeats the quoted words "
+    "of the source. Keep exactly the same facts and meaning, with the same certainty (a forecast stays a "
+    "forecast, a claim stays attributed): the same numbers written the same way, the same names, dates and "
+    "places. Add nothing, remove nothing, do not explain. Reply with JSON only: "
+    '{"sentences": {"<n>": "<the reworded sentence>"}}'
+)
+
+
+def faithful(old: str, new: str, cited: list) -> bool:
+    """Whether a reworded sentence says what the old one said, as far as a
+    check can tell: the same numbers, every name, about the same length, no
+    copied run of a source, nothing about the sources."""
+    if not new or numbers(new) != numbers(old) or any(n not in new.lower() for n in _names(old, tuple(x.text for x in cited))):
+        return False
+    if not 0.6 <= len(new) / max(1, len(old)) <= 1.6 or about_sources(new):
+        return False
+    return not any(copied_run(new, x.text) for x in cited)
+
+
+def rephrase_copies(db, tenant_id: str, draft_id: int, core: CoreClient, purpose: str = "draft") -> int:
+    """Reword, where they stand, the draft's sentences that copy a passage of
+    their source; returns how many were reworded. Each is checked with
+    `faithful`, then the draft is checked again as after a person's edit."""
+    with db.tenant(tenant_id) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
+        stored = stored_claims(s, draft_id)
+        sources = _sources(s, list({i for c in stored for i in c["sources"]}))
+    copied = {f.get("claim") for f in d.flags or [] if COPIED in (f.get("problems") or [])}
+    todo = [c for c in stored if c["ordinal"] in copied]
+    if not todo:
+        return 0
+    lines = []
+    for c in todo:
+        runs = [r for r in (copied_words(c["text"], sources[i].text) for i in c["sources"] if i in sources) if r]
+        lines.append(f'{c["ordinal"]}. Sentence: {c["text"]}\n   Words taken from the source: "{"; ".join(runs)}"')
+    step(N_("Il modello riformula le frasi copiate dalle fonti"))
+
+    def valid(v):
+        if not isinstance(v, dict) or not isinstance(v.get("sentences"), dict):
+            raise ValueError('expected {"sentences": {"<n>": "..."}}')
+        return v["sentences"]
+
+    try:
+        with usage.tagged(db, tenant_id, purpose, site_id=d.site_id, ref=f"draft:{draft_id}"):
+            answer, _calls = core.chat_json(REPHRASE_SYSTEM, f"Language: {d.language}\n" + "\n".join(lines), valid)
+    except CoreError as e:
+        log.info("draft %s: copied sentences not reworded: %s", draft_id, e)
+        return 0
+    texts = {}
+    for c in todo:
+        new = " ".join(str(answer.get(str(c["ordinal"])) or "").split())
+        if faithful(c["text"], new, [sources[i] for i in c["sources"] if i in sources]):
+            texts[c["ordinal"]] = new
+    if texts:
+        edit(db, tenant_id, draft_id, d.title, d.subtitle or "", texts)
+    return len(texts)
+
+
 # The sentence checks' findings, stored in English (the models read them too).
 NO_SOURCE = "no valid source"
 NUMBERS_MISSING = "numbers not found in the cited sources: "
@@ -489,6 +583,19 @@ def read_documents(db, tenant_id: str, links: dict[int, list[str]], client: http
     return list(dict.fromkeys(out))
 
 
+def _problem(flag: dict, article: Article, sources: dict[int, Source]) -> str:
+    """A sentence's problems for the writer, with the words it copied, so
+    it knows what to say in its own words."""
+    out = f"claim {flag['claim']}: {', '.join(flag['problems'])}"
+    if COPIED in flag["problems"]:
+        c = article.claims[flag["claim"]]
+        runs = [r for r in (copied_words(c.text, sources[i].text) for i in c.sources if i in sources) if r]
+        if runs:
+            out += (f' (these words are the source\'s: "{"; ".join(runs)}"; say it in your own words with the same '
+                    "facts, numbers and names)")
+    return out
+
+
 def _sources(s, ids: list[int]) -> dict[int, Source]:
     rows = s.execute(
         select(m.source_items, m.sources.c.name.label("source_name"))
@@ -676,7 +783,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             short = need and len({sources[i].name for c in article.claims for i in c.sources if i in sources}) < need
             if not article.flags and not short:
                 break
-            problem = "; ".join(f"claim {f['claim']}: {', '.join(f['problems'])}" for f in article.flags)
+            problem = "; ".join(_problem(f, article, sources) for f in article.flags)
             if short:
                 problem = "; ".join(x for x in (problem, f"cite items of at least {need} different outlets") if x)
         messages += [{"role": "assistant", "content": res.content},
@@ -714,6 +821,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             s.execute(insert(m.draft_claim_sources).values(
                 [{"tenant_id": tenant_id, "claim_id": cid, "item_id": i} for i in c.sources]))
         s.execute(update(m.proposals).where(m.proposals.c.id == proposal_id).values(status="drafted"))
+    if any(COPIED in c.flags for c in article.claims):  # still copied after the tries: reworded where they stand
+        rephrase_copies(db, tenant_id, did, core, purpose)
     return did
 
 

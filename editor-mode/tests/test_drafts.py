@@ -268,3 +268,60 @@ def test_published_articles_can_be_written_again_to_compare(db, tenant, monkeypa
         job = s.execute(text("SELECT kind, args FROM editor.jobs WHERE subject = :s"), {"s": f"proposal {pid}"}).one()
     args = job.args if isinstance(job.args, dict) else json.loads(job.args)
     assert job.kind == "draft" and args["compare"] is True
+
+
+SOURCE_RUN = ("Terna registra oltre 100 gigawatt di richieste di connessione per nuovi data center in tutta Italia "
+              "secondo i dati di ottobre")
+
+
+def _copying(db, tenant, rephrased: str):
+    """A draft whose first sentence copies its source, written three times
+    the same way, then the rewording asked for it."""
+    from editor.db import Database
+
+    pid, cited = accepted_proposal(db, tenant)
+    admin = Database.from_url(db.admin_url)
+    with admin.engine.begin() as conn:
+        conn.execute(text("UPDATE editor.source_items SET summary = :s WHERE id = :i"), {"s": SOURCE_RUN, "i": cited[0]})
+    admin.engine.dispose()
+    one = [cited[0]]
+    article = json.dumps({"title": "Data center e rete elettrica", "subtitle": "Le richieste crescono", "sections": [
+        {"heading": None, "claims": [
+            {"text": "Terna registra oltre 100 gigawatt di richieste di connessione per nuovi data center in tutta Italia.",
+             "sources": one},
+            {"text": "Le richieste riguardano i centri dati.", "sources": one},
+            {"text": "Il dato si riferisce al mese di ottobre.", "sources": one}]}]})
+    asked = []
+
+    def answer(request):
+        asked.append(json.loads(request.content)["messages"][-1]["content"])
+        if len(asked) <= 3:
+            return chat(article)
+        return chat(json.dumps({"sentences": {"0": rephrased}}))
+
+    with respx.mock() as router:
+        router.post("http://core.test/v1/llm/chat").mock(side_effect=answer)
+        did = drafts.write_draft(db, tenant, pid, CoreClient("http://core.test", "tok"), None)
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+    return d, asked
+
+
+def test_copied_sentences_are_reworded_without_changing_what_they_say(db, tenant):
+    """Francesco 2026-11-05: why so many copied sentences, if it knows? And
+    "fai in modo che non falsi le frasi". The writer is told the words it
+    copied; what it still copies is reworded in place, and a rewording that
+    changes a number or drops a name is not taken."""
+    good = "In Italia le domande di allaccio di nuovi centri dati alla rete di Terna superano i 100 gigawatt."
+    d, asked = _copying(db, tenant, good)
+    assert 'these words are the source\'s: "terna registra oltre 100 gigawatt' in asked[1]
+    assert len(asked) == 4 and d.status == "draft" and not d.flags and "domande di allaccio" in d.body_md
+
+
+def test_a_rewording_that_changes_a_figure_or_a_name_is_not_taken(db, tenant):
+    d2, _ = _copying(db, tenant, "In Italia le domande di allaccio alla rete di Terna superano i 120 gigawatt.")
+    assert d2.status == "needs_review" and "120" not in d2.body_md and "Terna registra oltre 100" in d2.body_md
+    assert not drafts.faithful("Lo dice Terna, con 100 GW.", "Lo dicono in 100 GW.", [])  # a name dropped
+    src = [type("S", (), {"text": "Secondo Terna le richieste sono 100."})()]
+    assert not drafts.faithful("Terna conta 100 richieste.", "Le richieste contate sono 100.", src)  # the subject too
+    assert drafts.faithful("Terna conta 100 richieste.", "Per Terna le richieste sono 100 in tutto.", src)
