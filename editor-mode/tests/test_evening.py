@@ -183,3 +183,40 @@ def test_no_analysis_for_a_thin_day_or_a_plan_without_it(db, tenant, monkeypatch
     done = []
     Runner.evening(SimpleNamespace(db=db), tenant, datetime(2026, 11, 5, 22, 0, tzinfo=UTC), "Europe/Rome", done, [])
     assert done == []
+
+
+def test_a_translation_that_copies_its_english_source_is_reworded_not_lost(db, tenant):
+    """aitoday.it, 2026-11-05: English versions missing for news from English
+    outlets. Translated into the source's language, a sentence came back as
+    the source's own words and the translation was discarded."""
+    from editor import translate as tr
+    from editor.db import Database
+    from sqlalchemy import text as sql
+
+    from test_publishing import approved_draft
+    from test_translate import ENGLISH
+
+    did, _ = approved_draft(db, tenant)
+    source = "Open Fiber has finished laying the full fibre network across every district of the city of Bari"
+    admin = Database.from_url(db.admin_url)
+    with admin.engine.begin() as conn:
+        conn.execute(sql("UPDATE editor.source_items SET summary = :s WHERE id IN (SELECT cs.item_id FROM "
+                         "editor.draft_claim_sources cs JOIN editor.draft_claims c ON c.id = cs.claim_id "
+                         "WHERE c.draft_id = :d)"), {"s": source, "d": did})
+    admin.engine.dispose()
+    copied = dict(ENGLISH, sentences=[source + ".", "The fibre network is complete.", "The works are over."])
+    asked = []
+
+    def answer(request):
+        asked.append(json.loads(request.content)["messages"])
+        if len(asked) <= 3:
+            return chat(json.dumps(copied))
+        return chat(json.dumps({"sentences": {"0": "In Bari, Open Fiber has now completed its fibre network, which reaches every district of the city."}}))
+
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=answer)
+        tid = tr.translate(db, tenant, did, "en", core())
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == tid)).one()
+    assert len(asked) == 4 and "Words taken from the source" in asked[3][-1]["content"]
+    assert d.status == "draft" and not d.flags and "reaches every district" in d.body_md
