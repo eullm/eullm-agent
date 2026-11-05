@@ -132,6 +132,7 @@
         {% if targets %}
         <form method="post" action="/ui/drafts/{{ d.id }}/publish" class="form-grid">
           <label class="field">{{ _('Destinazione') }}<select name="target_id">{% for t in targets %}<option value="{{ t.id }}">{{ t.name }} · {{ _(kinds.get(t.kind, t.kind)) }}</option>{% endfor %}</select></label>
+          {% if site_sections and not d.translation_of %}<label class="field">{{ _('Rubrica') }}<select name="section">{% if not sd.section %}<option value="">{{ _('Nessuna') }}</option>{% elif sd.section not in site_sections %}<option value="" selected>{{ sd.section }}</option>{% endif %}{% for x in site_sections %}<option value="{{ x }}" {% if sd.section == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>{% endif %}
           <label class="field">{{ _('Modo') }}<select name="mode"><option value="draft">{{ _('Come bozza nel CMS') }}</option><option value="publish">{{ _('Pubblica subito') }}</option></select></label>
           <div><button class="btn pri" type="submit">{{ _('Chiedi la pubblicazione') }}</button></div>
         </form>

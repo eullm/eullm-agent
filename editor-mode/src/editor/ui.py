@@ -1391,8 +1391,9 @@ def register(app, ctx) -> None:
                   "morning_share": morning_share, "borrow": borrow, "extra_credits": extra_credits,
                   "extra_min_opportunity": extra_min_opportunity}
         with db.tenant(c.tenant_id) as s:  # set in "Come scrive il sito", not here
-            values["analysis"] = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
-                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())["analysis"]
+            current = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())
+            values["analysis"], before = current["analysis"], current["sections"]
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1411,6 +1412,18 @@ def register(app, ctx) -> None:
                                    "poi lo approvi qui sotto."))
         if not saved:
             return done("/site?tab=auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
+        if action == "menu" or (values["sections"] and values["sections"] != before):
+            # The rubrics as the WordPress site's menu: when they change, or when asked.
+            with db.tenant(c.tenant_id) as s:
+                wp = s.execute(select(m.publish_targets.c.id).where(
+                    m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")).first()
+            if wp is not None and values["sections"]:
+                queue.enqueue(db, c.tenant_id, "wpmenu", f"site {site_id}", {"site_id": site_id})
+                if action == "menu":
+                    return done("/site?tab=auto", t("Le rubriche vanno nel menu del sito WordPress: lo segui nel "
+                                                  "riquadro Attività."))
+            elif action == "menu":
+                return done("/site?tab=auto", t("Per il menu servono le rubriche e un sito WordPress collegato."))
         if values["enabled"]:
             return done("/site?tab=auto", t("Redazione automatica accesa: dal prossimo giro orario sceglie, scrive e "
                                           "pubblica fino a {n} articoli al giorno, dalle {start} alle {end}.",
@@ -1884,7 +1897,10 @@ def register(app, ctx) -> None:
                 m.drafts.c.proposal_id == d.proposal_id, m.drafts.c.version > d.version,
                 m.drafts.c.translation_of.is_(None)).order_by(m.drafts.c.version)).first() \
                 if auto_note and d.proposal_id and not d.translation_of else None
+            site_sections = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar())["sections"]
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
+                          site_sections=site_sections,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
@@ -2026,10 +2042,20 @@ def register(app, ctx) -> None:
                                            languages=", ".join(tr.LANGUAGES[x] for x in chosen)))
 
     @app.post("/ui/drafts/{draft_id}/publish")
-    def ui_publish(draft_id: int, target_id: int = Form(...), mode: str = Form("draft"),
+    def ui_publish(draft_id: int, target_id: int = Form(...), mode: str = Form("draft"), section: str = Form(""),
                    c: auth.Caller = Depends(ctx.need("editor"))):
         if mode not in ("draft", "publish"):
             raise HTTPException(400, "unknown mode")
+        if section.strip():  # the site's section it goes under: its category on WordPress
+            with db.tenant(c.tenant_id) as s:
+                d = s.execute(select(m.drafts.c.seo, m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).first()
+                body = s.execute(select(m.editorial_profiles.c.body).where(
+                    m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")
+                ).scalar() if d else None
+                chosen = drafts.site_section(body, section)
+                if d is not None and chosen and chosen != (d.seo or {}).get("section"):
+                    s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
+                        seo={**(d.seo or {}), "section": chosen}))
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:

@@ -34,6 +34,7 @@ KINDS = {
     "brief": N_("Profilo dal contesto"),
     "evening": N_("Il Punto della Sera"),
     "request": N_("Articolo richiesto"),
+    "wpmenu": N_("Menu del sito WordPress"),
 }
 RECENT = timedelta(minutes=15)  # how long an ended job stays on every page
 STALLED = timedelta(minutes=3)  # queued this long with nothing running: the worker is not taking work
@@ -124,6 +125,29 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
             return [t("Tutte le notizie delle ultime 72 ore sono già state proposte a questo sito: "
                       "le prossime arrivano con la raccolta, ogni ora.")], _site_link(site_id, "/trends"), t("Vedi i trend")
         return [t("Nessuna proposta nuova.")], _site_link(site_id, "/trends"), t("Vedi i trend")
+    if kind == "wpmenu":
+        if r.get("error") == "no_sections":
+            return [t("Il sito non ha rubriche: scrivile in Redazione automatica › Regole.")], \
+                _site_link(site_id, "/site?tab=auto"), t("Rubriche")
+        if r.get("error") == "no_wordpress":
+            return [t("Il sito non ha una destinazione WordPress.")], "/connect", t("Collega il sito")
+        out = []
+        for x in r.get("sites") or []:
+            if x.get("error") == "role":
+                out.append(t("{name}: l'utente collegato non può cambiare i menu, su WordPress lo può fare solo un "
+                             "amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.",
+                             name=x["name"]))
+            elif x.get("error") == "block_theme":
+                out.append(t("{name}: il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le "
+                             "categorie da Aspetto › Editor › Navigazione.", name=x["name"]))
+            else:
+                line = t("{name}: menu aggiornato (voci aggiunte: {a}, già presenti: {p}).", name=x["name"],
+                         a=len(x.get("added") or []), p=x.get("present", 0))
+                if x.get("missing"):
+                    line += " " + t("Categorie non create (serve un utente che possa crearle): {names}.",
+                                    names=", ".join(x["missing"]))
+                out.append(line)
+        return out, _site_link(site_id, "/site?tab=auto"), t("Rubriche")
     if kind == "request":
         unread = r.get("unread") or []
         missed = [t("Link non letti (pagina vuota, a pagamento o che non si lascia leggere): {links}",

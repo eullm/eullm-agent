@@ -2609,5 +2609,18 @@
  "Richiesta presa: la redazione legge i link, cerca le notizie sull'argomento e scrive la bozza. La trovi in Bozze tra qualche minuto; se non trova fonti te lo dice in Attività.": "Request taken: the newsroom reads the links, searches for news on the subject and writes the draft. You will find it in Drafts in a few minutes; if it finds no sources it tells you in Activity.",
  "Scrivi cosa vuoi nell'articolo: l'argomento, il taglio, a chi è rivolto.": "Say what you want in the article: the subject, the angle, who it is for.",
  "Nessun Core configurato: per scrivere serve un modello.": "No Core configured: writing needs a model.",
- "Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono.": "Approve the site's profile first: the article is written in its language and tone."
+ "Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono.": "Approve the site's profile first: the article is written in its language and tone.",
+ "Nessuna": "None",
+ "Una voce per ogni rubrica nel menu principale del sito; le categorie mancanti si creano. Su WordPress i menu li cambia solo un amministratore.": "One entry for each section in the site's main menu; missing categories are created. On WordPress only an administrator can change menus.",
+ "Metti le rubriche nel menu del sito": "Put the sections in the site menu",
+ "Menu del sito WordPress": "WordPress site menu",
+ "Rubriche": "Sections",
+ "Il sito non ha rubriche: scrivile in Redazione automatica › Regole.": "The site has no sections: write them in Automatic newsroom › Rules.",
+ "Il sito non ha una destinazione WordPress.": "The site has no WordPress destination.",
+ "{name}: l'utente collegato non può cambiare i menu, su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name}: the connected user cannot change menus, on WordPress only an administrator can. Create the menu from Appearance › Menus, or connect an administrator user.",
+ "{name}: menu aggiornato (voci aggiunte: {a}, già presenti: {p}).": "{name}: menu updated (entries added: {a}, already there: {p}).",
+ "{name}: il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: the theme uses block navigation, with no menu locations: add the categories from Appearance › Editor › Navigation.",
+ "Categorie non create (serve un utente che possa crearle): {names}.": "Categories not created (a user who can create them is needed): {names}.",
+ "Le rubriche vanno nel menu del sito WordPress: lo segui nel riquadro Attività.": "The sections go into the WordPress site menu: follow it in the Activity box.",
+ "Per il menu servono le rubriche e un sito WordPress collegato.": "The menu needs the sections and a connected WordPress site."
 }

@@ -117,6 +117,25 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                                     "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
                                 rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover)
 
+    def wpmenu(tenant: str, subject: str, args: dict) -> dict:
+        """The WordPress menu with the site's sections."""
+        site_id = args["site_id"]
+        with db.tenant(tenant) as s:
+            sections = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())["sections"]
+            targets = s.execute(select(m.publish_targets).where(
+                m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")
+                .order_by(m.publish_targets.c.id)).all()
+        if not sections:
+            return {"site_id": site_id, "error": "no_sections"}
+        if not targets:
+            return {"site_id": site_id, "error": "no_wordpress"}
+        out = {"site_id": site_id, "sites": []}
+        for target in targets:  # one per language, on one WordPress or more
+            res = need(publisher, "publisher").wordpress_menu(db, target, sections)
+            out["sites"].append({"name": target.name, **res})
+        return out
+
     def request(tenant: str, subject: str, args: dict) -> dict:
         """An article asked for in the newsroom's own words: its links read,
         the archive searched, the draft written, or why there is none."""
@@ -280,4 +299,4 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
             "deliver": deliver, "auto": auto, "brief": brief, "evening": evening,
-            "request": request}
+            "request": request, "wpmenu": wpmenu}

@@ -306,6 +306,13 @@ def search_fields(s, d) -> dict:
     }
 
 
+def without_title(md: str) -> str:
+    """The article without its first heading (the title), for a CMS that
+    shows the title from its own field; the subtitle stays as the lead."""
+    head, sep, rest = md.lstrip().partition("\n")
+    return rest.lstrip("\n") if head.startswith("# ") else md
+
+
 def fits_language(target, language: str | None) -> bool:
     """A destination set for one language takes only articles in it; one
     set for none takes any."""
@@ -374,6 +381,11 @@ def mark_uncertain_failed(db, tenant_id: str, pub_id: int, by: str) -> bool:
             m.publications.c.id == pub_id, m.publications.c.status == "sending",
         ).values(status="failed", error=f"outcome unknown; checked on the CMS by {by}")).rowcount
     return bool(n)
+
+
+# The theme's places for the main menu, the likeliest first; else the first it has.
+MENU_PLACES = ("primary", "main", "menu-1", "primary-menu", "main-menu", "header", "header-menu", "top")
+MENU_NAME = "Redazia"
 
 
 class Publisher:
@@ -549,6 +561,10 @@ class Publisher:
             raise PublishError("the post's id on WordPress is unknown: change it from WordPress")
         auth = (target.config["user"], _need(secret, target))
         post = self._wordpress_post(target, payload, pub.mode)
+        if "categories" not in post and payload.get("section"):
+            cat = self._wordpress_category(base, auth, payload["section"])
+            if cat is not None:
+                post["categories"] = [cat]
         if cover_changed(image, pub):
             # A cover made after the last send goes up with the text; an
             # unchanged one is not uploaded again at every update.
@@ -670,6 +686,63 @@ class Publisher:
             log.warning("category %r on %s: %s", name, base, e)
         return None
 
+    def wordpress_menu(self, db, target, sections: list[str]) -> dict:
+        """The site's menu with an entry for each of Redazia's sections, in
+        their order (Francesco 2026-11-05: "creare anche le voci del menu
+        dalle categorie scelte dal backoffice"). The menu in the theme's main
+        place is used, or one is created there; a missing category is
+        created; entries already there are left as they are.
+
+        Returns {menu, location, added, present, missing} or {error}:
+        "role" when the user may not change menus (WordPress gives that to
+        administrators only), "block_theme" when the theme has no menu places
+        (its navigation is edited in the site editor)."""
+        base = target.config["url"].rstrip("/")
+        check_public_url(base, self.resolver)
+        auth = (target.config["user"], _need(resolve_secret(db, target), target))
+        r = self._wp("GET", base, "wp/v2/menu-locations", auth=auth)
+        if r.status_code in (401, 403):
+            return {"error": "role"}
+        r.raise_for_status()
+        places = r.json() if isinstance(r.json(), dict) else {}
+        if not places:
+            return {"error": "block_theme"}
+        location = next((k for k in MENU_PLACES if k in places), next(iter(places)))
+        menu = int((places[location] or {}).get("menu") or 0)
+        if not menu:
+            r = self._wp("GET", base, "wp/v2/menus", "per_page=100&_fields=id,name", auth=auth)
+            r.raise_for_status()
+            menu = next((int(x["id"]) for x in r.json() if html.unescape(str(x.get("name") or "")) == MENU_NAME), 0)
+            if menu:
+                r = self._wp("POST", base, f"wp/v2/menus/{menu}", auth=auth, json={"locations": [location]})
+            else:
+                r = self._wp("POST", base, "wp/v2/menus", auth=auth, json={"name": MENU_NAME, "locations": [location]})
+            if r.status_code in (401, 403):
+                return {"error": "role"}
+            r.raise_for_status()
+            menu = int(r.json()["id"])
+        r = self._wp("GET", base, "wp/v2/menu-items", f"menus={menu}&per_page=100&_fields=id,object,object_id",
+                     auth=auth)
+        r.raise_for_status()
+        there = {int(x.get("object_id") or 0) for x in r.json() if x.get("object") == "category"}
+        added, missing, present = [], [], 0
+        for n, name in enumerate(sections):
+            cat = self._wordpress_category(base, auth, name)
+            if cat is None:
+                missing.append(name)
+            elif cat in there:
+                present += 1
+            else:
+                r = self._wp("POST", base, "wp/v2/menu-items", auth=auth, json={
+                    "title": name, "menus": menu, "type": "taxonomy", "object": "category", "object_id": cat,
+                    "status": "publish", "menu_order": n + 1})
+                if r.status_code in (401, 403):
+                    return {"error": "role"}
+                r.raise_for_status()
+                there.add(cat)
+                added.append(name)
+        return {"menu": menu, "location": location, "added": added, "present": present, "missing": missing}
+
     def _wordpress_media(self, base: str, auth, slug: str | None, image) -> int:
         """The cover image to the media library, with its alternative text:
         its id, for the post's featured image."""
@@ -684,7 +757,9 @@ class Publisher:
 
     @staticmethod
     def _wordpress_post(target, payload: dict, mode: str) -> dict:
-        content = payload["html"]
+        # The title goes in WordPress's own field, which the theme shows: in
+        # the text too it came out twice (wp.aitoday.it, 2026-11-05).
+        content = to_html(without_title(payload["markdown"])) if payload.get("markdown") else payload["html"]
         if (target.config or {}).get("jsonld") and payload.get("jsonld"):
             # Only for sites where the user may publish scripts (unfiltered_html):
             # elsewhere WordPress would show it as text.

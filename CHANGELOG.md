@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.30.5
+## 0.31.0
 
 ### Added
 
@@ -14,6 +14,28 @@
   Attività, con i link che non si sono potuti leggere. Conta come un
   articolo del piano; la bozza si rilegge, si approva e si pubblica come le
   altre.
+- **Le rubriche nel menu del sito WordPress.** In Redazione automatica ›
+  Regole, salvando rubriche nuove (o con «Metti le rubriche nel menu del
+  sito») Redazia mette una voce per ogni rubrica nel menu principale del
+  tema, creando il menu se manca e le categorie che non ci sono; le voci già
+  presenti restano come sono. Su WordPress i menu li cambia solo un
+  amministratore: con un utente editore Attività lo dice e spiega come fare.
+- **Rubrica scelta anche per le bozze scritte a mano.** Lo scrittore indica
+  la rubrica del sito a cui appartiene l'articolo (prima la sceglieva solo il
+  caporedattore della redazione automatica), e nella pagina della bozza la
+  si può cambiare prima di chiedere la pubblicazione.
+
+### Fixed
+
+- **WordPress: il titolo non compare più due volte** (wp.aitoday.it, 5
+  novembre). Il titolo va nel campo di WordPress, che il tema mostra; il
+  testo non lo ripete più in testa.
+- **WordPress: l'articolo va nella categoria della sua rubrica** invece di
+  "Uncategorized": la bozza pubblicata a mano non aveva una rubrica (vedi
+  sopra), e ora anche l'aggiornamento di un articolo già online crea la
+  categoria che manca.
+
+## 0.30.5
 
 ### Fixed
 

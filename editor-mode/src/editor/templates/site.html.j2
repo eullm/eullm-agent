@@ -137,6 +137,7 @@
     <div class="row">
       <button class="btn pri" type="submit" name="action" value="save">{{ _('Salva') }}</button>
       <button class="btn" type="submit" name="action" value="profile">{{ _('Crea il profilo dal contesto') }}</button>
+      {% if numbers.auto_targets|selectattr('kind', 'equalto', 'wordpress')|list %}<button class="btn" type="submit" name="action" value="menu" title="{{ _('Una voce per ogni rubrica nel menu principale del sito; le categorie mancanti si creano. Su WordPress i menu li cambia solo un amministratore.') }}">{{ _('Metti le rubriche nel menu del sito') }}</button>{% endif %}
       <span class="hint">{{ _('Per un sito nuovo, senza articoli da leggere: il profilo nasce dal contesto e dalle rubriche, poi lo approvi.') }}</span>
     </div>
   </form>

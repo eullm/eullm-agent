@@ -452,8 +452,19 @@ SYSTEM = (
     '[{"text": "...", "sources": [<ids>]}]}], '
     '"faq": [{"question": "...", "claims": [{"text": "...", "sources": [<ids>]}]}], '
     '"seo": {"keyphrase": "<2-4 words>", "title": "<search title, max 60 chars>", '
-    '"description": "<meta description, 120-155 chars>", "slug": "<url-words-with-hyphens>"}}'
+    '"description": "<meta description, 120-155 chars>", "slug": "<url-words-with-hyphens>", '
+    '"section": "<the one of the Sections of the site the article belongs to, written exactly as listed, or null>"}}'
 )
+
+
+def site_section(profile: dict | None, given) -> str | None:
+    """The site's section the writer chose, as the site writes it; None when
+    it is not one of them. The automatic newsroom's editor-in-chief may
+    still move the article (autopilot.finish)."""
+    from .autopilot import settings_of
+
+    want = str(given or "").strip().lower()
+    return next((x for x in settings_of(profile)["sections"] if x.lower() == want), None) if want else None
 
 
 _ARXIV = re.compile(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/([\w.\-/]+?)(?:\.pdf)?/?$")
@@ -881,6 +892,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     lead = " ".join(c.text for c in article.claims if c.section == first)
     sd.checks = seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
                            len({i for c in article.claims for i in c.sources}))
+    section = site_section(profile, article.seo.get("section") if isinstance(article.seo, dict) else None)
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
         # while this one was with the model.
@@ -891,7 +903,9 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             tenant_id=tenant_id, proposal_id=proposal_id, site_id=prop.site_id, version=version,
             title=article.title, subtitle=article.subtitle, body_md=body, language=profile.get("language"),
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
-            seo=sd.as_dict(),
+            # Filed under one of the site's sections from the start: a draft published by hand
+            # went to WordPress without a category (wp.aitoday.it, 2026-11-05).
+            seo={**sd.as_dict(), **({"section": section} if section else {})},
         ).returning(m.drafts.c.id)).scalar_one()
         if over:  # beyond the plan's articles of the month: paid with credits
             credits.spend(s, "article", f"draft:{did}")

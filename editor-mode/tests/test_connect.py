@@ -337,3 +337,115 @@ def test_a_section_without_its_category_gets_one_on_wordpress():
         router.post(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(
             403, json={"code": "rest_cannot_create"}))
         assert p._wordpress_category(WP, ("u", "p"), "Mondo") is None
+
+
+def test_the_title_is_not_sent_twice_to_wordpress():
+    """wp.aitoday.it, 2026-11-05: the theme shows the title from its field,
+    and the text started with it again."""
+    target = type("T", (), {"config": {"url": WP, "user": "e"}})()
+    md = "# Alfabetizzazione AI a scuola\n\n_L'indagine ESEP su 454 professionisti_\n\nL'alfabetizzazione AI è poco strutturata."
+    post = pub.Publisher._wordpress_post(target, {"title": "Alfabetizzazione AI a scuola", "markdown": md,
+                                                  "html": "<h1>x</h1>", "subtitle": "s"}, "publish")
+    assert "<h1>" not in post["content"] and "Alfabetizzazione AI a scuola" not in post["content"]
+    assert "ESEP" in post["content"] and "poco strutturata" in post["content"]
+
+
+def test_the_writer_files_the_article_under_a_section_and_the_director_can_change_it(db, tenant, monkeypatch):
+    from editor import autopilot, drafts
+
+    assert drafts.site_section({"settings": {"auto": {"sections": ["Strumenti AI", "Lavoro e competenze"]}}},
+                               "lavoro e competenze") == "Lavoro e competenze"
+    assert drafts.site_section({"settings": {"auto": {"sections": ["Strumenti AI"]}}}, "Sport") is None
+    assert drafts.site_section({}, "Sport") is None
+    assert '"section"' in drafts.SYSTEM
+
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    did, site_id = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id,
+                                                                   m.editorial_profiles.c.status == "approved")).scalar()
+        autopilot.save(s, site_id, {**autopilot.settings_of(body), "sections": ["Rete", "Mercato"]})
+    target = pub.add_target(db, tenant, site_id, "wordpress", "Blog", {"url": WP, "user": "editor"}, "WP_PASS")
+    c = logged_in(db, tenant, "editor")
+    page = c.get(f"/drafts/{did}").text
+    assert 'name="section"' in page and ">Mercato</option>" in page
+    r = c.post(f"/ui/drafts/{did}/publish", data={"target_id": target, "mode": "publish", "section": "mercato"},
+               follow_redirects=False)
+    assert r.status_code == 303
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar()["section"] == "Mercato"
+
+
+def _menu_router(router, places, menus=(), items=()):
+    router.get(f"{WP}/wp-json/wp/v2/menu-locations").mock(return_value=httpx.Response(200, json=places))
+    router.get(f"{WP}/wp-json/wp/v2/menus").mock(return_value=httpx.Response(200, json=list(menus)))
+    router.get(f"{WP}/wp-json/wp/v2/menu-items").mock(return_value=httpx.Response(200, json=list(items)))
+    router.get(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(200, json=[
+        {"id": 3, "name": "Strumenti AI"}]))
+    router.post(f"{WP}/wp-json/wp/v2/categories").mock(return_value=httpx.Response(201, json={"id": 9}))
+
+
+def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
+    """Francesco 2026-11-05: "creare anche le voci del menu dalle categorie
+    scelte dal backoffice di redazia"."""
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "WP_PASS"), "app-pass-123")
+    _, site_id = approved_draft(db, tenant)
+    tid = pub.add_target(db, tenant, site_id, "wordpress", "Blog", {"url": WP, "user": "admin"}, "WP_PASS")
+    with db.tenant(tenant) as s:
+        target = s.execute(select(m.publish_targets).where(m.publish_targets.c.id == tid)).one()
+    p = pub.Publisher(resolver=public_resolver)
+    with respx.mock(assert_all_called=False) as router:
+        _menu_router(router, {"primary": {"name": "primary", "menu": 0}, "footer": {"name": "footer", "menu": 0}})
+        made = router.post(f"{WP}/wp-json/wp/v2/menus").mock(return_value=httpx.Response(201, json={"id": 21}))
+        entry = router.post(f"{WP}/wp-json/wp/v2/menu-items").mock(return_value=httpx.Response(201, json={"id": 1}))
+        out = p.wordpress_menu(db, target, ["Strumenti AI", "Casi pratici"])
+    assert out == {"menu": 21, "location": "primary", "added": ["Strumenti AI", "Casi pratici"], "present": 0,
+                   "missing": []}
+    assert json.loads(made.calls[0].request.content) == {"name": pub.MENU_NAME, "locations": ["primary"]}
+    sent = [json.loads(x.request.content) for x in entry.calls]
+    assert [(x["object_id"], x["menus"], x["object"], x["type"]) for x in sent] == [
+        (3, 21, "category", "taxonomy"), (9, 21, "category", "taxonomy")]
+
+    # The theme's menu is already there with one of them: only the other is added.
+    with respx.mock(assert_all_called=False) as router:
+        _menu_router(router, {"primary": {"name": "primary", "menu": 5}},
+                     items=[{"id": 40, "object": "category", "object_id": 3}])
+        made = router.post(f"{WP}/wp-json/wp/v2/menus")
+        entry = router.post(f"{WP}/wp-json/wp/v2/menu-items").mock(return_value=httpx.Response(201, json={"id": 2}))
+        out = p.wordpress_menu(db, target, ["Strumenti AI", "Casi pratici"])
+    assert out["added"] == ["Casi pratici"] and out["present"] == 1 and not made.called and entry.call_count == 1
+
+    # An editor may not change menus; a block theme has no menu places.
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{WP}/wp-json/wp/v2/menu-locations").mock(return_value=httpx.Response(403, json={}))
+        assert p.wordpress_menu(db, target, ["Strumenti AI"]) == {"error": "role"}
+    with respx.mock(assert_all_called=False) as router:
+        router.get(f"{WP}/wp-json/wp/v2/menu-locations").mock(return_value=httpx.Response(200, json=[]))
+        assert p.wordpress_menu(db, target, ["Strumenti AI"]) == {"error": "block_theme"}
+
+    # The job reads the sections and the site's WordPress, and says what it did.
+    from editor import activity, autopilot, work
+
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id,
+                                                                   m.editorial_profiles.c.status == "approved")).scalar()
+        autopilot.save(s, site_id, {**autopilot.settings_of(body), "sections": ["Strumenti AI"]})
+    with respx.mock(assert_all_called=False) as router:
+        _menu_router(router, {"primary": {"name": "primary", "menu": 5}})
+        router.post(f"{WP}/wp-json/wp/v2/menu-items").mock(return_value=httpx.Response(201, json={"id": 3}))
+        res = work.handlers(db, publisher=p)["wpmenu"](tenant, f"site {site_id}", {"site_id": site_id})
+    assert res["sites"][0]["added"] == ["Strumenti AI"]
+    lines, _, _ = activity._result("wpmenu", res, site_id, str)
+    assert "voci aggiunte: 1" in lines[0]
+    lines, _, _ = activity._result("wpmenu", {"sites": [{"name": "Blog", "error": "role"}]}, site_id, str)
+    assert "amministratore" in lines[0]
+
+    # Saving new sections queues the menu, and so does the button.
+    c = logged_in(db, tenant, "owner")
+    form = {"brief": "", "sections": "Strumenti AI\nCasi pratici", "per_day": 6, "min_opportunity": 40,
+            "min_sources": 2, "start": 7, "end": 23, "on_problem": "fix"}
+    assert c.post(f"/ui/sites/{site_id}/auto", data=form, follow_redirects=False).status_code == 303
+    with db.tenant(tenant) as s:
+        assert s.execute(select(func.count()).select_from(m.jobs).where(m.jobs.c.kind == "wpmenu")).scalar() == 1
+    assert "Metti le rubriche nel menu del sito" in c.get("/site?tab=auto").text
