@@ -2549,5 +2549,6 @@
  "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "If the reasons can be fixed, press “Edit”, correct the sentences and approve the draft: you publish it.",
  "leggi tutto": "read all",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "The AI editor-in-chief corrected it instead of discarding it: {why}",
- "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "The AI editor-in-chief corrects the article instead of discarding it: {why}"
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "The AI editor-in-chief corrects the article instead of discarding it: {why}",
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Proposal accepted: “{title}” is being written, follow it in the Activity box."
 }

@@ -107,3 +107,26 @@ def test_a_new_cover_for_an_article_online_says_how_it_gets_there():
     lines, link, label = activity._result("image", {"draft_id": 4, "title": "Bari", "online": 2}, None, str)
     assert lines[0] == "Immagine pronta per «Bari»." and "Aggiorna sul sito" in lines[1] and link == "/drafts/4"
     assert len(activity._result("image", {"draft_id": 4, "title": "Bari", "online": 0}, None, str)[0]) == 1
+
+
+def test_the_article_being_written_is_named(db, tenant):
+    """Francesco 2026-11-05: "lo sta scrivendo ma non dice quale sta scrivendo"."""
+    from fastapi.testclient import TestClient
+
+    from editor import auth, opportunity as opp, proposals as props
+    from editor.api import create_app
+    from editor.core_client import CoreClient
+    from test_proposals import setup_site
+
+    site_id = setup_site(db, tenant)
+    pid = props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None)[0]
+    with db.tenant(tenant) as s:
+        title = s.execute(m.proposals.select().where(m.proposals.c.id == pid)).one().title
+    c = TestClient(create_app(db, core=CoreClient("http://core.test", "tok")))
+    c.post("/login", data={"token": auth.create_token(db, tenant, "owner-user", "owner")}, follow_redirects=False)
+    r = c.post(f"/ui/proposals/{pid}", data={"accept": "1", "back": "/trends"})
+    assert f"Proposta accettata: «{title}» è in scrittura" in r.text
+    with db.tenant(tenant) as s:
+        item = activity.recent(s, ROME, problem)["items"][0]
+    assert item["what"] == "Scrittura della bozza" and item["title"] == title
+    assert f"Scrittura della bozza: «{title}»" in c.get("/trends").text.replace("&#34;", '"')

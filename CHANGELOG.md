@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.45
+
+### Fixed
+
+- **Si vede quale articolo sta scrivendo** (Francesco: "lo sta scrivendo ma
+  non dice quale"). Il riquadro Attività mette il titolo accanto al lavoro
+  ("Scrittura della bozza: «titolo» · sito"), anche per la redazione
+  automatica, le traduzioni e le copertine, e l'avviso dopo "Scrivi" nomina
+  la proposta accettata.
+
 ## 0.28.44
 
 ### Removed

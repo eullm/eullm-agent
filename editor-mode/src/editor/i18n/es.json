@@ -2549,5 +2549,6 @@
  "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "Si los motivos se pueden corregir, pulsa «Editar», arregla las frases y aprueba el borrador: lo publicas tú.",
  "leggi tutto": "leer todo",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "El redactor jefe de IA lo corrigió en lugar de descartarlo: {why}",
- "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "El redactor jefe de IA corrige el artículo en lugar de descartarlo: {why}"
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "El redactor jefe de IA corrige el artículo en lugar de descartarlo: {why}",
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Propuesta aceptada: «{title}» se está escribiendo, síguelo en el recuadro Actividad."
 }

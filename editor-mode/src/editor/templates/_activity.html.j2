@@ -18,10 +18,10 @@
     {% else %}<span class="chip red">{{ _('Non riuscito') }}</span>{% endif %}
     <div class="what">
       {% if activity.compact %}
-      <strong>{{ x.what }}{% if x.where %} · {{ x.where }}{% endif %}</strong>
+      <strong{% if x.title %} title="{{ x.title }}"{% endif %}>{{ x.what }}{% if x.title %}: «{{ x.title }}»{% endif %}{% if x.where %} · {{ x.where }}{% endif %}</strong>
       <span class="one" title="{{ x.lines|join(' ') }}">{{ x.step or (x.lines[0] if x.lines else x.state) }}</span>
       {% else %}
-      <strong>{{ x.what }}{% if x.where %} · {{ x.where }}{% endif %}</strong>
+      <strong>{{ x.what }}{% if x.title %}: «{{ x.title }}»{% endif %}{% if x.where %} · {{ x.where }}{% endif %}</strong>
       <span>{{ x.state }}{% if x.step %} · {{ x.step }}{% endif %}</span>
       {% for line in x.lines %}<span style="color: var(--ink-2);">{{ line }}</span>{% endfor %}
       {% endif %}

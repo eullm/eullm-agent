@@ -2549,5 +2549,6 @@
  "Se i motivi si possono correggere, premi «Modifica», sistema le frasi e approva la bozza: la pubblichi tu.": "Wenn sich die Gründe beheben lassen, klicken Sie auf „Bearbeiten“, korrigieren Sie die Sätze und geben Sie den Entwurf frei: Sie veröffentlichen ihn.",
  "leggi tutto": "alles lesen",
  "Il caporedattore AI l'ha corretto invece di scartarlo: {why}": "Der KI-Chefredakteur hat ihn korrigiert, statt ihn zu verwerfen: {why}",
- "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Der KI-Chefredakteur korrigiert den Artikel, statt ihn zu verwerfen: {why}"
+ "Il caporedattore AI corregge l'articolo invece di scartarlo: {why}": "Der KI-Chefredakteur korrigiert den Artikel, statt ihn zu verwerfen: {why}",
+ "Proposta accettata: «{title}» è in scrittura, la segui nel riquadro Attività.": "Vorschlag angenommen: „{title}“ wird geschrieben, verfolgen Sie ihn im Kasten Aktivität."
 }
