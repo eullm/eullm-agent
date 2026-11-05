@@ -651,7 +651,11 @@ def proofread(db, tenant_id: str, d, fixes: dict) -> bool:
     return True
 
 
-EXCERPT = 2500  # characters of each cited source the editor-in-chief reads
+# Characters of each cited source the editor-in-chief reads: as much as the
+# writer read of the main news (drafts._prompt). With 2500 it refused, as
+# "not in the source", details the writer had read further on in a paper
+# (aitoday.it, 2026-11-05: articles from arXiv discarded one after the other).
+EXCERPT = 6000
 
 # A refused article is corrected where it stands before it is written again
 # or thrown away (Francesco 2026-11-05: "sono motivi che si possono

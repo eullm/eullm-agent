@@ -19,7 +19,7 @@ import json
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from . import credits, drafts, images, quotas, seo, usage
+from . import credits, drafts, images, quotas, seo, style, usage
 from . import models as m
 from .core_client import CoreClient, CoreError, extract_json
 from .i18n import N_
@@ -231,4 +231,9 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
             s.execute(insert(m.draft_claim_sources).values(
                 [{"tenant_id": tenant_id, "claim_id": cid, "item_id": i} for i in c.sources]))
         images.copy(s, tenant_id, draft_id, did, out["image_alt"] or None)  # the original's image, if any
+    # Translated into the language of its sources, a sentence often comes back as the source's own
+    # words, and a translation with a copied sentence was discarded (aitoday.it, 2026-11-05: English
+    # versions missing for news from English outlets): reworded where it stands, like an article.
+    if any(drafts.COPIED in c.flags or style.stock(c.text, language) for c in article.claims):
+        drafts.reword(db, tenant_id, did, core, "translate")
     return did

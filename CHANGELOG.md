@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.30.1
+
+### Fixed
+
+- **Le traduzioni inglesi non vengono più scartate per una frase copiata**
+  (aitoday.it, 5 novembre: l'italiano approvato, l'inglese scartato per "1-2
+  frasi da rivedere"). Una notizia da fonti inglesi, tradotta in inglese,
+  riprendeva alla lettera qualche frase della fonte; la frase risultava
+  copiata e la traduzione intera finiva scartata. Ora quelle frasi vengono
+  riformulate sul posto, con gli stessi numeri, nomi e fonti, e la
+  traduzione esce.
+- **Il caporedattore AI legge le fonti quanto lo scrittore.** Leggeva 2.500
+  caratteri di ogni fonte, lo scrittore fino a 6.000: per gli articoli da
+  arXiv scartava come "dettagli che non compaiono nella fonte" cose scritte
+  più avanti nel paper. Ora legge 6.000 caratteri anche lui.
+
 ## 0.30.0
 
 ### Added
@@ -1687,7 +1703,6 @@ this version brings what 0.28.13 lists.
 - Editor Mode: "Accetta e scrivi la bozza" answered Internal Server Error,
   and so did every page with the Attività box while a draft was being
   written (the box read the proposals' sites the wrong way).
-
 
 ## 0.17.0
 
