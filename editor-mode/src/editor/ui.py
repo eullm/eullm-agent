@@ -8,6 +8,7 @@ role the action needs. Forms answer with a redirect and a one-shot notice.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -841,7 +842,10 @@ def register(app, ctx) -> None:
                           usage=usage, last_fetch=last_fetch, core_trouble=core_trouble, briefing=briefing, decisions=decisions,
                           proposed_total=proposed_total, collected=collected,
                           limits=limit_boxes(s, usage, auto_cards, credits.state(s)),
-                          day=the_day(s, usage, auto_cards, sid))
+                          day=the_day(s, usage, auto_cards, sid),
+                          request_sites=[x for x in ([one] if one else sites) if x.id in set(s.execute(
+                              select(m.editorial_profiles.c.site_id).where(
+                                  m.editorial_profiles.c.status == "approved")).scalars())])
 
     def draft_jobs(s, proposal_ids: list[int]) -> dict[int, dict]:
         """The latest draft job of each accepted proposal still without a
@@ -1342,6 +1346,7 @@ def register(app, ctx) -> None:
             autopilot.save(s, site_id, values)
         queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
                       {"site_id": site_id, "language": language if language in autopilot.LANGS else "it", "auto": values})
+        menu_from_sections(c, site_id, values["sections"])
         return done(to, t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, poi lo approvi qui."))
 
     @app.post("/ui/sites/{site_id}/approve/{version}")
@@ -1387,8 +1392,9 @@ def register(app, ctx) -> None:
                   "morning_share": morning_share, "borrow": borrow, "extra_credits": extra_credits,
                   "extra_min_opportunity": extra_min_opportunity}
         with db.tenant(c.tenant_id) as s:  # set in "Come scrive il sito", not here
-            values["analysis"] = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
-                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())["analysis"]
+            current = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())
+            values["analysis"], before = current["analysis"], current["sections"]
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1403,8 +1409,17 @@ def register(app, ctx) -> None:
             queue.enqueue(db, c.tenant_id, "brief", f"site {site_id}",
                           {"site_id": site_id, "language": language if language in autopilot.LANGS else "it",
                            "auto": values})
+            menu_from_sections(c, site_id, values["sections"])
             return done("/site", t("Il modello scrive il profilo dal contesto: lo segui nel riquadro Attività, "
                                    "poi lo approvi qui sotto."))
+        if action == "menu" or (values["sections"] and values["sections"] != before):
+            # The rubrics as the WordPress site's categories and menu: when they change, or when asked.
+            if menu_from_sections(c, site_id, values["sections"]):
+                if action == "menu":
+                    return done("/site?tab=auto", t("Le rubriche vanno nel menu del sito WordPress: lo segui nel "
+                                                  "riquadro Attività."))
+            elif action == "menu":
+                return done("/site?tab=auto", t("Per il menu servono le rubriche e un sito WordPress collegato."))
         if not saved:
             return done("/site?tab=auto", t("Il sito non ha ancora un profilo: premi \"Crea il profilo dal contesto\"."))
         if values["enabled"]:
@@ -1880,7 +1895,10 @@ def register(app, ctx) -> None:
                 m.drafts.c.proposal_id == d.proposal_id, m.drafts.c.version > d.version,
                 m.drafts.c.translation_of.is_(None)).order_by(m.drafts.c.version)).first() \
                 if auto_note and d.proposal_id and not d.translation_of else None
+            site_sections = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar())["sections"]
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
+                          site_sections=site_sections,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
@@ -2021,11 +2039,39 @@ def register(app, ctx) -> None:
         return done("/site?tab=publish", t("Ogni articolo approvato sarà tradotto in: {languages}.",
                                            languages=", ".join(tr.LANGUAGES[x] for x in chosen)))
 
+    def menu_from_sections(c: auth.Caller, site_id: int, sections: list[str]) -> bool:
+        """The sections as categories and menu entries on the site's
+        WordPress, right when they are confirmed (Francesco 2026-11-05:
+        "perché aspettare"). False when the site has no WordPress."""
+        with db.tenant(c.tenant_id) as s:
+            wp = s.execute(select(m.publish_targets.c.id).where(
+                m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")).first()
+        if wp is None or not sections:
+            return False
+        queue.enqueue(db, c.tenant_id, "wpmenu", f"site {site_id}", {"site_id": site_id, "sections": sections})
+        return True
+
+    def file_under(c: auth.Caller, draft_id: int, section: str) -> None:
+        """The site's section the article goes under (its category on
+        WordPress), when one of the site's sections is chosen."""
+        if not section.strip():
+            return
+        with db.tenant(c.tenant_id) as s:
+            d = s.execute(select(m.drafts.c.seo, m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).first()
+            if d is None:
+                return
+            chosen = drafts.site_section(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar(),
+                section)
+            if chosen and chosen != (d.seo or {}).get("section"):
+                s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(seo={**(d.seo or {}), "section": chosen}))
+
     @app.post("/ui/drafts/{draft_id}/publish")
-    def ui_publish(draft_id: int, target_id: int = Form(...), mode: str = Form("draft"),
+    def ui_publish(draft_id: int, target_id: int = Form(...), mode: str = Form("draft"), section: str = Form(""),
                    c: auth.Caller = Depends(ctx.need("editor"))):
         if mode not in ("draft", "publish"):
             raise HTTPException(400, "unknown mode")
+        file_under(c, draft_id, section)
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
@@ -2035,7 +2081,8 @@ def register(app, ctx) -> None:
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
 
     @app.post("/ui/publications/{pub_id}/update")
-    def ui_pub_update(pub_id: int, draft_id: int = Form(0), c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_pub_update(pub_id: int, draft_id: int = Form(0), section: str = Form(""),
+                      c: auth.Caller = Depends(ctx.need("owner"))):
         """The director puts the current text (or a version written again)
         online in place of the published one."""
         with db.tenant(c.tenant_id) as s:
@@ -2047,6 +2094,7 @@ def register(app, ctx) -> None:
             d = s.execute(select(m.drafts.c.status).where(m.drafts.c.id == (draft_id or pub.draft_id))).first()
             if d is None or d.status != "approved":
                 return done(back, t("Approva prima la bozza: online va solo quello che un direttore ha approvato."))
+        file_under(c, draft_id or pub.draft_id, section)
         queue.enqueue(db, c.tenant_id, "change", f"update {pub_id}",
                       {"publication_id": pub_id, "op": "update", "draft_id": draft_id or None, "by": c.name})
         return done(back, t("Aggiornamento in corso: lo segui nel riquadro Attività."))
@@ -2063,6 +2111,30 @@ def register(app, ctx) -> None:
         queue.enqueue(db, c.tenant_id, "change", f"withdraw {pub_id}",
                       {"publication_id": pub_id, "op": "withdraw", "by": c.name})
         return done(f"/drafts/{pub.draft_id}", t("Ritiro in corso: lo segui nel riquadro Attività."))
+
+    @app.post("/ui/requests")
+    def ui_request_article(site_id: int = Form(...), text: str = Form(""), links: str = Form(""),
+                           c: auth.Caller = Depends(ctx.need("editor"))):
+        """An article asked for in the newsroom's own words, with optional
+        links: written from the links and the archive's news on the subject,
+        or not written when there is nothing to cite."""
+        from . import requested
+
+        text = " ".join(text.split())[:requested.MAX_TEXT]
+        if len(text) < 15:
+            return done("/#h-request", t("Scrivi cosa vuoi nell'articolo: l'argomento, il taglio, a chi è rivolto."))
+        if ctx.core is None:
+            return done("/#h-request", t("Nessun Core configurato: per scrivere serve un modello."))
+        with db.tenant(c.tenant_id) as s:
+            if s.execute(select(m.editorial_profiles.c.id).where(
+                    m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).first() is None:
+                return done("/#h-request", t("Prima approva il profilo del sito: l'articolo si scrive nella sua lingua e nel suo tono."))
+        found = requested.links_of(links)
+        key = hashlib.sha256(f"{text}|{' '.join(found)}".encode()).hexdigest()[:12]
+        queue.enqueue(db, c.tenant_id, "request", f"request {site_id} {key}",
+                      {"site_id": site_id, "text": text, "links": found, "by": c.name})
+        return done("/", t("Richiesta presa: la redazione legge i link, cerca le notizie sull'argomento e scrive la "
+                           "bozza. La trovi in Bozze tra qualche minuto; se non trova fonti te lo dice in Attività."))
 
     @app.post("/ui/drafts/{draft_id}/redo")
     def ui_redo_draft(draft_id: int, note: str = Form(""), c: auth.Caller = Depends(ctx.need("editor"))):

@@ -1,4 +1,5 @@
 {% extends "base.html.j2" %}
+{% macro rubric() %}{% if site_sections and not d.translation_of %}<label class="field">{{ _('Rubrica') }}<select name="section">{% if not sd.section %}<option value="">{{ _('Nessuna') }}</option>{% elif sd.section not in site_sections %}<option value="" selected>{{ sd.section }}</option>{% endif %}{% for x in site_sections %}<option value="{{ x }}" {% if sd.section == x %}selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>{% endif %}{% endmacro %}
 {% block title %}{{ d.title }}{% endblock %}
 {% block main %}
 <header class="head">
@@ -85,7 +86,7 @@
         {% if p.id in stale_cover and d.status == 'approved' %}<p class="notice" style="margin: 6px 0;">{{ _('La copertina è cambiata dopo la pubblicazione: online c\'è ancora quella vecchia. Premi «Aggiorna sul sito» per sostituirla.') }}</p>{% endif %}
         <div class="row" style="flex-wrap: wrap; gap: 8px;">
           {% if d.status == 'approved' %}
-          <form class="inline" method="post" action="/ui/publications/{{ p.id }}/update"><button class="btn sm" type="submit">{{ _('Rimetti online') if p.withdrawn_at else _('Aggiorna sul sito') }}</button></form>
+          <form class="inline row" method="post" action="/ui/publications/{{ p.id }}/update" style="gap: 6px; align-items: end;">{% if p.kind == 'wordpress' %}{{ rubric() }}{% endif %}<button class="btn sm" type="submit">{{ _('Rimetti online') if p.withdrawn_at else _('Aggiorna sul sito') }}</button></form>
           {% endif %}
           {% if not p.withdrawn_at %}
           <form class="inline row" method="post" action="/ui/publications/{{ p.id }}/withdraw" style="gap: 6px; align-items: center;">
@@ -132,6 +133,7 @@
         {% if targets %}
         <form method="post" action="/ui/drafts/{{ d.id }}/publish" class="form-grid">
           <label class="field">{{ _('Destinazione') }}<select name="target_id">{% for t in targets %}<option value="{{ t.id }}">{{ t.name }} · {{ _(kinds.get(t.kind, t.kind)) }}</option>{% endfor %}</select></label>
+          {{ rubric() }}
           <label class="field">{{ _('Modo') }}<select name="mode"><option value="draft">{{ _('Come bozza nel CMS') }}</option><option value="publish">{{ _('Pubblica subito') }}</option></select></label>
           <div><button class="btn pri" type="submit">{{ _('Chiedi la pubblicazione') }}</button></div>
         </form>

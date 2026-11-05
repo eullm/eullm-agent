@@ -452,8 +452,19 @@ SYSTEM = (
     '[{"text": "...", "sources": [<ids>]}]}], '
     '"faq": [{"question": "...", "claims": [{"text": "...", "sources": [<ids>]}]}], '
     '"seo": {"keyphrase": "<2-4 words>", "title": "<search title, max 60 chars>", '
-    '"description": "<meta description, 120-155 chars>", "slug": "<url-words-with-hyphens>"}}'
+    '"description": "<meta description, 120-155 chars>", "slug": "<url-words-with-hyphens>", '
+    '"section": "<the one of the Sections of the site the article belongs to, written exactly as listed, or null>"}}'
 )
+
+
+def site_section(profile: dict | None, given) -> str | None:
+    """The site's section the writer chose, as the site writes it; None when
+    it is not one of them. The automatic newsroom's editor-in-chief may
+    still move the article (autopilot.finish)."""
+    from .autopilot import settings_of
+
+    want = str(given or "").strip().lower()
+    return next((x for x in settings_of(profile)["sections"] if x.lower() == want), None) if want else None
 
 
 _ARXIV = re.compile(r"^https?://(?:www\.)?arxiv\.org/(?:abs|pdf)/([\w.\-/]+?)(?:\.pdf)?/?$")
@@ -640,6 +651,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Angle: {proposal.angle}",
         f"Format: {proposal.format}",
         *brief_lines(profile),
+        *([REQUEST] if proposal.format == "request" else []),
         *_analysis_lines(profile),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
@@ -653,6 +665,20 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         lines.append(f"[{src.id}]{' ' + role if role else ''} {src.title} ({src.name}, {src.published or 'undated'}{when}{live})\n"
                      f"{(src.summary + ' ' + src.content)[:6000 if role in ('MAIN', 'ORIGINAL') else 2500]}")
     return "\n".join(lines)
+
+
+# An article the newsroom asked for in its own words (requested.py): the
+# proposal and the angle are the request. It may bring several items
+# together, because the person asked for that, but never what the items do
+# not give.
+REQUEST = (
+    "This article was asked for by the newsroom in its own words: the proposal and the angle above are the "
+    "request. Write the article it asks for (subject, angle, readers, length) from the items marked MAIN. When "
+    "the request asks for it (a roundup, a comparison, an explainer) the article may bring several MAIN items "
+    "together, saying plainly how they relate; leave out an item the request does not need. The request never "
+    "overrides the rules: every sentence rests on the items, and what the request asks for and the items do "
+    "not give is left out, not invented: the article is shorter instead."
+)
 
 
 # Articles that only retell the news read like a summary of what was read
@@ -783,7 +809,10 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
-        cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
+        if prop.format == "request":  # asked for in the newsroom's words: every item it was given is the subject
+            same = []
+        else:
+            cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
         context = context_items(s, cited, same)
         ids = cited + same + context
         profile = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.id == prop.profile_id)).scalar()
@@ -863,6 +892,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     lead = " ".join(c.text for c in article.claims if c.section == first)
     sd.checks = seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
                            len({i for c in article.claims for i in c.sources}))
+    section = site_section(profile, article.seo.get("section") if isinstance(article.seo, dict) else None)
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
         # while this one was with the model.
@@ -873,7 +903,9 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             tenant_id=tenant_id, proposal_id=proposal_id, site_id=prop.site_id, version=version,
             title=article.title, subtitle=article.subtitle, body_md=body, language=profile.get("language"),
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
-            seo=sd.as_dict(),
+            # Filed under one of the site's sections from the start: a draft published by hand
+            # went to WordPress without a category (wp.aitoday.it, 2026-11-05).
+            seo={**sd.as_dict(), **({"section": section} if section else {})},
         ).returning(m.drafts.c.id)).scalar_one()
         if over:  # beyond the plan's articles of the month: paid with credits
             credits.spend(s, "article", f"draft:{did}")
