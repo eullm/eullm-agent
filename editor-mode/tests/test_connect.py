@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 
 from editor import connect, models as m, publishing as pub, vault
 from editor.api import create_app
@@ -374,6 +374,18 @@ def test_the_writer_files_the_article_under_a_section_and_the_director_can_chang
     assert r.status_code == 303
     with db.tenant(tenant) as s:
         assert s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar()["section"] == "Mercato"
+        # Already online: the section changes with «Aggiorna sul sito».
+        pid = s.execute(select(m.publications.c.id).where(m.publications.c.draft_id == did)).scalar()
+        s.execute(update(m.publications).where(m.publications.c.id == pid).values(
+            status="published", decided_by="test", external_id="7", external_url=f"{WP}/?p=7"))
+    owner = logged_in(db, tenant, "owner")
+    page = owner.get(f"/drafts/{did}").text
+    assert f'action="/ui/publications/{pid}/update"' in page and page.count('name="section"') == 2
+    assert owner.post(f"/ui/publications/{pid}/update", data={"section": "Rete"},
+                      follow_redirects=False).status_code == 303
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar()["section"] == "Rete"
+        assert s.execute(select(m.jobs.c.subject).where(m.jobs.c.kind == "change")).scalar() == f"update {pid}"
 
 
 def _menu_router(router, places, menus=(), items=()):

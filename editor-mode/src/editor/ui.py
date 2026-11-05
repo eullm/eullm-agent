@@ -2041,21 +2041,27 @@ def register(app, ctx) -> None:
         return done("/site?tab=publish", t("Ogni articolo approvato sarà tradotto in: {languages}.",
                                            languages=", ".join(tr.LANGUAGES[x] for x in chosen)))
 
+    def file_under(c: auth.Caller, draft_id: int, section: str) -> None:
+        """The site's section the article goes under (its category on
+        WordPress), when one of the site's sections is chosen."""
+        if not section.strip():
+            return
+        with db.tenant(c.tenant_id) as s:
+            d = s.execute(select(m.drafts.c.seo, m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).first()
+            if d is None:
+                return
+            chosen = drafts.site_section(s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar(),
+                section)
+            if chosen and chosen != (d.seo or {}).get("section"):
+                s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(seo={**(d.seo or {}), "section": chosen}))
+
     @app.post("/ui/drafts/{draft_id}/publish")
     def ui_publish(draft_id: int, target_id: int = Form(...), mode: str = Form("draft"), section: str = Form(""),
                    c: auth.Caller = Depends(ctx.need("editor"))):
         if mode not in ("draft", "publish"):
             raise HTTPException(400, "unknown mode")
-        if section.strip():  # the site's section it goes under: its category on WordPress
-            with db.tenant(c.tenant_id) as s:
-                d = s.execute(select(m.drafts.c.seo, m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).first()
-                body = s.execute(select(m.editorial_profiles.c.body).where(
-                    m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")
-                ).scalar() if d else None
-                chosen = drafts.site_section(body, section)
-                if d is not None and chosen and chosen != (d.seo or {}).get("section"):
-                    s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
-                        seo={**(d.seo or {}), "section": chosen}))
+        file_under(c, draft_id, section)
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
@@ -2065,7 +2071,8 @@ def register(app, ctx) -> None:
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
 
     @app.post("/ui/publications/{pub_id}/update")
-    def ui_pub_update(pub_id: int, draft_id: int = Form(0), c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_pub_update(pub_id: int, draft_id: int = Form(0), section: str = Form(""),
+                      c: auth.Caller = Depends(ctx.need("owner"))):
         """The director puts the current text (or a version written again)
         online in place of the published one."""
         with db.tenant(c.tenant_id) as s:
@@ -2077,6 +2084,7 @@ def register(app, ctx) -> None:
             d = s.execute(select(m.drafts.c.status).where(m.drafts.c.id == (draft_id or pub.draft_id))).first()
             if d is None or d.status != "approved":
                 return done(back, t("Approva prima la bozza: online va solo quello che un direttore ha approvato."))
+        file_under(c, draft_id or pub.draft_id, section)
         queue.enqueue(db, c.tenant_id, "change", f"update {pub_id}",
                       {"publication_id": pub_id, "op": "update", "draft_id": draft_id or None, "by": c.name})
         return done(back, t("Aggiornamento in corso: lo segui nel riquadro Attività."))

@@ -23,7 +23,8 @@
 - **Rubrica scelta anche per le bozze scritte a mano.** Lo scrittore indica
   la rubrica del sito a cui appartiene l'articolo (prima la sceglieva solo il
   caporedattore della redazione automatica), e nella pagina della bozza la
-  si può cambiare prima di chiedere la pubblicazione.
+  si può cambiare prima di chiedere la pubblicazione, o per un articolo già
+  su WordPress insieme a «Aggiorna sul sito».
 
 ### Fixed
 
