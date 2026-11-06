@@ -2630,5 +2630,8 @@
  "Entro ore": "En horas",
  "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "Con la redacción automática activada: aunque se hayan agotado los artículos del día o fuera de horario, una noticia que publican al menos estos medios en estas horas sale igualmente, tras el redactor jefe IA. Como máximo {n} al día; cada una es un artículo menos al día siguiente.",
  "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Última hora activada: una noticia que publican al menos {n} medios en {h} horas sale aunque el día haya terminado o fuera de horario, y al día siguiente sale una menos.",
- "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Última hora desactivada: no sale nada más allá de los artículos del día."
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Última hora desactivada: no sale nada más allá de los artículos del día.",
+ "Le proposte": "Las propuestas",
+ "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "No escrito por la redacción automática: «{title}». No ha costado nada y otra propuesta ocupa su lugar.",
+ "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "solo se pudieron leer {n} palabras de la noticia: demasiado pocas para escribir un artículo sin inventar"
 }

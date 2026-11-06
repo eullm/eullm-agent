@@ -97,14 +97,18 @@ def _check_system(rules: list[str], what: str, joined: str) -> str:
     '"seo_title": "<same, or null>", "seo_description": "<same, or null>"}}. headline_fixes is a last proofread '
     "of the Headlines given after the article: correct only a clear typo, a missing or doubled word or a grammar "
     "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right. "
-    'Add "cut": ["<sentence copied exactly from the article>"] when removing one to three sentences fixes every '
+    'Add "cut": ["<sentence copied exactly from the article>"] when removing up to six sentences fixes every '
     "problem (a detail the sources do not support, a sentence about the sources): then set publish to true, "
-    "because the article goes out without them. Refuse only what removing a few sentences cannot fix: the event "
+    "because the article goes out without them, shorter. Refuse only what removing sentences cannot fix: the event "
     f"itself wrong, the title or the opening wrong{joined}"
     )
 
 
-CHECK_SYSTEM = _check_system(RULES, "article", ", two stories joined")
+CHECK_SYSTEM = _check_system(RULES, "article", ", two stories joined") + (
+    ". The site's articles of the last two days are listed after the sources: add \"repeats\": \"<the title of "
+    "the listed article, copied exactly>\" when this article tells the same story again with no new fact in its "
+    "title and opening, and set publish to false; a new development (a decision, a result, an answer, a "
+    "number that is news itself) is not a repeat, and then repeats is null")
 
 # The evening analysis joins the day's stories by design (evening.py): the
 # rules on one event per article do not apply; what it must not do is make
@@ -321,9 +325,29 @@ def _angle_terms(title: str, angle: str | None) -> set[str]:
 # their proposals' angles, longer and different, hid it).
 SAME_TITLE_WORDS = 4
 SAME_TITLE_SHARE = 0.6
+# Or the same names: "Vance attribuisce alla guerra in Iran la sconfitta
+# repubblicana, Trump esclude di licenziare Hegseth" and, the next morning,
+# "Vance e la guerra in Iran dopo le midterm: Teheran replica, Hegseth sotto
+# pressione" (aitoday.it, 2026-11-06) share few words but three names.
+SAME_TITLE_NAMES = 3
+TITLE_CASE = 0.6  # more capitalised words than this: a title in Title Case, whose capitals are not names
+_CAPITAL = re.compile(r"[A-ZÀ-ÖØ-Þ][\w'’-]*")
+
+
+def title_words(title: str | None) -> set[str]:
+    """The words of a title, and its names (capitalised words) marked with @."""
+    words = set(tokens(title or ""))
+    caps = _CAPITAL.findall(title or "")
+    if not caps or len(caps) > TITLE_CASE * max(1, len((title or "").split())):
+        return words
+    return words | {"@" + n for n in tokens(" ".join(caps))}
 
 
 def same_title(a: set[str], b: set[str]) -> bool:
+    names = sum(1 for x in a & b if x.startswith("@"))
+    if names >= SAME_TITLE_NAMES:
+        return True
+    a, b = {x for x in a if not x.startswith("@")}, {x for x in b if not x.startswith("@")}
     shared = len(a & b)
     return shared >= SAME_TITLE_WORDS and shared / max(1, min(len(a), len(b))) >= SAME_TITLE_SHARE
 
@@ -355,7 +379,7 @@ def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[in
     if rows:
         for pid, item in s.execute(select(pc.proposal_id, pc.item_id).where(pc.proposal_id.in_([r.id for r in rows]))):
             used.setdefault(pid, set()).add(item)
-    return [(_angle_terms(r.title, r.angle), used.get(r.id, set()), set(tokens(r.title))) for r in rows]
+    return [(_angle_terms(r.title, r.angle), used.get(r.id, set()), title_words(r.title)) for r in rows]
 
 
 # Proposals read each round: enough to get past a day of news that only one outlet tells,
@@ -389,7 +413,7 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, t(
                 "argomento da evitare: {word}", _language_in(s, r.tenant_id, site_id), word=word), site_id)
             continue
-        terms, title = _angle_terms(r.title, r.angle), set(tokens(r.title))
+        terms, title = _angle_terms(r.title, r.angle), title_words(r.title)
         items = set(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == r.id)).scalars())
         if overlaps(terms, items, seen, title):
@@ -447,7 +471,7 @@ def breaking_news(s, site_id: int, cfg: dict, now: datetime):
             continue
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == r.id)).scalars())
-        terms, title = _angle_terms(r.title, r.angle), set(tokens(r.title))
+        terms, title = _angle_terms(r.title, r.angle), title_words(r.title)
         if overlaps(terms, set(cited), seen, title):
             continue
         main, same = drafts.event_items(s, cited, r.title or "", also=(r.basis or {}).get("same_event") or ())
@@ -640,9 +664,10 @@ def _check_validator(v) -> dict:
     fixes = v.get("headline_fixes") if isinstance(v.get("headline_fixes"), dict) else {}
     fixes = {k: " ".join(str(x).split()) for k, x in fixes.items()
              if k in ("title", "subtitle", "seo_title", "seo_description") and isinstance(x, str) and x.strip()}
-    cut = [" ".join(str(x).split()) for x in v.get("cut") or [] if isinstance(x, str) and x.strip()][:3]
-    return {"publish": v["publish"], "problems": problems, "section": str(v.get("section") or "").strip()[:80],
-            "fixes": fixes, "cut": cut}
+    cut = [" ".join(str(x).split()) for x in v.get("cut") or [] if isinstance(x, str) and x.strip()][:CUT_MAX]
+    repeats = " ".join(str(v.get("repeats") or "").split())[:300] if isinstance(v.get("repeats"), str) else ""
+    return {"publish": v["publish"] and not repeats, "problems": problems,
+            "section": str(v.get("section") or "").strip()[:80], "fixes": fixes, "cut": cut, "repeats": repeats}
 
 
 # The article's sentences the checks or the editor-in-chief find wrong are
@@ -650,8 +675,11 @@ def _check_validator(v) -> dict:
 # it away after it was paid for (2026-11-04: seven of eight articles of a
 # day discarded, most for one sentence). Never the opening, never so many
 # that the article is no longer the one written.
-CUT_MAX_SHARE = 0.25
-CUT_MAX = 3
+# Details the sources do not give are cut, not written again (2026-11-05: the
+# rewrite of an article padded from thin sources padded it again): up to six
+# sentences and two fifths of the article, which goes out shorter.
+CUT_MAX_SHARE = 0.4
+CUT_MAX = 6
 CUT_MIN_LEFT = 4
 
 
@@ -866,8 +894,11 @@ def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: b
     seo = d.seo or {}
     heads = [f"Headlines: title: {d.title} | subtitle: {d.subtitle or ''} | search title: {seo.get('title') or ''} | "
              f"search description: {seo.get('description') or ''}"]
+    recent = [] if evening else recent_titles(db, tenant_id, d)
     prompt = "\n".join(lines + [f"Language: {d.language}", f"Reasons in: {reasons_language(db, tenant_id, d)}",
-                               "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id)])
+                               "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id),
+                               *(["The site's articles of the last two days:", *(f"- {x}" for x in recent)]
+                                 if recent else [])])
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
         verdict, _calls = core.chat_json(EVENING_CHECK_SYSTEM if evening else CHECK_SYSTEM, prompt, _check_validator)
     return verdict
@@ -968,6 +999,9 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         except CoreError as e:
             return _stop(db, tenant_id, d, [t("il caporedattore AI non ha risposto: {error}", lang, error=e)], out,
                          discard=False)
+        if verdict.get("repeats") and not evening:  # nothing to fix: the site already told it
+            return _stop(db, tenant_id, d, [t("la stessa notizia è già uscita: «{title}»", lang,
+                                              title=verdict["repeats"])], out, discard=cfg["on_problem"] == "fix")
         if not verdict["publish"]:
             fixable += verdict["problems"]
         elif verdict.get("cut"):  # publishable without a few sentences: cut, not written again
@@ -1024,18 +1058,46 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     return res
 
 
+def too_thin(db, tenant_id: str, proposal_id: int, words: int) -> dict:
+    """A proposal of which too little was read to write an article: closed
+    before the writing is paid for, so another one takes its place."""
+    pr = m.proposals.c
+    with db.tenant(tenant_id) as s:
+        p = s.execute(select(pr.title, pr.site_id).where(pr.id == proposal_id)).one()
+        s.execute(update(m.proposals).where(pr.id == proposal_id).values(status="rejected", decided_by=AUTO))
+        why = t("della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare",
+                _language_in(s, tenant_id, p.site_id), n=words)
+        proposals.record_feedback(s, tenant_id, "proposal", proposal_id, "down", AUTO, why, p.site_id)
+    return {"title": p.title, "site_id": p.site_id, "proposal_id": proposal_id, "skipped": [why]}
+
+
+RECENT_TITLES = 80
+
+
+def recent_titles(db, tenant_id: str, d) -> list[str]:
+    """The titles of the site's articles of the last days, newest first,
+    for the editor-in-chief to see a story told again in other words."""
+    dr = m.drafts.c
+    with db.tenant(tenant_id) as s:
+        return list(s.execute(select(dr.title).where(
+            dr.site_id == d.site_id, dr.id != d.id, dr.status == "approved", dr.translation_of.is_(None),
+            dr.proposal_id.is_distinct_from(d.proposal_id),
+            dr.created_at >= datetime.now(UTC) - timedelta(days=OVERLAP_DAYS))
+            .order_by(dr.id.desc()).limit(RECENT_TITLES)).scalars())
+
+
 def told_already(s, d) -> str | None:
     """The title of an article of the site that already tells the same story
     (approved in the last days, any of its versions), or None. Proposals
     written at the same time pass `choose` together; the second to finish is
     caught here, before the editor-in-chief and the cover are paid for."""
     dr = m.drafts.c
-    mine = set(tokens(d.title))
+    mine = title_words(d.title)
     rows = s.execute(select(dr.title).where(
         dr.site_id == d.site_id, dr.id != d.id, dr.status == "approved", dr.translation_of.is_(None),
         dr.proposal_id.is_distinct_from(d.proposal_id),
         dr.created_at >= datetime.now(UTC) - timedelta(days=OVERLAP_DAYS))).scalars()
-    return next((x for x in rows if same_title(mine, set(tokens(x)))), None)
+    return next((x for x in rows if same_title(mine, title_words(x))), None)
 
 
 def _stop(db, tenant_id: str, d, why: list[str], out: dict, discard: bool) -> dict:

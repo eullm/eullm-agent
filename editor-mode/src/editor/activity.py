@@ -174,6 +174,10 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         return [text], f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Leggi la bozza")
     if kind == "auto":
         link = f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts"
+        if r.get("skipped"):
+            return [t("Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta "
+                      "prende il suo posto.", title=r.get("title", "")),
+                    t("Motivi: {why}", why="; ".join(humanize(x) for x in r["skipped"]))], "/proposals", t("Le proposte")
         if r.get("discarded"):
             return [t("Scartato dalla redazione automatica: «{title}». Non è stato pubblicato e non è servita "
                       "nessuna copertina.", title=r.get("title", "")),

@@ -587,6 +587,58 @@ def test_a_few_wrong_sentences_are_cut_not_paid_for_again(db, tenant, monkeypatc
     assert draft_state("rejected", ap.AUTO) == "discarded" and draft_state("rejected", "Francesco") == "rejected"
 
 
+def test_a_story_told_again_is_dropped_and_thin_news_is_not_written(db, tenant, monkeypatch):
+    """aitoday.it, 2026-11-05/06: Vance, the Iran war and Hegseth told again
+    the next morning in other words; 7 of 28 articles discarded after being
+    paid for, written from sources too thin to support them."""
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    _, site_id, prop = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=1)
+    pub.add_target(db, tenant, site_id, "webhook", "sito", {"url": "https://hooks.example/it"}, None)
+    w = ap.title_words
+    vance = "Vance attribuisce alla guerra in Iran la sconfitta repubblicana, Trump esclude di licenziare Hegseth"
+    assert ap.same_title(w(vance), w("Vance e la guerra in Iran dopo le midterm: Teheran replica, Hegseth sotto pressione"))
+    assert not ap.same_title(w("Elezioni di metà mandato Usa, Iran: «Gli americani hanno detto no alla guerra»"),
+                             w("Vance e la guerra in Iran dopo le midterm: Teheran replica, Hegseth sotto pressione"))
+    assert not any(x.startswith("@") for x in w("Agility Robotics Debuts on Nasdaq: Humanoid Robots Reach the Market"))
+
+    # The editor-in-chief reads the site's recent titles: a repeat is discarded, never written again.
+    old = _long(db, tenant, prop)
+    sirm = "Radiologia e intelligenza artificiale: a Milano si apre il congresso Sirm"
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.proposals).where(m.proposals.c.id == prop[0])).one()._asdict()
+        row.pop("id")
+        other = s.execute(insert(m.proposals).values(**row).returning(m.proposals.c.id)).scalar_one()
+        s.execute(m.drafts.update().where(m.drafts.c.id == old).values(status="approved", decided_by="francesco", title=sirm, proposal_id=other))
+    did = _long(db, tenant, prop)
+    asked, rewrites, sent = [], [], []
+
+    def answer(request):
+        asked.append(json.loads(request.content)["messages"][-1]["content"])
+        return chat(json.dumps({"publish": True, "problems": [], "repeats": sirm}))
+
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=answer)
+        out = ap.finish(db, tenant, did, core(), sent.append, rewrite=lambda *a: rewrites.append(a))
+    assert len(asked) == 1 and sirm in asked[0] and "last two days" in asked[0]
+    assert out["discarded"] and sirm in out["discarded"][0] and not rewrites and not sent
+
+    # Too little read of the news: no writing paid for, the proposal closed so another takes its place.
+    pid = prop[0]
+    with respx.mock(assert_all_called=False) as router:
+        llm = router.post(CORE).mock(return_value=chat("{}"))
+        with pytest.raises(drafts.Thin):
+            drafts.write_draft(db, tenant, pid, core(), None, min_words=100_000)
+    assert not llm.calls
+    out = ap.too_thin(db, tenant, pid, 42)
+    assert "42" in out["skipped"][0] and out["proposal_id"] == pid
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.proposals.c.status).where(m.proposals.c.id == pid)).scalar() == "rejected"
+    from editor import activity
+    lines, link, _ = activity._result("auto", out, site_id, str)
+    assert "Non scritto" in lines[0] and link == "/proposals"
+
+
 def test_reasons_that_can_be_fixed_are_fixed_not_thrown_away(db, tenant, monkeypatch):
     """Francesco 2026-11-05: "sono motivi che si possono correggere, non credo
     sia tutta da buttare la notizia". A refused article is corrected where it

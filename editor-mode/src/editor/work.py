@@ -102,16 +102,19 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         def write(purpose="draft", notes=None):
             if http_factory is None:
                 return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), None, pay=pay,
-                                          purpose=purpose, notes=notes, outlets=outlets)
+                                          purpose=purpose, notes=notes, outlets=outlets, min_words=drafts.THIN_WORDS)
             with http_factory() as client:
                 return drafts.write_draft(db, tenant, args["proposal_id"], core_for(tenant), client, pay=pay,
-                                          purpose=purpose, notes=notes, outlets=outlets)
+                                          purpose=purpose, notes=notes, outlets=outlets, min_words=drafts.THIN_WORDS)
 
         def cover(did):  # drawn only for an article that passed every check
             if imager is not None:
                 images.make(db, tenant, did, imager, core_for(tenant))
 
-        did = write()
+        try:
+            did = write()
+        except drafts.Thin as e:  # nothing paid: another proposal takes its place
+            return autopilot.too_thin(db, tenant, args["proposal_id"], e.words)
         return autopilot.finish(db, tenant, did, core_for(tenant), publish_job(tenant, args["site_id"]),
                                 lambda language, final: enqueue(db, tenant, "translate", f"draft {final} {language}", {
                                     "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
