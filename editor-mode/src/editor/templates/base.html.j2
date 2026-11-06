@@ -73,7 +73,7 @@
     <a href="/plan">{{ _('Scegli il piano') if plan_state.status != 'past_due' else _("Vedi l'abbonamento") }}</a>
   </p>
   {% endif %}
-  {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+  {% if notice %}<p class="notice" role="status" id="flash">{{ notice }}</p>{% endif %}
   {% if activity and not activity.full %}{% include "_activity.html.j2" %}{% endif %}
   {% block main %}{% endblock %}
 </main>
