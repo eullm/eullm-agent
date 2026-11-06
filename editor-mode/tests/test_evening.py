@@ -168,6 +168,60 @@ def test_the_evening_analysis_reads_the_day_and_links_its_articles(db, tenant, m
         assert did not in {r.id for r in ev.published(s, site_id, datetime.now(UTC))}
 
 
+def test_the_evening_analysis_is_never_lost_for_its_headline(db, tenant, monkeypatch):
+    """aitoday.it, 2026-11-06: the evening analysis discarded because its
+    title and subtitle said more than the day's articles. Its headline goes
+    plain (name and date) and it is read again; refused still, it waits for
+    a person, never discarded."""
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    site_id, dids, target = _day(db, tenant)
+    with db.tenant(tenant) as s:
+        assert ev.save(s, site_id, {"enabled": True, "hour": 21, "min_articles": 3})
+        assert ap.save(s, site_id, {**ap.DEFAULTS, "enabled": True, "min_opportunity": 0, "hours": [0, 24],
+                                    "min_sources": 2, "sections": ["Rete"], "target_id": target})
+    asked = []
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=_analysis(asked))
+        did = ev.write(db, tenant, site_id, core(), datetime(2026, 11, 6, 20, 5, tzinfo=UTC), "Europe/Rome")
+    assert "no more certain and no larger" in asked[0][0]["content"]
+    verdicts = []
+
+    def editor(refusals):
+        def answer(request):
+            msgs = json.loads(request.content)["messages"]
+            if "editor-in-chief" not in msgs[0]["content"]:
+                return chat(json.dumps({"title": "x", "subtitle": "", "sections": []}))  # no correction offered
+            verdicts.append(msgs[-1]["content"])
+            if len(verdicts) <= refusals:
+                return chat(json.dumps({"publish": False, "problems": ["il titolo presenta come fatto un legame"]}))
+            return chat(json.dumps({"publish": True, "problems": []}))
+        return answer
+
+    sent = []
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=editor(1))
+        out = ap.finish(db, tenant, did, core(), sent.append)
+    assert out.get("target") == "sito" and out["plain_headline"] and len(sent) == 1, out
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+    assert d.title == "Il Punto della Sera del 6 novembre" and d.status == "approved"
+    assert d.subtitle == "Il Punto della Sera. Le notizie del giorno lette insieme dal caporedattore AI."
+    assert "Il Punto della Sera del 6 novembre" in verdicts[-1]
+
+    # Refused whatever its headline: it waits for a person.
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=_analysis([]))
+        again = ev.write(db, tenant, site_id, core(), datetime(2026, 11, 7, 20, 5, tzinfo=UTC), "Europe/Rome",
+                         proposal_id=d.proposal_id)
+    verdicts.clear()
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=editor(99))
+        out = ap.finish(db, tenant, again, core(), sent.append, rewrite=None)
+    assert out.get("held") and not out.get("discarded"), out
+    with db.tenant(tenant) as s:
+        assert s.execute(select(m.drafts.c.status).where(m.drafts.c.id == again)).scalar() != "rejected"
+
+
 def test_no_analysis_for_a_thin_day_or_a_plan_without_it(db, tenant, monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
     site_id, _, _ = _day(db, tenant, n=2)

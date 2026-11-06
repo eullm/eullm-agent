@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.31.4
+
+### Fixed
+
+- **Il Punto della Sera non va più perso** (aitoday.it, 6 novembre: scartato
+  perché titolo e sommario presentavano come fatti i legami tra le notizie).
+  Il direttore AI non mette più legami, cause ed effetti nel titolo e nel
+  sommario: restano nel testo, come lettura. Se il caporedattore lo boccia
+  comunque, il Punto della Sera prende titolo e sommario neutri (per esempio
+  «Il Punto della Sera del 6 novembre») con il testo invariato, e viene
+  riletto. Se non passa nemmeno così e dopo una riscrittura, aspetta il
+  direttore come bozza: non viene mai scartato.
+
 ## 0.31.3
 
 ### Fixed

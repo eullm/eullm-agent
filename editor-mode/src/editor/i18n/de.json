@@ -2633,5 +2633,6 @@
  "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Eilmeldungen aus: Über die Artikel des Tages hinaus erscheint nichts.",
  "Le proposte": "Die Vorschläge",
  "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Von der automatischen Redaktion nicht geschrieben: „{title}“. Es hat nichts gekostet, ein anderer Vorschlag tritt an seine Stelle.",
- "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "von der Nachricht konnten nur {n} Wörter gelesen werden: zu wenige, um einen Artikel zu schreiben, ohne etwas zu erfinden"
+ "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "von der Nachricht konnten nur {n} Wörter gelesen werden: zu wenige, um einen Artikel zu schreiben, ohne etwas zu erfinden",
+ "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "Der KI-Chefredakteur liest den Abendbericht mit neutralem Titel und Untertitel erneut"
 }
