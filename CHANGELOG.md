@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.31.2
+
+### Fixed
+
+- **La stessa notizia il giorno dopo** (aitoday.it, 5-6 novembre: Tinto
+  Brass, Vance e Hegseth, il congresso Sirm raccontati di nuovo con un altro
+  titolo e un'altra copertina). Un titolo con tre nomi in comune con un
+  articolo dei due giorni prima è la stessa notizia. Il caporedattore AI
+  riceve i titoli del sito degli ultimi due giorni e scarta, senza
+  riscriverla, una notizia già data che non porta fatti nuovi.
+- **Meno articoli pagati e poi scartati** (5 novembre: 7 su 28, circa 0,20 $
+  l'uno, quasi sempre per dettagli che non stanno nella fonte letta). Se
+  della notizia si leggono meno di 150 parole l'articolo non si scrive e la
+  proposta lascia il posto a un'altra, senza spesa. Il redattore non scrive
+  ciò che sa a memoria (carriere, record, date). Il caporedattore taglia fino
+  a sei frasi senza fonte invece di far riscrivere tutto.
+
 ## 0.31.1
 
 ### Added

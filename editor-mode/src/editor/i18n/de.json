@@ -2630,5 +2630,8 @@
  "Entro ore": "Innerhalb Stunden",
  "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "Mit eingeschalteter automatischer Redaktion: Auch wenn die Artikel des Tages aufgebraucht sind oder außerhalb der Zeiten, erscheint eine Nachricht, die mindestens so viele Medien in diesen Stunden bringen, trotzdem, nach dem KI-Chefredakteur. Höchstens {n} pro Tag; jede ist am nächsten Tag ein Artikel weniger.",
  "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Eilmeldungen an: Eine Nachricht, die mindestens {n} Medien innerhalb von {h} Stunden bringen, erscheint auch nach getaner Tagesarbeit oder außerhalb der Zeiten, und am nächsten Tag erscheint eine weniger.",
- "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Eilmeldungen aus: Über die Artikel des Tages hinaus erscheint nichts."
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Eilmeldungen aus: Über die Artikel des Tages hinaus erscheint nichts.",
+ "Le proposte": "Die Vorschläge",
+ "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Von der automatischen Redaktion nicht geschrieben: „{title}“. Es hat nichts gekostet, ein anderer Vorschlag tritt an seine Stelle.",
+ "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "von der Nachricht konnten nur {n} Wörter gelesen werden: zu wenige, um einen Artikel zu schreiben, ohne etwas zu erfinden"
 }

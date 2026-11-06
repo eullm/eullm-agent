@@ -59,6 +59,25 @@ TARGET_WORDS = 1000  # when the site's own length is unknown
 # padded to reach a length (an external audit found padded articles
 # repeating themselves and stretching thin sources).
 MIN_WORDS, MAX_WORDS = 600, 2000
+# The automatic newsroom does not write from less than this read of the news
+# itself (its outlets and original documents): from so little the model fills
+# the article with what it remembers, the editor-in-chief refuses it and the
+# rewrite does the same (aitoday.it, 2026-11-05: 7 of 28 discarded so, about
+# 0.20 $ each).
+THIN_WORDS = 150
+
+
+class Thin(ValueError):
+    """Too little was read of the news to write an article from it."""
+
+    def __init__(self, words: int):
+        super().__init__(f"only {words} words were read of the news")
+        self.words = words
+
+
+def material_words(sources: dict, ids) -> int:
+    """Words read of these items: each page once, its text or else its summary."""
+    return sum(len((sources[i].content or sources[i].summary or "").split()) for i in dict.fromkeys(ids) if i in sources)
 
 
 def target_words(profile: dict) -> int:
@@ -423,10 +442,12 @@ SYSTEM = (
     "Tell the event, never your sources or your checking: no heading or sentence about what is confirmed or "
     "not, what is clear or unclear, what the sources, the texts or the outlets say or do not say; when the items "
     "do not give a detail, leave it out without saying so. "
-    "Write only what the items say. Length follows the material: when the items give only a title, a summary or "
-    "an abstract, or come from one outlet, write a short news piece of 200 to 400 words, attributed to its "
-    "source; write longer only when the items carry the details (who, what, "
-    "numbers, dates, how it works, what changes for the reader). A short piece must still give what its title "
+    "Write only what the items say, never what you know or remember yourself: no career, record, date, "
+    "figure or history of a person, a company or a place that the items do not give. Length follows the "
+    "material: when the items give only a title, a summary or an abstract, or come from one outlet, write a "
+    "short news piece of 200 to 400 words, attributed to its source; write longer only when the items carry "
+    "the details (who, what, numbers, dates, how it works, what changes for the reader). A short piece must "
+    "still give what its title "
     "promises (the figure, the decision, what the study found): if the items do not give it, the title does not "
     "promise it. Never pad: no background the items do not give, no repeating a point in other words. "
     "Be exact: give a number with what it is compared to, as the items do (the rate and the period, not "
@@ -798,10 +819,13 @@ def outlets(s, items: list[int], title: str = "", need: int = 0, also: list[int]
 
 
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
-                pay: bool = True, purpose: str = "draft", notes: str | None = None, outlets: int = 0) -> int:
+                pay: bool = True, purpose: str = "draft", notes: str | None = None, outlets: int = 0,
+                min_words: int = 0) -> int:
     """Write and store a draft for an accepted proposal; returns its id.
     Past the plan's articles of the month it is paid with credits, unless
-    `pay` is False (the automatic newsroom stays within the plan)."""
+    `pay` is False (the automatic newsroom stays within the plan). With
+    `min_words`, `Thin` when less was read of the news, before the writing
+    is paid for."""
     with db.tenant(tenant_id) as s:
         prop = s.execute(select(m.proposals).where(m.proposals.c.id == proposal_id)).first()
         if prop is None or prop.status not in ("accepted", "drafted"):
@@ -845,6 +869,10 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             with db.tenant(tenant_id) as s:
                 sources = _sources(s, ids)
 
+    if min_words:
+        read = material_words(sources, cited + documents)
+        if read < min_words:
+            raise Thin(read)
     allowed = set(sources)
     roles = {**{i: "CONTEXT" for i in context}, **{i: "MAIN" for i in cited}, **{i: "ORIGINAL" for i in documents}}
     prompt = _prompt(profile, prop, sources, roles, posts)

@@ -2630,5 +2630,8 @@
  "Entro ore": "Within hours",
  "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "With the automatic newsroom on: even when the day's articles are used up or outside the hours, a story at least these outlets run within these hours still goes out, after the AI editor-in-chief. At most {n} a day; each one is one article fewer the next day.",
  "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Breaking news on: a story at least {n} outlets run within {h} hours goes out even when the day is done or outside the hours, and one fewer goes out the next day.",
- "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Breaking news off: nothing goes out beyond the day's articles."
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Breaking news off: nothing goes out beyond the day's articles.",
+ "Le proposte": "The proposals",
+ "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Not written by the automatic newsroom: “{title}”. It cost nothing and another proposal takes its place.",
+ "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "only {n} words of the news could be read: too few to write an article without making things up"
 }
