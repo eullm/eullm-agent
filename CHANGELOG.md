@@ -2,6 +2,15 @@
 
 ## 0.31.1
 
+### Added
+
+- **Breaking news** (Sito e profilo › Come scrive il sito, vicino al Punto
+  della Sera, spenta in partenza). Con la redazione automatica accesa, una
+  notizia che almeno N testate diverse (3 in partenza, da 2 a 10) danno entro
+  poche ore (3 in partenza, da 1 a 12) esce anche quando gli articoli del
+  giorno sono finiti o fuori orario, dopo il caporedattore AI come le altre.
+  Al massimo 3 al giorno, e ognuna è un articolo in meno il giorno dopo.
+
 ### Fixed
 
 - **La stessa notizia non esce più due volte** (aitoday.it, 6 novembre: il

@@ -188,10 +188,65 @@ def test_an_important_story_goes_out_beyond_the_day_brought_forward_from_tomorro
     settings(db, tenant, site_id, per_day=2, borrow=1, extra_min_opportunity=0)
     over = ap.over_today({"auto_over": {"day": "2026-10-28", "borrowed": 1, "paid": 0, "debt": 0}},
                          (now + timedelta(days=1)).astimezone(__import__("zoneinfo").ZoneInfo("Europe/Rome")))
-    assert over == {"day": "2026-10-29", "borrowed": 0, "paid": 0, "debt": 1}
+    assert over == {"day": "2026-10-29", "borrowed": 0, "paid": 0, "breaking": 0, "debt": 1}
     # What passes the bar and the limit left out is counted.
     with db.tenant(tenant) as s:
         assert ap.left_out(s, site_id, ap.settings_of(body), now) >= 0
+
+
+def test_breaking_news_goes_out_past_the_day_and_out_of_hours(db, tenant):
+    """Francesco 2026-11-06: a story that comes out 3 or 4 times in a short
+    while goes out even when the day's articles are done, one fewer the
+    next day."""
+    from zoneinfo import ZoneInfo
+
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=1, borrow=0, breaking=True, breaking_outlets=2, breaking_hours=3)
+    queued = []
+    now = datetime.now(UTC)
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": now})
+    run = lambda at: ap.run(db, tenant, site_id, None, at, "Europe/Rome", lambda pid, paid=False: queued.append(pid))
+    assert len(run(now)["accepted"]) == 1  # the day's article
+    with db.tenant(tenant) as s:  # another story, told by two outlets in the last hours
+        first = s.execute(select(m.proposals).where(m.proposals.c.id == queued[0])).one()
+        s.execute(insert(m.proposals).values(tenant_id=tenant, site_id=site_id, topic_id=first.topic_id,
+                                             profile_id=first.profile_id, opportunity=80, title="Seconda notizia",
+                                             generated_by="model", status="proposed", created_at=now))
+        second = s.execute(select(func.max(m.proposals.c.id))).scalar()
+        for item in s.execute(select(m.proposal_citations.c.item_id).where(
+                m.proposal_citations.c.proposal_id == first.id)).scalars().all():
+            s.execute(insert(m.proposal_citations).values(tenant_id=tenant, proposal_id=second, item_id=item))
+    with db.tenant(tenant) as s:
+        assert ap.breaking_news(s, site_id, {**ap.DEFAULTS, "min_opportunity": 0, "breaking_outlets": 3,
+                                             "breaking_hours": 3}, now) is None  # two outlets, not three
+    out = run(now)
+    assert out == {"accepted": [second], "wanted": 1, "extra": "breaking"} and queued[-1] == second
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(
+            m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
+    assert body["settings"]["auto_over"]["breaking"] == 1
+    assert run(now)["done"] == 1  # nothing else told that much: the day is done
+    # Tomorrow it owes it.
+    local = now.astimezone(ZoneInfo("Europe/Rome"))
+    assert ap.over_today(body["settings"], local + __import__("datetime").timedelta(days=1))["debt"] == 1
+
+    # Out of hours too; switched off, nothing beyond the day.
+    with db.tenant(tenant) as s:
+        s.execute(update(m.proposals).where(m.proposals.c.id == second).values(status="proposed"))
+        s.execute(m.drafts.delete())
+    start = (local.hour + 2) % 24
+    settings(db, tenant, site_id, per_day=1, borrow=0, breaking=True, breaking_outlets=2, breaking_hours=3,
+             hours=[start, (start + 1) % 24 or 24])
+    with db.tenant(tenant) as s:
+        s.execute(update(m.proposals).where(m.proposals.c.status == "accepted").values(status="rejected"))
+        s.execute(update(m.proposals).where(m.proposals.c.id == second).values(status="proposed"))
+    assert run(now).get("extra") == "breaking"
+    settings(db, tenant, site_id, per_day=1, borrow=0, hours=[start, (start + 1) % 24 or 24])
+    with db.tenant(tenant) as s:
+        s.execute(update(m.proposals).where(m.proposals.c.id == second).values(status="proposed"))
+    assert run(now) == {"waiting": "hours"}
 
 
 def _written(db, tenant, again=None):

@@ -2623,5 +2623,12 @@
  "Una categoria per ogni rubrica e una voce per ciascuna nel menu principale del sito. Le categorie le crea anche un editore, i menu li cambia solo un amministratore.": "Une catégorie par rubrique et une entrée pour chacune dans le menu principal du site. Un éditeur peut créer les catégories, seul un administrateur modifie les menus.",
  "{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name} : catégories prêtes ({n}), mais l'utilisateur connecté ne peut pas modifier les menus : sur WordPress seul un administrateur le peut. Crée le menu depuis Apparence › Menus, ou connecte un utilisateur administrateur.",
  "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name} : catégories prêtes ({n}), mais le thème utilise la navigation en blocs, sans emplacements de menu : ajoute les catégories depuis Apparence › Éditeur › Navigation.",
- "la stessa notizia è già uscita: «{title}»": "la même information est déjà parue : «{title}»"
+ "la stessa notizia è già uscita: «{title}»": "la même information est déjà parue : «{title}»",
+ "Breaking news": "Dernière minute",
+ "Una notizia che molte testate danno insieme esce comunque": "Une info que de nombreux médias publient en même temps sort quand même",
+ "Testate almeno": "Au moins médias",
+ "Entro ore": "En heures",
+ "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "Avec la rédaction automatique activée : même quand les articles du jour sont épuisés ou hors horaires, une info qu'au moins ces médias publient dans ces heures sort quand même, après le rédacteur en chef IA. Au maximum {n} par jour ; chacune compte un article de moins le lendemain.",
+ "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Dernière minute activée : une info qu'au moins {n} médias publient en {h} heures sort même une fois la journée terminée ou hors horaires, et il en sort une de moins le lendemain.",
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Dernière minute désactivée : rien ne sort au-delà des articles du jour."
 }
