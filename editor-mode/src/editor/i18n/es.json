@@ -2622,5 +2622,13 @@
  "Crea categorie e menu su WordPress": "Crear categorías y menú en WordPress",
  "Una categoria per ogni rubrica e una voce per ciascuna nel menu principale del sito. Le categorie le crea anche un editore, i menu li cambia solo un amministratore.": "Una categoría por sección y una entrada para cada una en el menú principal del sitio. Un editor puede crear las categorías, solo un administrador cambia los menús.",
  "{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name}: categorías listas ({n}), pero el usuario conectado no puede cambiar los menús: en WordPress solo puede hacerlo un administrador. Crea el menú desde Apariencia › Menús, o conecta un usuario administrador.",
- "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: categorías listas ({n}), pero el tema usa la navegación por bloques, sin ubicaciones de menú: añade las categorías desde Apariencia › Editor › Navegación."
+ "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: categorías listas ({n}), pero el tema usa la navegación por bloques, sin ubicaciones de menú: añade las categorías desde Apariencia › Editor › Navegación.",
+ "la stessa notizia è già uscita: «{title}»": "la misma noticia ya ha salido: «{title}»",
+ "Breaking news": "Última hora",
+ "Una notizia che molte testate danno insieme esce comunque": "Una noticia que muchos medios publican a la vez sale igualmente",
+ "Testate almeno": "Al menos medios",
+ "Entro ore": "En horas",
+ "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "Con la redacción automática activada: aunque se hayan agotado los artículos del día o fuera de horario, una noticia que publican al menos estos medios en estas horas sale igualmente, tras el redactor jefe IA. Como máximo {n} al día; cada una es un artículo menos al día siguiente.",
+ "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Última hora activada: una noticia que publican al menos {n} medios en {h} horas sale aunque el día haya terminado o fuera de horario, y al día siguiente sale una menos.",
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Última hora desactivada: no sale nada más allá de los artículos del día."
 }

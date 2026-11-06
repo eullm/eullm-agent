@@ -2622,5 +2622,13 @@
  "Crea categorie e menu su WordPress": "Kategorien und Menü in WordPress anlegen",
  "Una categoria per ogni rubrica e una voce per ciascuna nel menu principale del sito. Le categorie le crea anche un editore, i menu li cambia solo un amministratore.": "Eine Kategorie pro Rubrik und je ein Eintrag im Hauptmenü der Website. Kategorien kann auch ein Redakteur anlegen, Menüs ändert nur ein Administrator.",
  "{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name}: Kategorien bereit ({n}), aber der verbundene Benutzer darf keine Menüs ändern: In WordPress darf das nur ein Administrator. Lege das Menü unter Design › Menüs an oder verbinde einen Administrator.",
- "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: Kategorien bereit ({n}), aber das Theme nutzt die Block-Navigation ohne Menüpositionen: Füge die Kategorien unter Design › Editor › Navigation hinzu."
+ "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: Kategorien bereit ({n}), aber das Theme nutzt die Block-Navigation ohne Menüpositionen: Füge die Kategorien unter Design › Editor › Navigation hinzu.",
+ "la stessa notizia è già uscita: «{title}»": "dieselbe Nachricht ist schon erschienen: «{title}»",
+ "Breaking news": "Eilmeldungen",
+ "Una notizia che molte testate danno insieme esce comunque": "Eine Nachricht, die viele Medien gleichzeitig bringen, erscheint trotzdem",
+ "Testate almeno": "Mindestens Medien",
+ "Entro ore": "Innerhalb Stunden",
+ "Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.": "Mit eingeschalteter automatischer Redaktion: Auch wenn die Artikel des Tages aufgebraucht sind oder außerhalb der Zeiten, erscheint eine Nachricht, die mindestens so viele Medien in diesen Stunden bringen, trotzdem, nach dem KI-Chefredakteur. Höchstens {n} pro Tag; jede ist am nächsten Tag ein Artikel weniger.",
+ "Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.": "Eilmeldungen an: Eine Nachricht, die mindestens {n} Medien innerhalb von {h} Stunden bringen, erscheint auch nach getaner Tagesarbeit oder außerhalb der Zeiten, und am nächsten Tag erscheint eine weniger.",
+ "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Eilmeldungen aus: Über die Artikel des Tages hinaus erscheint nichts."
 }

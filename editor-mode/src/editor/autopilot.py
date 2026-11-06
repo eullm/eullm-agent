@@ -40,7 +40,10 @@ DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "av
             # more a day it may pay with credits, for news over `extra_min_opportunity`.
             "borrow": 2, "extra_credits": 0, "extra_min_opportunity": 65.0,
             # A last section that reads the facts: connects them, weighs them (drafts.ANALYSIS).
-            "analysis": True}
+            "analysis": True,
+            # Breaking news: a story that many outlets tell within a few hours goes out even when the
+            # day's articles are done or out of hours, brought forward from tomorrow (breaking_news).
+            "breaking": False, "breaking_outlets": 3, "breaking_hours": 3}
 # "fix": an article with problems is written again once, by the stronger model when the console sets one,
 # and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
 ON_PROBLEM = ("fix", "hold")
@@ -153,6 +156,9 @@ class _Auto(BaseModel):
     extra_credits: int = Field(DEFAULTS["extra_credits"], ge=0, le=20)
     extra_min_opportunity: float = Field(DEFAULTS["extra_min_opportunity"], ge=0, le=100)
     analysis: bool = True
+    breaking: bool = False
+    breaking_outlets: int = Field(DEFAULTS["breaking_outlets"], ge=2, le=10)
+    breaking_hours: int = Field(DEFAULTS["breaking_hours"], ge=1, le=12)
 
 
 def check_settings(values: dict) -> dict:
@@ -308,8 +314,26 @@ def _angle_terms(title: str, angle: str | None) -> set[str]:
     return set(tokens(title)) | set(tokens(angle or ""))
 
 
-def overlaps(terms: set[str], items: set[int], others: list[tuple[set[str], set[int]]]) -> bool:
-    for o_terms, o_items in others:
+# Two titles that say the same thing in other words: most of the words of
+# the shorter one (aitoday.it, 2026-11-06: "Fine vita, il governo impugna la
+# legge del Veneto davanti alla Consulta" and "Il governo impugna la legge del
+# Veneto sul fine vita e la manda alla Consulta" went out two minutes apart;
+# their proposals' angles, longer and different, hid it).
+SAME_TITLE_WORDS = 4
+SAME_TITLE_SHARE = 0.6
+
+
+def same_title(a: set[str], b: set[str]) -> bool:
+    shared = len(a & b)
+    return shared >= SAME_TITLE_WORDS and shared / max(1, min(len(a), len(b))) >= SAME_TITLE_SHARE
+
+
+def overlaps(terms: set[str], items: set[int], others: list[tuple], title: set[str] | None = None) -> bool:
+    """`others`: (words, news items[, title words]) of what was taken on."""
+    for other in others:
+        o_terms, o_items = other[0], other[1]
+        if title and len(other) > 2 and same_title(title, other[2]):
+            return True
         shared = len(terms & o_terms)
         share = shared / max(1, min(len(terms), len(o_terms)))
         if shared >= SAME_STORY_WORDS and share >= SAME_STORY_SHARE:
@@ -331,7 +355,7 @@ def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[in
     if rows:
         for pid, item in s.execute(select(pc.proposal_id, pc.item_id).where(pc.proposal_id.in_([r.id for r in rows]))):
             used.setdefault(pid, set()).add(item)
-    return [(_angle_terms(r.title, r.angle), used.get(r.id, set())) for r in rows]
+    return [(_angle_terms(r.title, r.angle), used.get(r.id, set()), set(tokens(r.title))) for r in rows]
 
 
 # Proposals read each round: enough to get past a day of news that only one outlet tells,
@@ -365,26 +389,26 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, t(
                 "argomento da evitare: {word}", _language_in(s, r.tenant_id, site_id), word=word), site_id)
             continue
-        terms = _angle_terms(r.title, r.angle)
+        terms, title = _angle_terms(r.title, r.angle), set(tokens(r.title))
         items = set(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == r.id)).scalars())
-        if overlaps(terms, items, seen):
+        if overlaps(terms, items, seen, title):
             continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
             out.append(r)
-            seen.append((terms, items))
+            seen.append((terms, items, title))
         else:
-            fewer.append((r, terms, items))
+            fewer.append((r, terms, items, title))
     # The outlets the site asks for are a preference, not a wall (Francesco 2026-11-05: "se non
     # c'è la seconda testata va fatto comunque una scrematura e la pubblicazione"): when the news
     # told by enough outlets are not enough, the best of the others follow, and the
     # editor-in-chief reads them like any other.
-    for r, terms, items in fewer:
+    for r, terms, items, title in fewer:
         if len(out) >= n:
             break
-        if not overlaps(terms, items, seen):
+        if not overlaps(terms, items, seen, title):
             out.append(r)
-            seen.append((terms, items))
+            seen.append((terms, items, title))
     return out
 
 
@@ -400,6 +424,40 @@ def lapse(db, tenant_id: str, site_id: int, now: datetime) -> int:
     return res.rowcount or 0
 
 
+# Breaking news a day at most, beyond the day's articles: each is one fewer tomorrow.
+BREAKING_PER_DAY = 3
+BREAKING_CANDIDATES = 40  # fresh proposals looked at each round, the best first
+
+
+def breaking_news(s, site_id: int, cfg: dict, now: datetime):
+    """The proposal of a story that at least `breaking_outlets` outlets told
+    in the last `breaking_hours` hours (Francesco 2026-11-06: "se ci sarà una
+    notizia che esce 3/4 volte nel giro di poco la riprendiamo anche se
+    abbiamo finito la disponibilità"), or None. Not one the site already told,
+    nor on a topic to avoid; the editor-in-chief reads it like any other."""
+    pr, si = m.proposals.c, m.source_items.c
+    since = now - timedelta(hours=cfg["breaking_hours"])
+    seen = recent_angles(s, site_id, now)
+    rows = s.execute(select(m.proposals).where(
+        pr.site_id == site_id, pr.status == "proposed", pr.created_at >= since,
+        pr.opportunity >= cfg["min_opportunity"] * OPPORTUNITY_FLOOR)
+        .order_by(pr.opportunity.desc(), pr.id.desc()).limit(BREAKING_CANDIDATES)).all()
+    for r in rows:
+        if avoided(f"{r.title} {r.angle or ''}", cfg["avoid"]):
+            continue
+        cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
+            m.proposal_citations.c.proposal_id == r.id)).scalars())
+        terms, title = _angle_terms(r.title, r.angle), set(tokens(r.title))
+        if overlaps(terms, set(cited), seen, title):
+            continue
+        main, same = drafts.event_items(s, cited, r.title or "", also=(r.basis or {}).get("same_event") or ())
+        told = s.execute(select(func.count(func.distinct(si.source_id))).where(
+            si.id.in_(main + same or [0]), si.fetched_at >= since)).scalar() or 0
+        if told >= cfg["breaking_outlets"]:
+            return r
+    return None
+
+
 def over_today(settings: dict, local) -> dict:
     """What the newsroom brought forward from tomorrow and paid with credits
     today, and what it owes from yesterday: {day, borrowed, paid, debt}.
@@ -409,9 +467,10 @@ def over_today(settings: dict, local) -> dict:
     today = local.date().isoformat()
     if rec.get("day") == today:
         return {"day": today, "borrowed": int(rec.get("borrowed", 0)), "paid": int(rec.get("paid", 0)),
-                "debt": int(rec.get("debt", 0))}
+                "breaking": int(rec.get("breaking", 0)), "debt": int(rec.get("debt", 0))}
     yesterday = (local.date() - timedelta(days=1)).isoformat()
-    return {"day": today, "borrowed": 0, "paid": 0, "debt": int(rec.get("borrowed", 0)) if rec.get("day") == yesterday else 0}
+    owed = int(rec.get("borrowed", 0)) + int(rec.get("breaking", 0)) if rec.get("day") == yesterday else 0
+    return {"day": today, "borrowed": 0, "paid": 0, "breaking": 0, "debt": owed}
 
 
 def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime, tz: str, enqueue) -> dict:
@@ -441,8 +500,23 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
     month_over = month_left is not None and month_left <= 0
     if month_over and not can_pay:
         return {"waiting": "month"}
+    def breaking(why: dict) -> dict:
+        """Before saying the day is done (or out of hours): breaking news, if any."""
+        if not cfg["breaking"] or month_over or over["breaking"] >= BREAKING_PER_DAY:
+            return why
+        with db.tenant(tenant_id) as s:
+            r = breaking_news(s, site_id, cfg, now)
+        if r is None or not proposals.decide(db, tenant_id, r.id, True, AUTO, "automatic newsroom, breaking"):
+            return why
+        enqueue(r.id)
+        from .profile import _set_settings
+
+        with db.tenant(tenant_id) as s:
+            _set_settings(s, site_id, auto_over={**over, "breaking": over["breaking"] + 1})
+        return {"accepted": [r.id], "wanted": 1, "extra": "breaking"}
+
     if not in_hours(cfg, local):
-        return {"waiting": "hours"}
+        return breaking({"waiting": "hours"})
     if cfg["min_sources"] > 1 and not month_over:
         # Other outlets telling the same event in other words or languages, confirmed by the
         # model once per proposal, so that choose finds the second outlet where it is.
@@ -466,15 +540,19 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             else:
                 # The day is done and no extra is allowed: how many good news stay out, counted
                 # here once an hour (the Desk only shows it; counting takes a while).
-                return {"done": target, "left_out": left_out(s, site_id, cfg, now)} \
+                done = {"done": target, "left_out": left_out(s, site_id, cfg, now)} \
                     | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                extra = "done"
         if extra is None and tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
             return {"tried": tried, "kept": kept}
-        if extra is not None:
+        if extra == "done":
+            picked = None
+        elif extra is not None:
             # One at a time, only for news that is worth it, a round after the other.
             picked = choose(s, site_id, cfg, now, 1, minimum=cfg["extra_min_opportunity"])
             if not picked:  # nothing worth more than the day's articles: the day is done
-                return {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                done = {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                extra = "done"
             want = 1
             paid = extra == "paid"
             planned_today = proposals.made_today(s, site_id, since, outlets=cfg["min_sources"] > 1)
@@ -490,6 +568,8 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
                 want = min(want, int(month_left))
             picked = choose(s, site_id, cfg, now, want)
             planned_today = proposals.made_today(s, site_id, since, outlets=cfg["min_sources"] > 1)
+    if extra == "done":
+        return breaking(done)
     if extra is None and len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
         # Only news it can take: told by as many outlets as the site asks (Francesco 2026-11-05: 167
         # proposals from single news, none with two outlets, and nothing written from 13:00 on).
@@ -858,6 +938,11 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
     if not cfg["enabled"]:
         return _stop(db, tenant_id, d, [t("la redazione automatica è spenta", lang)], out, discard=False)
+    with db.tenant(tenant_id) as s:
+        twin = None if evening else told_already(s, d)
+    if twin:  # nothing to fix: the site already has this story
+        return _stop(db, tenant_id, d, [t("la stessa notizia è già uscita: «{title}»", lang, title=twin)], out,
+                     discard=cfg["on_problem"] == "fix")
     word = avoided(f"{d.title}\n{d.body_md}", cfg["avoid"])
     if word:  # nothing to fix: the subject itself is out
         return _stop(db, tenant_id, d, [t("argomento da evitare: {word}", lang, word=word)], out,
@@ -937,6 +1022,20 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if langs:
         res["translations"] = langs
     return res
+
+
+def told_already(s, d) -> str | None:
+    """The title of an article of the site that already tells the same story
+    (approved in the last days, any of its versions), or None. Proposals
+    written at the same time pass `choose` together; the second to finish is
+    caught here, before the editor-in-chief and the cover are paid for."""
+    dr = m.drafts.c
+    mine = set(tokens(d.title))
+    rows = s.execute(select(dr.title).where(
+        dr.site_id == d.site_id, dr.id != d.id, dr.status == "approved", dr.translation_of.is_(None),
+        dr.proposal_id.is_distinct_from(d.proposal_id),
+        dr.created_at >= datetime.now(UTC) - timedelta(days=OVERLAP_DAYS))).scalars()
+    return next((x for x in rows if same_title(mine, set(tokens(x)))), None)
 
 
 def _stop(db, tenant_id: str, d, why: list[str], out: dict, discard: bool) -> dict:

@@ -184,6 +184,16 @@
       </div>
       <p class="hint">{{ _('Collegamenti e commento si reggono solo sui fatti delle fonti: niente numeri, cause o previsioni nuove. Il caporedattore AI toglie le frasi che non lo rispettano.') }}</p>
     </form>
+    <form method="post" action="/ui/sites/{{ site.id }}/breaking">
+      <label>{{ _('Breaking news') }}</label>
+      <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="on" value="1" {% if n.auto.breaking %}checked{% endif %}> {{ _('Una notizia che molte testate danno insieme esce comunque') }}</label>
+      <div class="row">
+        <label class="field">{{ _('Testate almeno') }}<input name="outlets" type="number" min="2" max="10" value="{{ n.auto.breaking_outlets }}" style="width: 5em;"></label>
+        <label class="field">{{ _('Entro ore') }}<input name="hours" type="number" min="1" max="12" value="{{ n.auto.breaking_hours }}" style="width: 5em;"></label>
+      </div>
+      <div class="row"><button class="btn" type="submit">{{ _('Salva') }}</button></div>
+      <p class="hint">{{ _('Con la redazione automatica accesa: anche quando gli articoli del giorno sono finiti o fuori orario, una notizia che danno almeno queste testate in queste ore esce lo stesso, dopo il caporedattore AI. Al massimo {n} al giorno; ognuna è un articolo in meno il giorno dopo.', n=3) }}</p>
+    </form>
     <form method="post" action="/ui/sites/{{ site.id }}/evening">
       <label>{{ _('Il Punto della Sera') }}</label>
       <label class="row" style="gap: 6px; align-items: center;"><input type="checkbox" name="enabled" value="1" {% if n.evening.enabled %}checked{% endif %}> {{ _("Ogni sera l'analisi della giornata") }}</label>

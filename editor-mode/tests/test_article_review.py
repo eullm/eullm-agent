@@ -63,3 +63,37 @@ def test_check_now_reads_github_again(monkeypatch):
     assert installs.latest(Client())["version"] == "0.0.1"  # kept
     installs._release["at"] = time.monotonic() - 20
     assert installs.latest(Client(), fresh=True)["version"] == "0.0.2"  # "Controlla adesso"
+
+
+def test_the_same_story_in_other_words_goes_out_once(db, tenant):
+    """aitoday.it, 2026-11-06: the government challenging the Veneto law on
+    end of life went out twice, two minutes apart, with two titles."""
+    from types import SimpleNamespace
+
+    from editor.text import tokens
+    from test_publishing import approved_draft
+
+    first = set(tokens("Fine vita, il governo impugna la legge del Veneto davanti alla Consulta"))
+    second = set(tokens("Il governo impugna la legge del Veneto sul fine vita e la manda alla Consulta"))
+    assert autopilot.same_title(first, second)
+    assert not autopilot.same_title(set(tokens("Elezioni di metà mandato USA: i democratici vincono il Senato")),
+                                    set(tokens("Elezioni di metà mandato: Hakeem Jeffries speaker, i primi debutti")))
+    # Two proposals of the same round: the second waits even with a longer, different angle.
+    told = [(terms("x"), {1}, first)]
+    assert autopilot.overlaps(autopilot._angle_terms("Il governo impugna la legge del Veneto sul fine vita",
+                                                     "la Consulta, i precedenti di Toscana e Sardegna, le reazioni"),
+                              {7}, told, second)
+
+    # Written at the same time, the second to finish meets the first, already approved.
+    did, site_id = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        s.execute(m.drafts.update().where(m.drafts.c.id == did).values(
+            title="Fine vita, il governo impugna la legge del Veneto davanti alla Consulta"))
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+        twin = SimpleNamespace(id=-1, site_id=site_id, proposal_id=-1,
+                               title="Il governo impugna la legge del Veneto sul fine vita e la manda alla Consulta")
+        assert autopilot.told_already(s, twin) == d.title
+        other = SimpleNamespace(id=-1, site_id=site_id, proposal_id=-1, title="Un altro fatto del tutto diverso")
+        assert autopilot.told_already(s, other) is None
+        assert autopilot.told_already(s, SimpleNamespace(id=-1, site_id=site_id, proposal_id=d.proposal_id,
+                                                         title=d.title)) is None  # its own version

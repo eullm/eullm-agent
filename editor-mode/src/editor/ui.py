@@ -1395,6 +1395,7 @@ def register(app, ctx) -> None:
             current = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())
             values["analysis"], before = current["analysis"], current["sections"]
+            values |= {k: current[k] for k in ("breaking", "breaking_outlets", "breaking_hours")}
         try:
             values = autopilot.check_settings(values)
         except ValueError as e:
@@ -1447,6 +1448,27 @@ def register(app, ctx) -> None:
                 return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
         return done("/site?tab=auto", t("Analisi negli articoli: accesa, vale dal prossimo articolo.") if on == "1"
                     else t("Analisi negli articoli: spenta, gli articoli raccontano solo i fatti."))
+
+    @app.post("/ui/sites/{site_id}/breaking")
+    def ui_breaking(site_id: int, on: str = Form(""), outlets: int = Form(3), hours: int = Form(3),
+                    c: auth.Caller = Depends(ctx.need("owner"))):
+        """Breaking news: a story many outlets tell within a few hours goes
+        out even past the day's articles, one fewer tomorrow."""
+        with db.tenant(c.tenant_id) as s:
+            body = s.execute(select(m.editorial_profiles.c.body).where(
+                m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
+            if body is None:
+                return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
+            try:
+                autopilot.save(s, site_id, {**autopilot.settings_of(body), "breaking": on == "1",
+                                            "breaking_outlets": outlets, "breaking_hours": hours})
+            except ValueError as e:
+                return done("/site", t("Impostazioni non salvate: {e}.", e=e))
+        if on != "1":
+            return done("/site", t("Breaking news spente: oltre gli articoli del giorno non esce niente."))
+        return done("/site", t("Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce "
+                               "anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.",
+                               n=outlets, h=hours))
 
     @app.post("/ui/sites/{site_id}/evening")
     def ui_evening(site_id: int, enabled: str = Form(""), hour: int = Form(21), min_articles: int = Form(6),
