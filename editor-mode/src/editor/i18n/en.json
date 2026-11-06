@@ -2622,5 +2622,6 @@
  "Crea categorie e menu su WordPress": "Create categories and menu on WordPress",
  "Una categoria per ogni rubrica e una voce per ciascuna nel menu principale del sito. Le categorie le crea anche un editore, i menu li cambia solo un amministratore.": "A category for each section and an entry for each in the site's main menu. An editor can create categories, only an administrator can change menus.",
  "{name}: categorie pronte ({n}), ma l'utente collegato non può cambiare i menu: su WordPress lo può fare solo un amministratore. Crea il menu da Aspetto › Menu, oppure collega un utente amministratore.": "{name}: categories ready ({n}), but the connected user cannot change menus: on WordPress only an administrator can. Create the menu from Appearance › Menus, or connect an administrator user.",
- "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: categories ready ({n}), but the theme uses block navigation, with no menu locations: add the categories from Appearance › Editor › Navigation."
+ "{name}: categorie pronte ({n}), ma il tema usa la navigazione a blocchi, senza posizioni per i menu: aggiungi le categorie da Aspetto › Editor › Navigazione.": "{name}: categories ready ({n}), but the theme uses block navigation, with no menu locations: add the categories from Appearance › Editor › Navigation.",
+ "la stessa notizia è già uscita: «{title}»": "the same story already went out: «{title}»"
 }

@@ -308,8 +308,26 @@ def _angle_terms(title: str, angle: str | None) -> set[str]:
     return set(tokens(title)) | set(tokens(angle or ""))
 
 
-def overlaps(terms: set[str], items: set[int], others: list[tuple[set[str], set[int]]]) -> bool:
-    for o_terms, o_items in others:
+# Two titles that say the same thing in other words: most of the words of
+# the shorter one (aitoday.it, 2026-11-06: "Fine vita, il governo impugna la
+# legge del Veneto davanti alla Consulta" and "Il governo impugna la legge del
+# Veneto sul fine vita e la manda alla Consulta" went out two minutes apart;
+# their proposals' angles, longer and different, hid it).
+SAME_TITLE_WORDS = 4
+SAME_TITLE_SHARE = 0.6
+
+
+def same_title(a: set[str], b: set[str]) -> bool:
+    shared = len(a & b)
+    return shared >= SAME_TITLE_WORDS and shared / max(1, min(len(a), len(b))) >= SAME_TITLE_SHARE
+
+
+def overlaps(terms: set[str], items: set[int], others: list[tuple], title: set[str] | None = None) -> bool:
+    """`others`: (words, news items[, title words]) of what was taken on."""
+    for other in others:
+        o_terms, o_items = other[0], other[1]
+        if title and len(other) > 2 and same_title(title, other[2]):
+            return True
         shared = len(terms & o_terms)
         share = shared / max(1, min(len(terms), len(o_terms)))
         if shared >= SAME_STORY_WORDS and share >= SAME_STORY_SHARE:
@@ -331,7 +349,7 @@ def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[in
     if rows:
         for pid, item in s.execute(select(pc.proposal_id, pc.item_id).where(pc.proposal_id.in_([r.id for r in rows]))):
             used.setdefault(pid, set()).add(item)
-    return [(_angle_terms(r.title, r.angle), used.get(r.id, set())) for r in rows]
+    return [(_angle_terms(r.title, r.angle), used.get(r.id, set()), set(tokens(r.title))) for r in rows]
 
 
 # Proposals read each round: enough to get past a day of news that only one outlet tells,
@@ -365,26 +383,26 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, t(
                 "argomento da evitare: {word}", _language_in(s, r.tenant_id, site_id), word=word), site_id)
             continue
-        terms = _angle_terms(r.title, r.angle)
+        terms, title = _angle_terms(r.title, r.angle), set(tokens(r.title))
         items = set(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == r.id)).scalars())
-        if overlaps(terms, items, seen):
+        if overlaps(terms, items, seen, title):
             continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
             out.append(r)
-            seen.append((terms, items))
+            seen.append((terms, items, title))
         else:
-            fewer.append((r, terms, items))
+            fewer.append((r, terms, items, title))
     # The outlets the site asks for are a preference, not a wall (Francesco 2026-11-05: "se non
     # c'è la seconda testata va fatto comunque una scrematura e la pubblicazione"): when the news
     # told by enough outlets are not enough, the best of the others follow, and the
     # editor-in-chief reads them like any other.
-    for r, terms, items in fewer:
+    for r, terms, items, title in fewer:
         if len(out) >= n:
             break
-        if not overlaps(terms, items, seen):
+        if not overlaps(terms, items, seen, title):
             out.append(r)
-            seen.append((terms, items))
+            seen.append((terms, items, title))
     return out
 
 
@@ -858,6 +876,11 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     lang = newsroom_language(db, tenant_id, d.site_id)  # the reasons are read in the panel
     if not cfg["enabled"]:
         return _stop(db, tenant_id, d, [t("la redazione automatica è spenta", lang)], out, discard=False)
+    with db.tenant(tenant_id) as s:
+        twin = None if evening else told_already(s, d)
+    if twin:  # nothing to fix: the site already has this story
+        return _stop(db, tenant_id, d, [t("la stessa notizia è già uscita: «{title}»", lang, title=twin)], out,
+                     discard=cfg["on_problem"] == "fix")
     word = avoided(f"{d.title}\n{d.body_md}", cfg["avoid"])
     if word:  # nothing to fix: the subject itself is out
         return _stop(db, tenant_id, d, [t("argomento da evitare: {word}", lang, word=word)], out,
@@ -937,6 +960,20 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if langs:
         res["translations"] = langs
     return res
+
+
+def told_already(s, d) -> str | None:
+    """The title of an article of the site that already tells the same story
+    (approved in the last days, any of its versions), or None. Proposals
+    written at the same time pass `choose` together; the second to finish is
+    caught here, before the editor-in-chief and the cover are paid for."""
+    dr = m.drafts.c
+    mine = set(tokens(d.title))
+    rows = s.execute(select(dr.title).where(
+        dr.site_id == d.site_id, dr.id != d.id, dr.status == "approved", dr.translation_of.is_(None),
+        dr.proposal_id.is_distinct_from(d.proposal_id),
+        dr.created_at >= datetime.now(UTC) - timedelta(days=OVERLAP_DAYS))).scalars()
+    return next((x for x in rows if same_title(mine, set(tokens(x)))), None)
 
 
 def _stop(db, tenant_id: str, d, why: list[str], out: dict, discard: bool) -> dict:

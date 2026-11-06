@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.31.1
+
+### Fixed
+
+- **La stessa notizia non esce più due volte** (aitoday.it, 6 novembre: il
+  governo che impugna la legge veneta sul fine vita, pubblicato alle 7:04 e
+  alle 7:06 con due titoli). Le due proposte avevano titoli quasi uguali ma
+  angoli più lunghi e diversi, e il confronto sulle parole dell'angolo le
+  lasciava passare insieme nello stesso giro. Ora la redazione automatica
+  confronta anche i soli titoli, sia quando sceglie le proposte sia prima del
+  caporedattore: un articolo che racconta una notizia già approvata nei due
+  giorni prima viene scartato prima di pagare caporedattore e copertina.
+
 ## 0.31.0
 
 ### Added
