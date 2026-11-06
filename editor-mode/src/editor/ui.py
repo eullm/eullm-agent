@@ -1463,10 +1463,10 @@ def register(app, ctx) -> None:
                 autopilot.save(s, site_id, {**autopilot.settings_of(body), "breaking": on == "1",
                                             "breaking_outlets": outlets, "breaking_hours": hours})
             except ValueError as e:
-                return done("/site", t("Impostazioni non salvate: {e}.", e=e))
+                return done("/site?tab=auto", t("Impostazioni non salvate: {e}.", e=e))
         if on != "1":
-            return done("/site", t("Breaking news spente: oltre gli articoli del giorno non esce niente."))
-        return done("/site", t("Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce "
+            return done("/site?tab=auto", t("Breaking news spente: oltre gli articoli del giorno non esce niente."))
+        return done("/site?tab=auto", t("Breaking news accese: una notizia che almeno {n} testate danno entro {h} ore esce "
                                "anche a giornata finita o fuori orario, e il giorno dopo ne esce una in meno.",
                                n=outlets, h=hours))
 

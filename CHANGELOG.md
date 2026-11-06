@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.31.3
+
+### Fixed
+
+- **Dopo un salvataggio la pagina resta dov'era** (Francesco, 6 novembre:
+  salvando Breaking news si finiva in cima al profilo, salvando il Punto della
+  Sera in cima alla pagina). Il modulo salvato torna alla stessa altezza
+  sullo schermo, con il suo riquadro aperto e il messaggio dentro, e
+  Breaking news resta nella scheda Redazione automatica.
+
 ## 0.31.2
 
 ### Fixed

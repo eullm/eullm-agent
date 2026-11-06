@@ -413,6 +413,11 @@ def test_the_switch_on_the_site_page(db, tenant):
     assert "nessuna proposta adatta" in page and "almeno 20" in page
     with db.tenant(tenant) as s:  # saving the settings keeps the last round
         assert ap.save(s, site_id, {**cfg, "per_day": 5}) and prof_body(s, site_id)["settings"]["auto_last"]["wanted"] == 1
+    # Saving a box of the tab stays on the tab, and the page comes back to the box (Francesco 2026-11-06).
+    r = c.post(f"/ui/sites/{site_id}/breaking", data={"on": "1", "outlets": "3", "hours": "3"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/site?tab=auto"
+    page = c.get("/site?tab=auto").text
+    assert 'id="flash"' in page and "Breaking news accese" in page and "redazia-saved-at" in page
     assert "Redazione automatica fermata" in c.post(f"/ui/sites/{site_id}/auto/stop").text
     with db.tenant(tenant) as s:
         assert not ap.settings_of(prof_body(s, site_id))["enabled"]

@@ -25,7 +25,7 @@
 {% include "_admin_nav.html.j2" %}
 <main class="main">
   {% include "_admin_top.html.j2" %}
-  {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+  {% if notice %}<p class="notice" role="status" id="flash">{{ notice }}</p>{% endif %}
   <header class="page-head">
     <div class="ph-text">
       <h1>{{ _('Consumi del modello') }}</h1>

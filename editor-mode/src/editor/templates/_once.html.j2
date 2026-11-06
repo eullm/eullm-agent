@@ -12,3 +12,39 @@ window.addEventListener('pageshow', function () {
   document.querySelectorAll('form button[disabled]').forEach(function (b) { b.disabled = false; });
 });
 </script>
+<script>
+/* After a form is saved the page comes back where it was: the same form at
+   the same height on the screen, its box open, and the message just above
+   it, instead of the top of the page (Francesco, 2026-11-06). */
+(function () {
+  var KEY = 'redazia-saved-at', here = location.pathname + location.search;
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (e.defaultPrevented || f.method.toLowerCase() !== 'post') return;
+    try {
+      sessionStorage.setItem(KEY, JSON.stringify({page: here, action: f.getAttribute('action') || '',
+        top: f.getBoundingClientRect().top, y: window.scrollY, at: Date.now()}));
+    } catch (x) {}
+  });
+  var saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); sessionStorage.removeItem(KEY); } catch (x) {}
+  if (!saved || Date.now() - saved.at > 60000 || saved.page !== here || !saved.action) return;
+  var best = null, gap = Infinity;
+  document.querySelectorAll('form').forEach(function (f) {
+    if (f.getAttribute('action') !== saved.action) return;
+    var d = Math.abs(f.getBoundingClientRect().top + window.scrollY - (saved.y + saved.top));
+    if (d < gap) { gap = d; best = f; }
+  });
+  if (!best) return;
+  for (var p = best.parentElement; p; p = p.parentElement) { if (p.tagName === 'DETAILS') p.open = true; }
+  var flash = document.getElementById('flash') || document.getElementById('top-notice');
+  if (flash) { flash.style.margin = '0 0 12px'; best.insertBefore(flash, best.firstChild); }
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  function back() {
+    var y = best.getBoundingClientRect().top + window.scrollY - Math.max(16, saved.top);
+    window.scrollTo(0, Math.max(0, y));
+  }
+  back();
+  window.addEventListener('load', back);
+})();
+</script>
