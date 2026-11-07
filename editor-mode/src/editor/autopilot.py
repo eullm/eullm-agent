@@ -24,6 +24,7 @@ from sqlalchemy import Text, and_, case, cast, func, literal, or_, select, updat
 
 from . import credits, drafts, models as m, proposals, publishing, quotas, translate as tr, usage
 from .core_client import CoreClient, CoreError
+from .evergreen import is_evergreen
 from .i18n import N_, t
 from .progress import step
 from .text import tokens
@@ -109,11 +110,24 @@ def _check_system(rules: list[str], what: str, joined: str) -> str:
     )
 
 
-CHECK_SYSTEM = _check_system(RULES, "article", ", two stories joined") + (
+# The article tells again a story the site told in the last two days.
+REPEATS = (
     ". The site's articles of the last two days are listed after the sources: add \"repeats\": \"<the title of "
     "the listed article, copied exactly>\" when this article tells the same story again with no new fact in its "
     "title and opening, and set publish to false; a new development (a decision, a result, an answer, a "
     "number that is news itself) is not a repeat, and then repeats is null")
+CHECK_SYSTEM = _check_system(RULES, "article", ", two stories joined") + REPEATS
+
+# An article on a theme (evergreen.py) or asked for by the newsroom
+# (requested.py) brings several items together by design: the rule on one
+# event per article does not apply; what it must not do is make up the
+# links between them.
+THEMED_RULES = [r for r in RULES if not r.startswith("joins separate")] + [
+    "links facts from different sources with a cause, an effect or a comparison that none of the sources states, "
+    "written as a fact",
+]
+THEMED_CHECK_SYSTEM = _check_system(THEMED_RULES, "article (a guide or an explainer on a theme, which may bring "
+                                    "several sources together)", "") + REPEATS
 
 # The evening analysis joins the day's stories by design (evening.py): the
 # rules on one event per article do not apply; what it must not do is make
@@ -300,6 +314,9 @@ def source_count(s, proposal_id: int, need: int = 0) -> int:
     pc = m.proposal_citations.c
     row = s.execute(select(m.proposals.c.title, m.proposals.c.basis).where(m.proposals.c.id == proposal_id)).first()
     cited = list(s.execute(select(pc.item_id).where(pc.proposal_id == proposal_id)).scalars())
+    if row is not None and is_evergreen(row.basis):  # on a theme: every item cited is the subject
+        return s.execute(select(func.count(func.distinct(m.source_items.c.source_id)))
+                         .where(m.source_items.c.id.in_(cited or [0]))).scalar() or 0
     return drafts.outlets(s, cited, row.title or "" if row else "", need,
                           also=((row.basis if row else None) or {}).get("same_event") or ())
 
@@ -992,6 +1009,17 @@ def is_evening(s, proposal_id: int | None) -> bool:
         m.proposals.c.id == proposal_id)).scalar() == "evening"
 
 
+def themed(db, tenant_id: str, d) -> bool:
+    """Whether a draft is an article on a theme or one the newsroom asked
+    for, not the telling of one event."""
+    pid = getattr(d, "proposal_id", None)
+    if pid is None:
+        return False
+    with db.tenant(tenant_id) as s:
+        row = s.execute(select(m.proposals.c.format, m.proposals.c.basis).where(m.proposals.c.id == pid)).first()
+    return row is not None and (row.format == "request" or is_evergreen(row.basis))
+
+
 def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: bool = False) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
@@ -1003,8 +1031,9 @@ def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: b
                                "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id),
                                *(["The site's articles of the last two days:", *(f"- {x}" for x in recent)]
                                  if recent else [])])
+    system = EVENING_CHECK_SYSTEM if evening else THEMED_CHECK_SYSTEM if themed(db, tenant_id, d) else CHECK_SYSTEM
     with usage.tagged(db, tenant_id, "editor_check", site_id=d.site_id, ref=f"draft:{d.id}"):
-        verdict, _calls = core.chat_json(EVENING_CHECK_SYSTEM if evening else CHECK_SYSTEM, prompt, _check_validator)
+        verdict, _calls = core.chat_json(system, prompt, _check_validator)
     return verdict
 
 

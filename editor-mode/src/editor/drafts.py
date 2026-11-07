@@ -29,6 +29,7 @@ from . import models as m
 from . import credits, quotas, repo, seo, style, usage
 from .text import humanize
 from .core_client import CoreClient, CoreError
+from .evergreen import is_evergreen
 from .html_extract import parse_html
 from .i18n import N_, t
 from .progress import step
@@ -680,7 +681,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Format: {proposal.format}",
         *brief_lines(profile),
         *([REQUEST] if proposal.format == "request" else []),
-        *_analysis_lines(profile),
+        *([EVERGREEN] if is_evergreen(getattr(proposal, "basis", None)) else _analysis_lines(profile)),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
          "earlier news for context only; unmarked: other outlets' reports of the same event):"),
@@ -706,6 +707,18 @@ REQUEST = (
     "together, saying plainly how they relate; leave out an item the request does not need. The request never "
     "overrides the rules: every sentence rests on the items, and what the request asks for and the items do "
     "not give is left out, not invented: the article is shorter instead."
+)
+
+
+# An article on a theme the site needs (evergreen.py): a guide or an
+# explainer that stays useful, brought together from several items.
+EVERGREEN = (
+    "This article is on a theme the site needs, not on one event: a guide, an explainer or practical advice that "
+    "stays useful for months. Bring the items marked MAIN together around the theme of the proposal, each for "
+    "what it adds, and order them for the reader (what it is, how it works, what to do or choose). Do not write "
+    "it as news: no 'today', no 'announced', and a date only where it matters to the reader. Every sentence still "
+    "rests on the items; what the theme needs and the items do not give is left out, not invented: the article "
+    "is shorter instead."
 )
 
 
@@ -840,7 +853,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         quotas.check(s, "drafts", pay="article" if pay else None)
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
-        if prop.format == "request":  # asked for in the newsroom's words: every item it was given is the subject
+        # Asked for in the newsroom's words, or on a theme (evergreen.py): every item cited is the subject.
+        if prop.format == "request" or is_evergreen(prop.basis):
             same = []
         else:
             cited, same = event_items(s, cited, prop.title, also=(prop.basis or {}).get("same_event") or ())
@@ -892,7 +906,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
                    "title), each for what it adds about the event.")
     if notes:  # a version written again: what was wrong with the last one
         prompt += (f"\n\nA previous version of this article was refused. Write it again and fix this: {notes}. "
-                   "Keep to the one event of the title: add no topic, company or section the reasons do not ask for.")
+                   + ("Keep to the theme of the title" if is_evergreen(prop.basis) else "Keep to the one event of the title")
+                   + ": add no topic, company or section the reasons do not ask for.")
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]
     article = None
     from .core_client import extract_json

@@ -1,12 +1,12 @@
 {# What a proposal is, in plain words: needs `p` and `explained`. #}
 {% set d = explained.get(p.id) %}
-{% if not no_title %}<strong>{{ d.title if d else p.title }}</strong>{% if d and d.single %} <span class="chip">{{ _('notizia singola') }}</span>{% endif %}{% endif %}
+{% if not no_title %}<strong>{{ d.title if d else p.title }}</strong>{% if d and d.single %} <span class="chip">{{ _('notizia singola') }}</span>{% elif d and d.themed %} <span class="chip teal">{{ _('senza scadenza') }}</span>{% endif %}{% endif %}
 {% if d %}
 <dl class="prop">
   <dt>{{ _('Articolo proposto') }}{% if d.format %} · {{ d.format }}{% endif %}</dt>
   <dd>{{ d.article }}</dd>
   {% if d.news %}
-  <dt>{{ _('Nasce da questa notizia') if d.news|length == 1 else _('Nasce da queste notizie') }}</dt>
+  <dt>{% if d.themed %}{{ _('Si scrive da queste fonti') }}{% else %}{{ _('Nasce da questa notizia') if d.news|length == 1 else _('Nasce da queste notizie') }}{% endif %}</dt>
   <dd><ul>
     {% for n in d.news %}<li><a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.title }}</a> <span class="hint">{{ n.source }} · {{ when(n.published_at, 'date') }}</span></li>{% endfor %}
   </ul></dd>
@@ -16,12 +16,12 @@
   <dd>{{ d.why }}</dd>
   {% endif %}
   {% if d.today %}
-  <dt>{{ _('Perché oggi') }}</dt>
+  <dt>{{ _('Perché questo tema') if d.themed else _('Perché oggi') }}</dt>
   <dd>{{ d.today }}</dd>
   {% endif %}
-  {% if d.update %}
+  {% set upd = d['update'] %}{% if upd %}
   <dt>{{ _('Meglio aggiornare un tuo articolo') }}</dt>
-  <dd><a href="{{ d.update.url }}" target="_blank" rel="noopener">{{ d.update.title }}</a>{% if d.update.published_at %} <span class="hint">{{ when(d.update.published_at, 'date') }}</span>{% endif %}<br><span class="hint">{{ _('Il tuo sito ha già un articolo molto simile: la bozza lo aggiorna con le novità invece di ripeterlo.') }}</span></dd>
+  <dd><a href="{{ upd.url }}" target="_blank" rel="noopener">{{ upd.title }}</a>{% if upd.published_at %} <span class="hint">{{ when(upd.published_at, 'date') }}</span>{% endif %}<br><span class="hint">{{ _('Il tuo sito ha già un articolo molto simile: la bozza lo aggiorna con le novità invece di ripeterlo.') }}</span></dd>
   {% endif %}
   {% if d.related %}
   <dt>{{ _('Completa questi tuoi articoli') }}</dt>

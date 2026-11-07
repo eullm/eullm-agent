@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import connect, opportunity as oppo, queue
+from . import connect, evergreen, opportunity as oppo, queue
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
@@ -568,6 +568,9 @@ def register(app, ctx) -> None:
                 article = t("Un articolo che mette insieme le notizie qui sotto e le spiega ai lettori del tuo sito.")
             basis = r.basis or {}
             single = basis.get("kind") == "news"
+            if evergreen.is_evergreen(basis):
+                out[r.id] = themed_details(r, basis, cited, model)
+                continue
             matched = basis.get("matched") if single else comp.get("matched_subtopic")
             why = []
             if matched:
@@ -623,6 +626,34 @@ def register(app, ctx) -> None:
                 "opp": opp, "hype_n": hype,
             }
         return out
+
+    def themed_details(r, basis: dict, cited: list, model: bool) -> dict:
+        """A proposal on a theme (evergreen.py): why the site needs it
+        instead of why today, and no hype."""
+        theme, reason = basis.get("theme") or r.title, basis.get("reason")
+        if reason == "search":
+            why = t("Su Google la ricerca «{query}» ha portato al tuo sito {n} impressioni in 28 giorni, ma nessun tuo "
+                    "articolo risponde a quella ricerca.", query=basis.get("query") or theme, n=basis.get("impressions") or 0)
+        elif reason == "season":
+            why = t("«{theme}» è un tema che i tuoi lettori cercano in questo periodo dell'anno.", theme=theme)
+        elif not basis.get("posts"):
+            why = t("Il tuo sito non ha articoli su «{theme}», uno degli argomenti del profilo.", theme=theme)
+        elif basis.get("last"):
+            why = t("Su «{theme}» il tuo sito ha {n} articoli, l'ultimo del {date}: è ora di tornarci.", theme=theme,
+                    n=basis["posts"], date=basis["last"])
+        else:
+            why = t("Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.",
+                    theme=theme, n=basis["posts"])
+        opp = round(r.opportunity or 0)
+        return {
+            "title": r.title, "themed": True, "single": False,
+            "article": r.angle if model and r.angle else t("Una guida sul tema, scritta dalle fonti qui sotto."),
+            "format": t(FORMATS[r.format]) if r.format in FORMATS else r.format,
+            "news": cited, "why": why, "today": r.why_now if model else "", "update": None, "related": [],
+            "opportunity": t("Punteggio {n}/100: quanto serve al sito un articolo su questo tema. Conta il bisogno "
+                             "del sito, non quanto se ne parla oggi.", n=opp),
+            "hype": t("Contenuto senza scadenza: l'hype del giorno non conta."), "opp": opp, "hype_n": None,
+        }
 
     def start_of_day(s) -> datetime:
         tz = zone(s)
@@ -1039,6 +1070,7 @@ def register(app, ctx) -> None:
             "cover_style": ((body or {}).get("settings") or {}).get("cover_style") or "impact",
             "cover_text": bool(((body or {}).get("settings") or {}).get("cover_text")),
             "sources_style": ((body or {}).get("settings") or {}).get("sources_style") or "notes",
+            "content_mode": evergreen.mode_of(body), "evergreen_share": evergreen.share_of(body),
             "evening": evening.settings_of(body),
             "evening_allowed": evening.allowed(s),
             "evening_section": evening.section_of(evening.settings_of(body), (body or {}).get("language")),
@@ -1489,6 +1521,16 @@ def register(app, ctx) -> None:
                                           "giorno e ne scrive l'analisi, se ne sono usciti almeno {n}.",
                                           hour=values["hour"], n=values["min_articles"]))
         return done("/site?tab=auto", t("Il Punto della Sera è spento."))
+
+    @app.post("/ui/sites/{site_id}/content-mode")
+    def ui_content_mode(site_id: int, mode: str = Form(...), share: int = Form(evergreen.SHARE),
+                        c: auth.Caller = Depends(ctx.need("owner"))):
+        if mode not in evergreen.MODES:
+            raise HTTPException(400, "unknown mode")
+        with db.tenant(c.tenant_id) as s:
+            if not prof.set_content_mode(s, site_id, mode, share):
+                return done("/site", t("Approva prima il profilo: le proposte partono dalla linea approvata."))
+        return done("/site?tab=auto", t("Tipo di contenuti salvato: vale dalle prossime proposte."))
 
     @app.post("/ui/sites/{site_id}/sources-style")
     def ui_sources_style(site_id: int, style: str = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
