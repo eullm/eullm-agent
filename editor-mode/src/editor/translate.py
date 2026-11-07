@@ -150,7 +150,8 @@ def _parse(value, n_headings: int, n_sentences: int) -> dict:
 
 def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient, pay: bool = True) -> int:
     """Write the translation of a draft into `language`; returns the new draft's id.
-    Past the plan's articles it is paid with credits, unless `pay` is False."""
+    Into one of the site's languages it is part of the article; into another it
+    is paid with credits, unless `pay` is False."""
     language = language.strip().lower()[:2]
     if language not in LANGUAGES:
         raise LanguageError(f"unknown language: {language}")
@@ -163,7 +164,9 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
     if (d.language or "")[:2] == language:
         raise LanguageError("the article is already in this language")
     with db.tenant(tenant_id) as s:
-        quotas.check(s, "drafts", pay="translation" if pay else None)
+        # Into the site's languages a translation is part of the article (Francesco 2026-11-07).
+        included = language in site_languages(s, d.site_id)
+        quotas.translation(s, included, pay)
         claims = drafts.stored_claims(s, draft_id)
         sources = drafts._sources(s, list({i for c in claims for i in c["sources"]}))
         image = images.of(s, draft_id)
@@ -220,7 +223,7 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
     body = drafts.render(article, sources, language, [])
     with db.tenant(tenant_id) as s:
         # Again: other drafts may have been written meanwhile.
-        over = quotas.check(s, "drafts", pay="translation" if pay else None)
+        over = quotas.translation(s, included, pay)
         quotas.lock(s, f"editor-draft-version:{d.proposal_id}")
         version = (s.execute(select(func.max(m.drafts.c.version)).where(
             m.drafts.c.proposal_id == d.proposal_id)).scalar() or 0) + 1
@@ -230,7 +233,7 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
             seo={**sd.as_dict(), **({"recipe": recipe} if recipe else {})}, translation_of=draft_id,
         ).returning(m.drafts.c.id)).scalar_one()
-        if over:  # beyond the plan's articles of the month: paid with credits
+        if over:  # into a language beyond the site's: paid with credits
             credits.spend(s, "translation", f"draft:{did}")
         for n, c in enumerate(article.claims):
             cid = s.execute(insert(m.draft_claims).values(

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.33.0
+
+### Changed
+
+- **Un articolo del piano è un articolo che esce, in tutte le lingue del
+  sito** (Francesco, 7 novembre). Prima "articoli al mese" contava ogni
+  bozza: traduzioni, riscritture del caporedattore AI e articoli scartati.
+  Con 1 sito, 2 lingue e 30 articoli si avevano 15 articoli più 15
+  traduzioni, meno le riscritture. Ora:
+  - un articolo conta una volta per proposta, comprese le sue riscritture
+    e versioni (`quotas.articles`, `drafts.written`);
+  - le traduzioni nelle lingue del sito sono comprese nell'articolo; una
+    traduzione in un'altra lingua si paga con i crediti (10);
+  - gli articoli scartati dalla redazione automatica non contano;
+  - una bozza scartata da una persona conta, perché è stata scritta e
+    letta.
+
+  Con 30 articoli e 2 lingue si hanno quindi 30 articoli, ognuno anche
+  tradotto.
+- **Guida › "Cosa contano i limiti del piano".** Spiega con esempi:
+  - articoli e lingue;
+  - limiti per redazione e non per sito (siti, articoli, fonti, crediti);
+  - lingue e articoli al giorno scelti per sito;
+  - a cosa servono i crediti, con i prezzi del listino.
+
 ## 0.32.2
 
 ### Fixed

@@ -76,7 +76,7 @@ def test_a_translation_keeps_sentences_sources_and_checks(db, tenant):
     assert d.translation_of == did and d.language == "en" and d.status == "draft" and d.title == "Bari gets full fibre"
     assert [(o, i) for o, _, i in src] == [tuple(r) for r in orig] and {sec for _, sec, _ in src} == {"Facts"}
     assert "## Facts" in d.body_md and "## Sources" in d.body_md and d.seo["slug"] == "bari-full-fibre"
-    assert purpose == 2 and used == 2  # the original and its translation: two articles of the plan
+    assert purpose == 2 and used == 1  # the article and its translation: one article of the plan (2026-11-07)
     # Asked again from the translation, it translates the original.
     with respx.mock() as router:
         router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps(ENGLISH)))

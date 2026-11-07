@@ -2662,5 +2662,14 @@
  "ricetta": "recipe",
  "confronto": "comparison",
  "dati": "data",
- "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "It has done today's articles ({n} of {tot}: {d} were brought forward yesterday) and resumes tomorrow at {h}:00."
+ "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "It has done today's articles ({n} of {tot}: {d} were brought forward yesterday) and resumes tomorrow at {h}:00.",
+ "Cosa contano i limiti del piano": "What the plan limits count",
+ "Il tuo piano: {a} articoli al mese, {s} siti, {l} lingue per sito, {f} fonti attive.": "Your plan: {a} articles a month, {s} sites, {l} languages per site, {f} active sources.",
+ "Un articolo esce in tutte le lingue del sito e conta una volta.": "An article comes out in all the site's languages and counts once.",
+ "Con 30 articoli e 2 lingue hai 30 articoli, ognuno anche tradotto: 60 pagine pubblicate, uno al giorno in ciascuna lingua.": "With 30 articles and 2 languages you get 30 articles, each also translated: 60 published pages, one a day in each language.",
+ "Un articolo conta una volta anche se il caporedattore AI lo riscrive. Quelli che la redazione automatica scarta non contano; una bozza che scarti tu conta, perché è stata scritta.": "An article counts once even when the AI editor-in-chief rewrites it. Those the automatic newsroom discards do not count; a draft you discard counts, because it was written.",
+ "I limiti sono della redazione, non del singolo sito.": "The limits belong to the newsroom, not to a single site.",
+ "Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.": "With 2 sites and 30 articles you have 30 articles in all, split as you like; the same for active sources. For each site you choose the languages (up to the plan's number) and, with the automatic newsroom, how many articles a day.",
+ "I crediti servono per andare oltre il piano.": "Credits are for going beyond the plan.",
+ "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "One more article costs {a} credits, a translation into a language the site does not have {t}, a cover redrawn after the two free ones {c}. The month's credits go first, then those of the packs, which do not expire. The automatic newsroom uses them only if you allowed it extra articles with credits."
 }
