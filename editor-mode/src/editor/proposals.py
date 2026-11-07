@@ -256,11 +256,12 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
 
 def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit: int | None = None,
          now: datetime | None = None, outlets: int = 0, full: list[str] | None = None) -> list[int]:
-    """The day's proposals: first the topics told by several sources, then,
+    """The day's proposals: first the articles on a theme the site's mode
+    asks for (evergreen.py), then the topics told by several sources, then,
     for what is left of the number, the best single news for the site
     (picks.fill). Never empty while news comes in. With `outlets` (the
     automatic newsroom's minimum), the news that many outlets tell come first."""
-    from . import opportunity, picks
+    from . import evergreen, opportunity, picks
 
     with db.tenant(tenant_id) as s:
         body = s.execute(select(m.editorial_profiles.c.body).where(
@@ -271,9 +272,19 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit
     limit = limit or body.get("settings", {}).get("proposals_per_day", PER_DAY)
     if only:
         limit = min(limit, quotas.PROPOSALS_ONLY_PER_DAY)
-    ids = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=limit,
-                  outlets=outlets, full=full)
-    return ids + picks.fill(db, tenant_id, site_id, limit - len(ids), core, now=now, outlets=outlets, full=full)
+    # Articles on a theme first, as many as the site's mode asks (evergreen.py), then the news.
+    themed, news = evergreen.split(body, limit)
+    ids = evergreen.plan(db, tenant_id, site_id, core, themed, now=now, full=full)
+    if not news:
+        return ids
+    if evergreen.mode_of(body) == "mixed":
+        news = limit - len(ids)  # a theme with nothing to write it from leaves its place to the news
+    if news <= 0:
+        return ids
+    found = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=news,
+                    outlets=outlets, full=full)
+    return ids + found + picks.fill(db, tenant_id, site_id, news - len(found), core, now=now, outlets=outlets,
+                                    full=full)
 
 
 TITLES_SYSTEM = (

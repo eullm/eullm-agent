@@ -166,6 +166,19 @@
       </div>
       <label class="row" style="gap: 4px; align-items: center;"><input type="checkbox" name="text" value="1" {% if n.cover_text %}checked{% endif %}> {{ _("con un titolo di 2-4 parole nell'immagine") }}</label>
     </form>
+    <form method="post" action="/ui/sites/{{ site.id }}/content-mode">
+      <label for="cm">{{ _('Tipo di contenuti') }}</label>
+      <div class="row">
+        <select id="cm" name="mode">
+          <option value="news" {% if n.content_mode == 'news' %}selected{% endif %}>{{ _('Notizie del giorno') }}</option>
+          <option value="evergreen" {% if n.content_mode == 'evergreen' %}selected{% endif %}>{{ _('Contenuti senza scadenza: guide e approfondimenti') }}</option>
+          <option value="mixed" {% if n.content_mode == 'mixed' %}selected{% endif %}>{{ _('Misto') }}</option>
+        </select>
+        <button class="btn" type="submit">{{ _('Salva') }}</button>
+      </div>
+      <label class="row" style="gap: 6px; align-items: center;">{{ _('Nel misto, senza scadenza') }} <input name="share" type="number" min="0" max="100" value="{{ n.evergreen_share }}" style="width: 5em;" aria-label="{{ _('Percentuale di contenuti senza scadenza') }}"> %</label>
+      <p class="hint">{{ _('Senza scadenza: articoli sui temi del profilo che il sito tratta poco, sulle ricerche Google senza una tua pagina e sui temi del mese. Si scrivono dalle fonti delle ultime settimane: un tema senza almeno due fonti non viene proposto.') }}</p>
+    </form>
     <form method="post" action="/ui/sites/{{ site.id }}/sources-style">
       <label for="ss">{{ _('Fonti negli articoli pubblicati') }}</label>
       <div class="row">

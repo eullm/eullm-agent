@@ -152,7 +152,7 @@ def test_article_text_is_not_read_where_robots_forbid_it(db, tenant):
 
 
 def test_article_text_is_not_read_where_the_publisher_reserves_it_against_ai(db, tenant):
-    """A publisher that shuts out the AI crawlers, or marks its page
+    """A publisher that shuts out the AI assistants' readers, or marks its page
     tdm-reservation, gets written from its feed summary only."""
     _, cited = accepted_proposal(db, tenant)
     with db.tenant(tenant) as s:
@@ -163,7 +163,7 @@ def test_article_text_is_not_read_where_the_publisher_reserves_it_against_ai(db,
         for h in hosts:
             router.get(f"https://{h}/.well-known/tdmrep.json").mock(return_value=httpx.Response(404))
         router.get(f"https://{httpx.URL(urls[0]).host}/robots.txt").mock(
-            return_value=httpx.Response(200, text="User-agent: CCBot\nDisallow: /\n"))
+            return_value=httpx.Response(200, text="User-agent: PerplexityBot\nDisallow: /\n"))
         first = router.get(urls[0]).mock(return_value=httpx.Response(200, text=ARTICLE_PAGE, headers={"content-type": "text/html"}))
         drafts.fetch_contents(db, tenant, cited[:1], c)
         assert not first.called

@@ -154,7 +154,8 @@ def search_terms(db, tenant_id: str, site_id: int, request: str, language: str |
     return terms | (set(tokens(" ".join(str(x) for x in given[:20]))) - ASKING)
 
 
-def search(s, site_id: int, terms: set[str], skip: list[int], limit: int = FOUND, now: datetime | None = None) -> list[int]:
+def search(s, site_id: int, terms: set[str], skip: list[int], limit: int = FOUND, now: datetime | None = None,
+           days: int = DAYS) -> list[int]:
     """The news the site follows on the subject of the request, the closest
     first: at least two of the words (one, when there is one), a word of the
     title counting twice."""
@@ -164,7 +165,7 @@ def search(s, site_id: int, terms: set[str], skip: list[int], limit: int = FOUND
     si = m.source_items
     rows = s.execute(select(si.c.id, si.c.title, si.c.summary).where(
         repo.followed_by(site_id), si.c.duplicate_of.is_(None),
-        si.c.fetched_at > (now or datetime.now(UTC)) - timedelta(days=DAYS),
+        si.c.fetched_at > (now or datetime.now(UTC)) - timedelta(days=days),
         si.c.id.not_in(skip or [0])).order_by(si.c.id.desc()).limit(5000)).all()
     scored = []
     for r in rows:

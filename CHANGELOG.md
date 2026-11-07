@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.32.0
+
+### Added
+
+- **Contenuti senza scadenza** per i siti che non vivono di notizie del
+  giorno, come ricette, lifestyle e blog aziendali (Francesco, 7 novembre:
+  "la metrica non è solo l'urgenza della notizia, ma la pertinenza
+  tematica, la stagionalità o la copertura di un cluster"). In Sito e
+  profilo › "Tipo di contenuti" si sceglie tra:
+  - notizie del giorno, come prima;
+  - contenuti senza scadenza;
+  - misto, con la percentuale di contenuti senza scadenza (50% di base).
+
+  Un tema nasce da una di tre ragioni (`editor/evergreen.py`):
+  - un argomento del profilo su cui il sito ha scritto poco o niente, o
+    niente da più di quattro mesi;
+  - una ricerca Google che porta visite al sito (Search Console) e a cui
+    nessun articolo del sito risponde;
+  - un tema del mese, come stagione, feste o calendario del settore,
+    chiesto al modello una volta al mese e salvato nel profilo.
+
+  La regola resta la stessa: l'articolo si scrive dalle fonti seguite
+  dal sito negli ultimi 30 giorni, e ogni frase ne cita una. Un tema senza
+  almeno due fonti di due testate non viene proposto, e un tema proposto
+  non torna per tre settimane. La proposta spiega perché il sito ne ha
+  bisogno ("Perché questo tema") al posto di "Perché oggi", e non mostra
+  l'hype. La bozza è una guida che mette insieme più fonti, senza la
+  sezione di analisi pensata per le notizie. Il caporedattore AI non la
+  rifiuta più perché "unisce più fatti", ma la rifiuta se inventa legami
+  tra le fonti. Lo stesso vale per gli articoli chiesti dalla redazione.
+
+### Changed
+
+- **Riserve degli editori: contano gli assistenti AI che leggono, non i
+  crawler di addestramento** (Francesco, 7 novembre). Con la 0.31.7 bastava
+  che il `robots.txt` chiudesse la pagina a un qualsiasi crawler AI: ce l'ha
+  il 62% delle fonti comuni, e quasi tutti gli articoli si sarebbero scritti
+  dal solo sommario. Ora la pagina è riservata se il `robots.txt` la chiude
+  a uno degli agenti con cui gli assistenti AI leggono il web per rispondere
+  agli utenti (ChatGPT-User, OAI-SearchBot, PerplexityBot, Perplexity-User,
+  Claude-User, Claude-SearchBot, MistralAI-User, DuckAssistBot), oppure se
+  la riservano `tdmrep.json` o `tdm-reservation`, come prima. Il blocco dei
+  soli GPTBot, CCBot, Google-Extended e simili non conta più. Le fonti
+  comuni riservate scendono a circa il 46%.
+
+- **Menu laterale più chiaro**, nella console `/admin` e nella redazione
+  (Francesco, 7 novembre: "questa barra fa un po' cagare"):
+  - un'icona per ogni voce;
+  - la voce aperta in azzurro tenue con una riga a sinistra, non più nera;
+  - in fondo una scheda con l'iniziale, l'utente, il ruolo e il pulsante per
+    uscire;
+  - la versione installata sotto la scheda.
+
+### Fixed
+
+- **"Meglio aggiornare un tuo articolo" compariva su ogni proposta** in
+  Trend e piano, con il link vuoto. La pagina leggeva il metodo `update`
+  del dizionario invece del valore. Ora compare solo quando il sito ha
+  davvero un articolo molto simile.
+
 ## 0.31.7
 
 ### Changed

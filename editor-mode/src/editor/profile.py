@@ -83,6 +83,8 @@ class _Settings(_Part):
     cover_style: Literal["impact", "editorial"] = DEFAULT_SETTINGS["cover_style"]
     cover_text: bool = DEFAULT_SETTINGS["cover_text"]
     sources_style: Literal["notes", "list"] = DEFAULT_SETTINGS["sources_style"]
+    content_mode: Literal["news", "evergreen", "mixed"] = "news"
+    evergreen_share: int = Field(50, ge=0, le=100)
 
 
 class _ProfileEdit(_Part):
@@ -431,6 +433,14 @@ def set_cover(s, site_id: int, style: str, text: bool) -> bool:
     if style not in ("impact", "editorial"):
         raise ValueError(style)
     return _set_settings(s, site_id, cover_style=style, cover_text=bool(text) and style == "impact")
+
+
+def set_content_mode(s, site_id: int, mode: str, share: int) -> bool:
+    """What the site receives (evergreen.py): "news", "evergreen" (articles
+    on a theme that stay useful) or "mixed", with the share on a theme."""
+    if mode not in ("news", "evergreen", "mixed"):
+        raise ValueError(mode)
+    return _set_settings(s, site_id, content_mode=mode, evergreen_share=max(0, min(100, int(share))))
 
 
 def set_sources_style(s, site_id: int, style: str) -> bool:
