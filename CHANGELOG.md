@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.31.5
+
+### Changed
+
+- **Meno notizie americane** (Francesco, 7 novembre: dal 4 novembre circa
+  metà degli articoli di aitoday.it parlava degli Stati Uniti).
+  - **Fonti bilanciate per paese:** ogni feed della base comune dice il suo
+    paese. Nelle sezioni mondo ed economia nessun paese straniero supera i
+    6-7 feed: quelli americani scendono da 19 a 6. Arrivano testate di 48
+    paesi, almeno due per 27 di loro, in inglese o nelle 5 lingue (una
+    testata in polacco non si collegherebbe alle altre sulla stessa
+    notizia), e 14 nuove fonti in italiano: 62 feed nuovi in tutto. Le fonti
+    tecnologiche restano come sono, in gran parte americane.
+  - **Tolti 7 feed fermi da mesi:** Corriere della Sera (fermo dal 2024),
+    CNN World, Wall Street Journal, Xinhua, The Telegraph, ANSA Tecnologia,
+    Wired Italia.
+  - **L'hype conta i paesi, non le testate:** venti testate americane sulla
+    stessa notizia valgono un paese, mentre una italiana, una francese e una
+    tedesca ne valgono tre (formula `hype-v2`). Lo stesso vale per il
+    punteggio delle proposte. Il minimo di testate della redazione
+    automatica, che serve a confermare il fatto, conta ancora le testate.
+  - **Massimo per paese straniero:** ogni proposta riceve il paese della
+    notizia. La redazione automatica dà a un paese straniero al massimo un
+    terzo degli articoli del giorno, poi aspetta il giorno dopo. Il paese
+    del sito non ha limite. Si regola in Sito e profilo › Redazione
+    automatica (Massimo per paese straniero, Paese del sito; 0 = nessun
+    limite).
+  - **Rubriche bilanciate** (aitoday.it, primi 87 articoli: Mondo 32,
+    Economia 18, Clima 1). Ogni proposta riceve anche la rubrica del sito a
+    cui appartiene. Una rubrica non supera un quarto degli articoli del
+    giorno, regolabile in Massimo per rubrica (%). Quando un paese o una
+    rubrica sono pieni, la redazione lo dice a chi prepara le nuove
+    proposte, che cerca altrove.
+
 ## 0.31.4
 
 ### Fixed

@@ -2634,5 +2634,11 @@
  "Le proposte": "Die Vorschläge",
  "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Von der automatischen Redaktion nicht geschrieben: „{title}“. Es hat nichts gekostet, ein anderer Vorschlag tritt an seine Stelle.",
  "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "von der Nachricht konnten nur {n} Wörter gelesen werden: zu wenige, um einen Artikel zu schreiben, ohne etwas zu erfinden",
- "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "Der KI-Chefredakteur liest den Abendbericht mit neutralem Titel und Untertitel erneut"
+ "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "Der KI-Chefredakteur liest den Abendbericht mit neutralem Titel und Untertitel erneut",
+ "Massimo per paese straniero (%)": "Höchstens für ein fremdes Land (%)",
+ "degli articoli del giorno sullo stesso paese, per esempio gli Stati Uniti; 0 = nessun limite": "der Artikel des Tages über dasselbe Land, zum Beispiel die USA; 0 = keine Grenze",
+ "Paese del sito": "Land der Website",
+ "sigla di due lettere, senza limite; vuoto = dalla lingua del sito": "Kürzel aus zwei Buchstaben, ohne Grenze; leer = aus der Sprache der Website",
+ "Massimo per rubrica (%)": "Höchstens für eine Rubrik (%)",
+ "degli articoli del giorno nella stessa rubrica, se il sito ne ha più di una; 0 = nessun limite": "der Artikel des Tages in derselben Rubrik, wenn die Website mehrere hat; 0 = keine Grenze"
 }

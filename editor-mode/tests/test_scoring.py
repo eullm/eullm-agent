@@ -43,3 +43,13 @@ def test_github_growth_uses_observations():
     assert hype([fast], NOW).components["code"] > hype([slow], NOW).components["code"]
     single = Member(1, "github", ago(48), {"stars": 400})  # 200 stars/day since creation
     assert hype([single], NOW).components["code"] == pytest.approx(0.6321, abs=1e-3)
+
+
+def test_outlets_of_one_country_are_one_voice():
+    """Francesco 2026-11-07: twenty American outlets on the same fact are not
+    twenty confirmations; Italian, French and German ones are three."""
+    us = [Member(i, "rss", ago(1), voice="country:US") for i in range(5)]
+    europe = [Member(10 + i, "rss", ago(1), voice=f"country:{c}") for i, c in enumerate(["IT", "FR", "DE"])]
+    assert hype(us, NOW).components["coverage"] == 0
+    assert hype(europe, NOW).components["coverage"] == pytest.approx(0.5)
+    assert hype(us, NOW).score < hype(europe, NOW).score

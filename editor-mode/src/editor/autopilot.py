@@ -43,7 +43,12 @@ DEFAULTS = {"enabled": False, "brief": "", "sections": [], "directives": "", "av
             "analysis": True,
             # Breaking news: a story that many outlets tell within a few hours goes out even when the
             # day's articles are done or out of hours, brought forward from tomorrow (breaking_news).
-            "breaking": False, "breaking_outlets": 3, "breaking_hours": 3}
+            "breaking": False, "breaking_outlets": 3, "breaking_hours": 3,
+            # No foreign country beyond this share of the day's articles (choose); the site's own country
+            # is free: `home_country`, or the one of its language.
+            "country_share": 34, "home_country": "",
+            # Nor a section beyond this share, when the site lists its sections.
+            "section_share": 25}
 # "fix": an article with problems is written again once, by the stronger model when the console sets one,
 # and discarded if it still does not pass: nothing waits for a person. "hold": it waits for a person.
 ON_PROBLEM = ("fix", "hold")
@@ -163,6 +168,9 @@ class _Auto(BaseModel):
     breaking: bool = False
     breaking_outlets: int = Field(DEFAULTS["breaking_outlets"], ge=2, le=10)
     breaking_hours: int = Field(DEFAULTS["breaking_hours"], ge=1, le=12)
+    country_share: int = Field(DEFAULTS["country_share"], ge=0, le=100)
+    home_country: str = Field("", max_length=2)
+    section_share: int = Field(DEFAULTS["section_share"], ge=0, le=100)
 
 
 def check_settings(values: dict) -> dict:
@@ -175,6 +183,9 @@ def check_settings(values: dict) -> dict:
     start, end = cfg["hours"]
     if not (0 <= start <= 23 and 1 <= end <= 24 and start != end):
         raise ValueError("hours: from 0-23 to 1-24")
+    cfg["home_country"] = cfg["home_country"].strip().upper()
+    if cfg["home_country"] and not proposals._ISO.match(cfg["home_country"]):
+        raise ValueError("home_country: two letters, like IT")
     cfg["sections"] = [x.strip()[:80] for x in cfg["sections"] if x.strip()]
     cfg["avoid"] = list(dict.fromkeys(x.strip().lower()[:80] for x in cfg["avoid"] if x.strip()))
     return cfg
@@ -382,20 +393,108 @@ def recent_angles(s, site_id: int, now: datetime) -> list[tuple[set[str], set[in
     return [(_angle_terms(r.title, r.angle), used.get(r.id, set()), title_words(r.title)) for r in rows]
 
 
+# The country of a site that does not say it, from its language; English is spoken in too many.
+HOME = {"it": "IT", "de": "DE", "fr": "FR", "es": "ES"}
+
+
+def home_of(s, site_id: int, cfg: dict) -> str:
+    return cfg.get("home_country") or HOME.get(tr.main_language(s, site_id) or "", "")
+
+
+def _cap(cfg: dict, key: str) -> int | None:
+    share = cfg.get(key, DEFAULTS[key])
+    return None if not share or share >= 100 else max(1, round(cfg["per_day"] * share / 100))
+
+
+def country_cap(cfg: dict) -> int | None:
+    """Articles a day one foreign country may have; None: no limit."""
+    return _cap(cfg, "country_share")
+
+
+def section_cap(cfg: dict) -> int | None:
+    """Articles a day one section may have, when the site lists its
+    sections; None: no limit."""
+    return _cap(cfg, "section_share") if len(cfg.get("sections") or []) > 1 else None
+
+
+def section_of(cfg: dict, name: str | None) -> str | None:
+    """The site's section `name` says, as the site writes it, or None."""
+    name = (name or "").strip().lower()
+    return next((x for x in cfg.get("sections") or [] if x.lower() == name), None) if name else None
+
+
+def mix_today(s, site_id: int, since: datetime, now: datetime) -> tuple[dict[str, int], dict[str, int]]:
+    """The day's articles of the automatic newsroom by country of their story
+    and by section: those written since `since` (under the section the
+    editor-in-chief gave them) and those accepted and not written yet (under
+    the planned one)."""
+    pr, dr = m.proposals.c, m.drafts.c
+    written = dict(s.execute(select(dr.proposal_id, dr.seo).where(
+        dr.site_id == site_id, dr.created_at >= since, dr.translation_of.is_(None),
+        dr.proposal_id.is_not(None))).all())
+    anyd = select(dr.proposal_id).where(dr.proposal_id.is_not(None))
+    rows = s.execute(select(pr.id, pr.basis).where(
+        pr.site_id == site_id, pr.decided_by == AUTO, pr.status == "accepted",
+        or_(pr.id.in_(list(written) or [0]), and_(pr.created_at >= now - timedelta(hours=36), ~pr.id.in_(anyd))))).all()
+    countries: dict[str, int] = {}
+    sections: dict[str, int] = {}
+    for pid, b in rows:
+        b = b or {}
+        if c := b.get("country"):
+            countries[c] = countries.get(c, 0) + 1
+        if sec := (written.get(pid) or {}).get("section") or b.get("section"):
+            sections[sec] = sections.get(sec, 0) + 1
+    return countries, sections
+
+
+def full_today(s, site_id: int, cfg: dict, now: datetime, since: datetime | None = None) -> list[str]:
+    """What the day already has enough of, for the planner to look elsewhere:
+    the foreign countries and the sections at their limit."""
+    ccap, scap = country_cap(cfg), section_cap(cfg)
+    if not ccap and not scap:
+        return []
+    countries, sections = mix_today(s, site_id, since or now - timedelta(hours=24), now)
+    home = home_of(s, site_id, cfg)
+    return [*(f"news about {c}" for c, n in countries.items() if ccap and c != home and n >= ccap),
+            *(f"the section {x}" for x, n in sections.items() if scap and n >= scap)]
+
+
 # Proposals read each round: enough to get past a day of news that only one outlet tells,
 # kept until they lapse, to the ones planned for the automatic newsroom.
 CHOOSE_FROM = 250
 
 
-def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False) -> list:
+def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | None = None, dry: bool = False,
+           since: datetime | None = None) -> list:
     """The best proposals of the last day and a half that pass the
     guardrails, those over the minimum opportunity first; those on a topic
     to avoid are turned down for good, those only telling again what a
     recent article told wait; a new development of the same subject goes on.
     News told by the outlets the site asks for come first, then, to make
-    up the number, the best ones fewer outlets tell."""
+    up the number, the best ones fewer outlets tell. A foreign country or
+    a section already at its share of the day's articles (country_cap,
+    section_cap) waits for tomorrow; the site's own country has no limit
+    (Francesco 2026-11-07: too many American stories, too much Mondo)."""
     pr = m.proposals.c
     seen = recent_angles(s, site_id, now)
+    ccap, scap, home = country_cap(cfg), section_cap(cfg), home_of(s, site_id, cfg)
+    countries, sections = mix_today(s, site_id, since or now - timedelta(hours=24), now) \
+        if ccap or scap else ({}, {})
+
+    def full(r) -> bool:
+        b = r.basis or {}
+        c, sec = b.get("country"), section_of(cfg, b.get("section"))
+        return bool(ccap and c and c != home and countries.get(c, 0) >= ccap) \
+            or bool(scap and sec and sections.get(sec, 0) >= scap)
+
+    def take(r) -> None:
+        out.append(r)
+        b = r.basis or {}
+        if c := b.get("country"):
+            countries[c] = countries.get(c, 0) + 1
+        if sec := section_of(cfg, b.get("section")):
+            sections[sec] = sections.get(sec, 0) + 1
+
     rows = s.execute(select(m.proposals).where(
         pr.site_id == site_id, pr.status == "proposed", pr.created_at >= now - timedelta(hours=36),
         pr.opportunity >= (cfg["min_opportunity"] * OPPORTUNITY_FLOOR if minimum is None else minimum))
@@ -413,13 +512,15 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
             proposals.record_feedback(s, r.tenant_id, "proposal", r.id, "down", AUTO, t(
                 "argomento da evitare: {word}", _language_in(s, r.tenant_id, site_id), word=word), site_id)
             continue
+        if full(r):
+            continue
         terms, title = _angle_terms(r.title, r.angle), title_words(r.title)
         items = set(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == r.id)).scalars())
         if overlaps(terms, items, seen, title):
             continue
         if source_count(s, r.id, cfg["min_sources"]) >= cfg["min_sources"]:
-            out.append(r)
+            take(r)
             seen.append((terms, items, title))
         else:
             fewer.append((r, terms, items, title))
@@ -430,8 +531,8 @@ def choose(s, site_id: int, cfg: dict, now: datetime, n: int, minimum: float | N
     for r, terms, items, title in fewer:
         if len(out) >= n:
             break
-        if not overlaps(terms, items, seen, title):
-            out.append(r)
+        if not full(r) and not overlaps(terms, items, seen, title):
+            take(r)
             seen.append((terms, items, title))
     return out
 
@@ -573,7 +674,7 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             picked = None
         elif extra is not None:
             # One at a time, only for news that is worth it, a round after the other.
-            picked = choose(s, site_id, cfg, now, 1, minimum=cfg["extra_min_opportunity"])
+            picked = choose(s, site_id, cfg, now, 1, minimum=cfg["extra_min_opportunity"], since=since)
             if not picked:  # nothing worth more than the day's articles: the day is done
                 done = {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
                 extra = "done"
@@ -590,16 +691,19 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             want = max(want, min(left, due_by(cfg, local) - kept))
             if month_left is not None:
                 want = min(want, int(month_left))
-            picked = choose(s, site_id, cfg, now, want)
+            picked = choose(s, site_id, cfg, now, want, since=since)
             planned_today = proposals.made_today(s, site_id, since, outlets=cfg["min_sources"] > 1)
     if extra == "done":
         return breaking(done)
     if extra is None and len(picked) < want and core is not None and planned_today < cfg["per_day"] * 4:
         # Only news it can take: told by as many outlets as the site asks (Francesco 2026-11-05: 167
         # proposals from single news, none with two outlets, and nothing written from 13:00 on).
-        proposals.plan(db, tenant_id, site_id, core, limit=max(3, 2 * want), now=now, outlets=cfg["min_sources"])
         with db.tenant(tenant_id) as s:
-            picked = choose(s, site_id, cfg, now, want)
+            full = full_today(s, site_id, cfg, now, since)
+        proposals.plan(db, tenant_id, site_id, core, limit=max(3, 2 * want), now=now, outlets=cfg["min_sources"],
+                       full=full)
+        with db.tenant(tenant_id) as s:
+            picked = choose(s, site_id, cfg, now, want, since=since)
     accepted = []
     for r in picked:
         if proposals.decide(db, tenant_id, r.id, True, AUTO, "automatic newsroom" if not extra else f"automatic newsroom, {extra}"):

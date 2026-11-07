@@ -28,10 +28,10 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
-from . import usage
+from . import news_base, usage
 from .core_client import CoreClient, CoreError
 from .opportunity import novelty
-from .proposals import FORMATS, _options_validator
+from .proposals import COUNTRY, FORMATS, SECTION, _options_validator, full_line, mix
 from .text import tokens
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,8 @@ SYSTEM = (
     "must be a different story. Write in the site's language. Reply with JSON only: "
     '{{"options": [{{"title": "<headline, max 120 chars>", "angle": "<what the article says, for this site, '
     '1-3 sentences>", "why_now": "<why it matters to these readers now>", "format": "<one of: '
-    + ", ".join(FORMATS) + '>", "citations": [<the id of the item; first the main one>]}}]}}. '
+    + ", ".join(FORMATS) + '>", "country": "<' + COUNTRY + '>", "section": "<' + SECTION + '>", '
+    '"citations": [<the id of the item; first the main one>]}}]}}. '
     "Cite only ids from the list."
 )
 
@@ -63,7 +64,7 @@ class Candidate:
     source: str
     published_at: datetime | None
     followed: bool
-    sources: int  # sources telling the same story
+    sources: int  # voices telling the same story (news_base.voice)
     relevance: float
     matched: str | None
     source_score: float | None
@@ -131,9 +132,14 @@ def candidates(s, site_id: int, profile: dict, now: datetime) -> list[Candidate]
     if not rows:
         return []
     topics = {r.topic_id for r in rows}
-    told_by = dict(s.execute(
-        select(ti.c.topic_id, func.count(func.distinct(si.c.source_id)))
-        .join(si, si.c.id == ti.c.item_id).where(ti.c.topic_id.in_(topics)).group_by(ti.c.topic_id)).all())
+    # How many tell the story: countries for the news base's outlets, other sources one by one.
+    voices: dict[int, set[str]] = {}
+    for t, sid, url in s.execute(
+            select(ti.c.topic_id, si.c.source_id, m.sources.c.url).distinct()
+            .join(si, si.c.id == ti.c.item_id).join(m.sources, m.sources.c.id == si.c.source_id)
+            .where(ti.c.topic_id.in_(topics))):
+        voices.setdefault(t, set()).add(news_base.voice(sid, url))
+    told_by = {t: len(v) for t, v in voices.items()}
     out = []
     for r in rows:
         near = closeness(set(tokens(r.title)) | set(tokens((r.summary or "")[:400])), profile)
@@ -176,6 +182,8 @@ def _score(c: Candidate, new: float) -> float:
 
 
 def _prompt(profile: dict, cands: list[Candidate], learned: list[str] | None = None) -> str:
+    from .autopilot import settings_of
+
     style = profile.get("style", {})
     lines = [
         f"Site: {profile.get('name')} ({profile.get('domain')}), language: {profile.get('language')}",
@@ -183,6 +191,7 @@ def _prompt(profile: dict, cands: list[Candidate], learned: list[str] | None = N
         f"Audience: {(profile.get('audience') or {}).get('value') or 'not determined'}",
         f"Tone: {style.get('tone') or 'not determined'}",
         f"Subtopics: {', '.join(s['name'] for s in profile.get('subtopics', []))}",
+        *([f"Sections of the site: {', '.join(secs)}"] if (secs := settings_of(profile)["sections"]) else []),
         *(learned or []),
         "News:",
     ]
@@ -194,7 +203,7 @@ def _prompt(profile: dict, cands: list[Candidate], learned: list[str] | None = N
 
 
 def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = None,
-         now: datetime | None = None, outlets: int = 0) -> list[int]:
+         now: datetime | None = None, outlets: int = 0, full: list[str] | None = None) -> list[int]:
     """Up to `n` proposals from single news items; returns their ids. With
     `outlets`, news told by at least that many outlets come first."""
     if n <= 0:
@@ -224,7 +233,7 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
     if core is not None:
         try:
             with usage.tagged(db, tenant_id, "proposal", site_id=site_id, ref=f"pick:{site_id}"):
-                options, _ = core.chat_json(SYSTEM.format(n=n), _prompt(prof.body, shown, learned),
+                options, _ = core.chat_json(SYSTEM.format(n=n), _prompt(prof.body, shown, learned + full_line(full)),
                                             _options_validator(set(by_id), n))
             for o in options:
                 c = by_id[o["citations"][0]]
@@ -254,7 +263,9 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
                 title=o["title"], angle=o["angle"], why_now=o["why_now"], format=o["format"],
                 generated_by="model" if by == "model" else "heuristic",
                 basis={"kind": "news", "picked_by": by, "score": c.score, "matched": c.matched,
-                       "sources": c.sources, "followed": c.followed} | ({"outlets": told.get(c.item_id, 1)} if outlets > 1 else {}),
+                       "sources": c.sources, "followed": c.followed}
+                | mix(o, prof.body)
+                | ({"outlets": told.get(c.item_id, 1)} if outlets > 1 else {}),
             ).returning(m.proposals.c.id)).scalar_one()
             s.execute(insert(m.proposal_citations).values(
                 [{"tenant_id": tenant_id, "proposal_id": pid, "item_id": i} for i in cites]))
