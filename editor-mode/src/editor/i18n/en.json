@@ -2658,5 +2658,8 @@
  "Una guida sul tema, scritta dalle fonti qui sotto.": "A guide on the theme, written from the sources below.",
  "Il tuo sito non ha articoli su «{theme}», uno degli argomenti del profilo.": "Your site has no articles on «{theme}», one of the subjects of its profile.",
  "Su «{theme}» il tuo sito ha {n} articoli, l'ultimo del {date}: è ora di tornarci.": "Your site has {n} articles on «{theme}», the last one from {date}: time to come back to it.",
- "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Your site has only {n} articles on «{theme}», fewer than on the other subjects of its profile."
+ "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Your site has only {n} articles on «{theme}», fewer than on the other subjects of its profile.",
+ "ricetta": "recipe",
+ "confronto": "comparison",
+ "dati": "data"
 }

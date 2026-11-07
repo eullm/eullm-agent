@@ -293,8 +293,9 @@ def search_fields(s, d) -> dict:
                         .order_by(m.publications.c.id.desc()).limit(1)).scalar() or {}
         oseo = s.execute(select(m.drafts.c.seo, m.drafts.c.title).where(m.drafts.c.id == d.translation_of)).first()
         original = pub.get("slug") or (oseo and ((oseo.seo or {}).get("slug") or seo.slugify(oseo.title)))
+    recipe = seo.recipe_card(sd.get("recipe"), claims)
     return {
-        "translation_of": original,
+        "translation_of": original, "recipe": recipe,
         "site_domain": site.domain if site else None, "section": section,
         "slug": sd.get("slug") or seo.slugify(d.title), "seo_title": sd.get("title") or d.title,
         "meta_description": description, "keyphrase": sd.get("keyphrase") or "",
@@ -302,7 +303,7 @@ def search_fields(s, d) -> dict:
                              keyphrase=sd.get("keyphrase") or "", published=datetime.now(UTC).isoformat(),
                              site_name=site.name if site else None,
                              site_url=f"https://{site.domain}/" if site else None, citations=urls,
-                             faq=[x for x in faq if x[1]]),
+                             faq=[x for x in faq if x[1]], recipe=recipe),
     }
 
 
@@ -607,7 +608,7 @@ class Publisher:
         if event == "update":
             data |= {k: payload.get(k) for k in ("title", "subtitle", "markdown", "html", "language", "slug", "section",
                                                  "seo_title", "meta_description", "keyphrase", "jsonld",
-                                                 "translation_of")}
+                                                 "translation_of", "recipe")}
             # The cover as on publishing: the receiver replaces its own when the link changes.
             data["image"] = ({"url": f"{self.public_url}/media/{image.token}", "alt": image.alt, "type": image.mime}
                              if image is not None and self.public_url else None)
@@ -813,7 +814,7 @@ class Publisher:
         data = json.dumps({"event": "publication", "mode": pub.mode, "publication_id": pub.id,
                            "url": cms_url, **{k: pub.payload[k] for k in ("title", "subtitle", "markdown", "html", "language")},
                            **{k: pub.payload.get(k) for k in ("slug", "section", "seo_title", "meta_description", "keyphrase",
-                                                              "jsonld", "translation_of")},
+                                                              "jsonld", "translation_of", "recipe")},
                            "date": datetime.now(UTC).isoformat(), "image": cover},
                           ensure_ascii=False).encode()
         sig = hmac.new(_need(secret, target).encode(), data, hashlib.sha256).hexdigest()

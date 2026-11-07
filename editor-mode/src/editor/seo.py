@@ -46,6 +46,30 @@ class Seo:
                 "slug": self.slug, "faq": self.faq, "links": self.links, "checks": self.checks}
 
 
+def duration(minutes: int | None) -> str | None:
+    """ISO 8601 duration, as schema.org wants it: 90 -> PT1H30M."""
+    if not minutes:
+        return None
+    h, m = divmod(int(minutes), 60)
+    return "PT" + (f"{h}H" if h else "") + (f"{m}M" if m else "")
+
+
+def recipe_card(meta: dict | None, claims) -> dict | None:
+    """A recipe as the site and search engines read it, from the draft's
+    sentences under its headings (the director's corrections included)."""
+    if not meta:
+        return None
+    ingredients = [c.text for c in claims if c.section == meta.get("ingredients")]
+    steps = [c.text for c in claims if c.section == meta.get("steps")]
+    if len(ingredients) < 2 or not steps:
+        return None
+    prep, cook = meta.get("prep_minutes"), meta.get("cook_minutes")
+    card = {"yield": meta.get("yield"), "prepTime": duration(prep), "cookTime": duration(cook),
+            "totalTime": duration((prep or 0) + (cook or 0)) if prep and cook else None,
+            "ingredients": ingredients, "steps": steps}
+    return {k: v for k, v in card.items() if v is not None}
+
+
 def slugify(text: str, limit: int = 70) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
     words = re.sub(r"[^a-z0-9]+", " ", text).split()
@@ -201,9 +225,10 @@ def checks(seo: Seo, title: str, lead: str, headings: list[str], sources: int) -
 
 def jsonld(*, title: str, description: str, language: str | None, url: str | None, keyphrase: str,
            published: str | None, site_name: str | None, site_url: str | None, citations: list[str],
-           faq: list[tuple[str, str]]) -> list[dict]:
+           faq: list[tuple[str, str]], recipe: dict | None = None) -> list[dict]:
     """schema.org data that says what the visible page says: the article,
-    its sources, and the questions it answers."""
+    its sources, the questions it answers and, for a recipe, the recipe
+    (the card search engines show: ingredients, steps, servings, times)."""
     article = {
         "@context": "https://schema.org", "@type": "NewsArticle", "headline": title[:110],
         "description": description, "inLanguage": language or None, "keywords": keyphrase or None,
@@ -213,6 +238,18 @@ def jsonld(*, title: str, description: str, language: str | None, url: str | Non
         "citation": citations or None,
     }
     out = [{k: v for k, v in article.items() if v is not None}]
+    if recipe:
+        card = {
+            "@context": "https://schema.org", "@type": "Recipe", "name": title[:110], "description": description,
+            "inLanguage": language or None, "keywords": keyphrase or None, "datePublished": published,
+            "author": {"@type": "Organization", "name": site_name, "url": site_url} if site_name else None,
+            "recipeYield": recipe.get("yield"), "prepTime": recipe.get("prepTime"), "cookTime": recipe.get("cookTime"),
+            "totalTime": recipe.get("totalTime"), "recipeIngredient": recipe["ingredients"],
+            "recipeInstructions": [{"@type": "HowToStep", "position": n, "text": x}
+                                   for n, x in enumerate(recipe["steps"], 1)],
+            "mainEntityOfPage": url, "url": url,
+        }
+        out.append({k: v for k, v in card.items() if v is not None})
     if len(faq) >= 2:
         out.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
             {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq]})

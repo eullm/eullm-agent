@@ -209,6 +209,14 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
     sd.checks = [x for x in seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
                                        len({i for c in article.claims for i in c.sources}))
                  if x["key"] != "internal_links"]
+    # A recipe keeps its lists and its card under the translated headings.
+    recipe = None
+    if old.get("recipe"):
+        moved = dict(zip(headings, out["headings"]))
+        recipe = {**old["recipe"], "ingredients": moved.get(old["recipe"].get("ingredients")),
+                  "steps": moved.get(old["recipe"].get("steps"))}
+        recipe = recipe if recipe["ingredients"] and recipe["steps"] else None
+    article.recipe = recipe
     body = drafts.render(article, sources, language, [])
     with db.tenant(tenant_id) as s:
         # Again: other drafts may have been written meanwhile.
@@ -220,7 +228,7 @@ def translate(db, tenant_id: str, draft_id: int, language: str, core: CoreClient
             tenant_id=tenant_id, proposal_id=d.proposal_id, site_id=d.site_id, version=version,
             title=article.title, subtitle=article.subtitle, body_md=body, language=language,
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
-            seo=sd.as_dict(), translation_of=draft_id,
+            seo={**sd.as_dict(), **({"recipe": recipe} if recipe else {})}, translation_of=draft_id,
         ).returning(m.drafts.c.id)).scalar_one()
         if over:  # beyond the plan's articles of the month: paid with credits
             credits.spend(s, "translation", f"draft:{did}")

@@ -224,7 +224,8 @@ SYSTEM = (
     "site described, bringing several items together. Write in the site's language. Reply with JSON only: "
     '{"title": "<headline, max 120 chars, no date and no \'today\'>", "angle": "<what the article explains and '
     'for whom, 1-3 sentences>", "why_now": "<why this theme is worth an article on this site, 1 sentence>", '
-    '"format": "<one of: guide, tutorial, comparison, analysis, data, review>", '
+    '"format": "<one of: guide, tutorial, comparison, analysis, data, review, recipe (only when an item gives a '
+    'whole recipe: its ingredients and its steps)>", '
     '"country": "<the ISO 3166-1 alpha-2 code of the country the theme is about, empty when it is not about one>", '
     '"section": "<the one of the site\'s sections it belongs to, written exactly as listed; empty when none are '
     'listed>", "citations": [<ids of the items the article relies on>]}. '

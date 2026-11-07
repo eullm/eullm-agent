@@ -119,6 +119,7 @@ class Article:
     claims: list[Claim]
     faq: list[str] = field(default_factory=list)  # sections that are a reader's question and its answer
     seo: dict = field(default_factory=dict)  # the model's search fields, see seo.parse
+    recipe: dict | None = None  # a recipe's headings, servings and times (RECIPE): its lines are claims
 
     @property
     def flags(self) -> list[dict]:
@@ -311,7 +312,63 @@ def flag_text(flag, lang: str | None = None) -> str:
     return flag
 
 
-def parse_article(value, allowed: set[int]) -> Article:
+# A recipe (format "recipe"): its ingredients and steps are claims like the
+# rest, each with its sources, under these headings, shown as lists; the
+# servings and the times stay only when the sources give them (recipe_meta).
+RECIPE_HEADINGS = {"it": ("Ingredienti", "Procedimento"), "en": ("Ingredients", "Method"),
+                   "de": ("Zutaten", "Zubereitung"), "fr": ("Ingrédients", "Préparation"),
+                   "es": ("Ingredientes", "Preparación")}
+
+
+def _sourced(lines, allowed: set[int], what: str) -> list[tuple[str, list[int]]]:
+    out = []
+    for c in lines if isinstance(lines, list) else []:
+        if not isinstance(c, dict) or not isinstance(c.get("text"), str) or not c["text"].strip():
+            continue
+        try:
+            ids = [int(x) for x in c.get("sources", [])]
+        except (TypeError, ValueError):
+            raise ValueError("sources must be item ids") from None
+        if not ids or any(i not in allowed for i in ids):
+            raise ValueError(f"{what} without valid sources: {c['text'][:80]!r}")
+        out.append((humanize(" ".join(c["text"].split())), list(dict.fromkeys(ids))))
+    return out
+
+
+def _minutes(v) -> int | None:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if 0 < n <= 48 * 60 else None
+
+
+def recipe_lists(meta: dict | None) -> dict[str, str]:
+    """The sections of a recipe shown as lists: the ingredients as bullets,
+    the steps numbered."""
+    meta = meta or {}
+    return {k: kind for k, kind in ((meta.get("ingredients"), "ul"), (meta.get("steps"), "ol")) if k}
+
+
+def recipe_meta(meta: dict | None, sources: dict, claims: list) -> dict | None:
+    """The recipe's servings and times, kept only when an item it cites
+    gives them (a number the sources do not give is never published)."""
+    if not meta:
+        return None
+    cited = {i for c in claims if c.section in (meta["ingredients"], meta["steps"]) for i in c.sources}
+    text = " ".join(sources[i].text for i in cited if i in sources).lower()
+    out = dict(meta)
+    for key in ("prep_minutes", "cook_minutes"):
+        n = out.get(key)
+        if n and not (re.search(rf"(?<!\d){n}(?!\d)", text)
+                      or (n % 60 == 0 and re.search(rf"(?<!\d){n // 60}\s*(h\b|or|hour|stund|heure)", text))):
+            out[key] = None
+    if out.get("yield") and not any(re.search(rf"(?<!\d){d}(?!\d)", text) for d in re.findall(r"\d+", out["yield"])):
+        out["yield"] = None
+    return out
+
+
+def parse_article(value, allowed: set[int], language: str | None = None) -> Article:
     if not isinstance(value, dict):
         raise ValueError("expected an object")
     title = value.get("title")
@@ -338,6 +395,15 @@ def parse_article(value, allowed: set[int]) -> Article:
             if unknown:
                 raise ValueError(f"claim cites ids not in the list: {unknown}")
             claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), heading))
+    recipe = None
+    if isinstance(value.get("recipe"), dict):
+        r = value["recipe"]
+        ingredients, steps = _sourced(r.get("ingredients"), allowed, "ingredient"), _sourced(r.get("steps"), allowed, "step")
+        if len(ingredients) >= 2 and steps:
+            ih, sh = RECIPE_HEADINGS.get((language or "")[:2], RECIPE_HEADINGS["en"])
+            claims += [Claim(t, ids, ih) for t, ids in ingredients] + [Claim(t, ids, sh) for t, ids in steps]
+            recipe = {"ingredients": ih, "steps": sh, "yield": " ".join(str(r.get("yield") or "").split())[:60] or None,
+                      "prep_minutes": _minutes(r.get("prep_minutes")), "cook_minutes": _minutes(r.get("cook_minutes"))}
     if len(claims) < 3:
         raise ValueError("an article needs at least 3 claims")
     # Questions readers ask, each answered with sourced claims like the rest.
@@ -360,13 +426,18 @@ def parse_article(value, allowed: set[int]) -> Article:
             claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), question))
         faq.append(question)
     seo = value.get("seo") if isinstance(value.get("seo"), dict) else {}
-    return Article(humanize(title.strip()), humanize(str(value.get("subtitle") or "").strip())[:300], claims, faq, seo)
+    return Article(humanize(title.strip()), humanize(str(value.get("subtitle") or "").strip())[:300], claims, faq, seo,
+                   recipe)
 
 
 READ_MORE = {"it": "Leggi anche", "de": "Weiterlesen", "fr": "À lire aussi", "es": "Lee también"}
 
 
-def render(article: Article, sources: dict[int, Source], language: str | None, links: list[dict] | None = None) -> str:
+def render(article: Article, sources: dict[int, Source], language: str | None, links: list[dict] | None = None,
+           lists: dict[str, str] | None = None) -> str:
+    """The article in Markdown, with a note for each source. `lists`: the
+    sections shown as a list ("ul") or numbered ("ol"), as a recipe's."""
+    lists = recipe_lists(article.recipe) if lists is None else lists
     order: list[int] = []
     for c in article.claims:
         for i in c.sources:
@@ -383,14 +454,20 @@ def render(article: Article, sources: dict[int, Source], language: str | None, l
             lines.append("\n" + " ".join(para))
             para.clear()
 
+    item = 0
     for c in article.claims:
         if c.section != section:
             flush()
-            section = c.section
+            section, item = c.section, 0
             if c.section:
                 lines.append(f"\n## {c.section}")
         marks = "".join(f"[^{ref[i]}]" for i in c.sources)
-        para.append(f"{c.text}{marks}")
+        kind = lists.get(c.section) if c.section else None
+        if kind:
+            item += 1
+            lines.append(("\n" if item == 1 else "") + ("- " if kind == "ul" else f"{item}. ") + f"{c.text}{marks}")
+        else:
+            para.append(f"{c.text}{marks}")
     flush()
     if links:
         lines.append(f"\n## {READ_MORE.get((language or '')[:2], 'Read more')}\n")
@@ -681,6 +758,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Format: {proposal.format}",
         *brief_lines(profile),
         *([REQUEST] if proposal.format == "request" else []),
+        *([RECIPE] if proposal.format == "recipe" else []),
         *([EVERGREEN] if is_evergreen(getattr(proposal, "basis", None)) else _analysis_lines(profile)),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
@@ -707,6 +785,20 @@ REQUEST = (
     "together, saying plainly how they relate; leave out an item the request does not need. The request never "
     "overrides the rules: every sentence rests on the items, and what the request asks for and the items do "
     "not give is left out, not invented: the article is shorter instead."
+)
+
+
+# A recipe: the ingredients and the steps as the items give them, each with
+# its sources, so the site can show the recipe card search engines read.
+RECIPE = (
+    "This article is a recipe. Besides the sections (a short introduction: what the dish is, where it comes from, "
+    "what makes it work, from the items), add to the JSON \"recipe\": {\"yield\": \"<servings as an item gives "
+    "them, or null>\", \"prep_minutes\": <minutes or null>, \"cook_minutes\": <minutes or null>, "
+    "\"ingredients\": [{\"text\": \"<one ingredient with its quantity>\", \"sources\": [<ids>]}], "
+    "\"steps\": [{\"text\": \"<one step, in order>\", \"sources\": [<ids>]}]}. Every ingredient, quantity, "
+    "time and step is the one a cited item gives, in your own words: never add, change or guess one. Do not "
+    "repeat the ingredients or the steps in the sections. When no item gives a whole recipe (its ingredients and "
+    "its steps), set \"recipe\" to null and write the article without it."
 )
 
 
@@ -918,7 +1010,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         with usage.tagged(db, tenant_id, purpose, site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
             res = core.chat(messages)
         try:
-            article = check(parse_article(extract_json(res.content), allowed), sources)
+            article = check(parse_article(extract_json(res.content), allowed, profile.get("language")), sources)
         except ValueError as e:
             problem = str(e)
         else:
@@ -935,6 +1027,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
 
     sd = seo.parse(article.seo, article.title)
     sd.faq = article.faq
+    article.recipe = recipe_meta(article.recipe, sources, article.claims)
     with db.tenant(tenant_id) as s:
         sd.links = seo.merge_links(posts, seo.site_links(s, prop.site_id, article.title, sd.keyphrase))
     body = render(article, sources, profile.get("language"), sd.links)
@@ -955,7 +1048,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             status="needs_review" if article.flags else "draft", flags=article.flags, generated_by="model",
             # Filed under one of the site's sections from the start: a draft published by hand
             # went to WordPress without a category (wp.aitoday.it, 2026-11-05).
-            seo={**sd.as_dict(), **({"section": section} if section else {})},
+            seo={**sd.as_dict(), **({"section": section} if section else {}),
+                 **({"recipe": article.recipe} if article.recipe else {})},
         ).returning(m.drafts.c.id)).scalar_one()
         if over:  # beyond the plan's articles of the month: paid with credits
             credits.spend(s, "article", f"draft:{did}")
@@ -1068,7 +1162,7 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
     claims = parse_text(text, order)
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
-    keep = {k: old[k] for k in ("section", "replaces") if k in old}
+    keep = {k: old[k] for k in ("section", "replaces", "recipe") if k in old}
     sd.links = old.get("links") or []
     sections = list(dict.fromkeys(c.section for c in claims))
     sd.faq = [q for q in old.get("faq") or [] if q in sections]
@@ -1080,7 +1174,6 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
     lead = " ".join(c.text for c in claims if c.section == first)
     sd.checks = seo.checks(sd, title, lead, sections, len({i for c in claims for i in c.sources}))
     status = "needs_review" if article.flags else "draft"
-    keep = {k: old[k] for k in ("section", "replaces") if k in old}
     with db.tenant(tenant_id) as s:
         ids = list(s.execute(select(m.draft_claims.c.id).where(m.draft_claims.c.draft_id == draft_id)).scalars())
         if ids:
@@ -1093,7 +1186,8 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
             for i in c.sources:
                 s.execute(insert(m.draft_claim_sources).values(tenant_id=tenant_id, claim_id=cid, item_id=i))
         s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
-            title=title, subtitle=article.subtitle, body_md=render(article, sources, d.language, sd.links),
+            title=title, subtitle=article.subtitle,
+            body_md=render(article, sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
             flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
     return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}
 
@@ -1130,7 +1224,7 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
         claims.append(Claim(text, c["sources"], c["section"]))
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
-    keep = {k: old[k] for k in ("section", "replaces") if k in old}
+    keep = {k: old[k] for k in ("section", "replaces", "recipe") if k in old}
     sd.faq, sd.links = old.get("faq") or [], old.get("links") or []
     article = check(Article(title, " ".join((subtitle or "").split())[:300], claims, sd.faq, {}), sources)
     first = next((c.section for c in claims), None)
@@ -1143,6 +1237,7 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
             if new.text != c["text"]:
                 s.execute(update(m.draft_claims).where(m.draft_claims.c.id == c["id"]).values(text=new.text))
         s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
-            title=title, subtitle=article.subtitle, body_md=render(article, sources, d.language, sd.links),
+            title=title, subtitle=article.subtitle,
+            body_md=render(article, sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
             flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
     return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}

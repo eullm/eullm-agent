@@ -57,6 +57,7 @@ keywords: ["parola chiave"]
 image: "/images/titolo-dell-articolo.png"
 image_alt: "Cosa mostra l'immagine"
 translation_of: "slug-dell-originale"   # solo nelle traduzioni
+recipe: {"yield": "4 persone", "cookTime": "PT10M", "ingredients": ["320 g di spaghetti"], "steps": ["Cuoci la pasta."]}   # solo nelle ricette
 ---
 ```
 
@@ -101,9 +102,29 @@ Un campo `draft` viene scritto `false`, un campo `published` viene scritto
    Netlify e Cloudflare Pages lo fanno di serie).
 7. **Generare alla build** sitemap, RSS e possibilmente `sitemap-news.xml`
    e dati strutturati `NewsArticle`.
+   Se il sito pubblica ricette, dichiara facoltativo anche `recipe` e
+   trasformalo in dati strutturati `Recipe` (vedi "Ricette" qui sotto).
 8. **Con la redazione automatica**, mostrare in ogni articolo che è scritto
    dall'intelligenza artificiale (AI Act, art. 50). Redazia mette comunque
    l'etichetta in fondo al testo.
+
+### Ricette
+
+Quando la proposta ha il formato **ricetta**, l'articolo ha due sezioni in
+più, "Ingredienti" (elenco puntato) e "Procedimento" (elenco numerato),
+nella lingua del sito. Ogni ingrediente e ogni passaggio ha la sua fonte
+come le altre frasi. Nel front matter arriva `recipe`, un oggetto JSON
+(che è anche YAML valido) con:
+
+- `ingredients` e `steps`: gli stessi testi dell'articolo;
+- `yield`, `prepTime`, `cookTime`, `totalTime`: solo se le fonti li danno
+  (le durate sono ISO 8601, per esempio `PT1H30M`).
+
+Il template li trasforma in `Recipe` di schema.org (`recipeIngredient`,
+`recipeInstructions` con `HowToStep`, `recipeYield`, i tempi), accanto a
+`NewsArticle`, con l'`image` dell'articolo: Google mostra la scheda della
+ricetta solo con la foto. Il modello pubblico redazia-site-template lo fa
+già.
 
 ### Come Redazia pubblica, modifica e ritira
 
@@ -152,6 +173,7 @@ credenziali dentro; i redirect non vengono seguiti.
   "keyphrase": "…",
   "jsonld": [{"@type": "NewsArticle", "...": "..."}],
   "translation_of": null,
+  "recipe": null,
   "date": "2026-11-07T08:00:00+00:00",
   "image": {"url": "https://app.redazia.com/media/…", "alt": "…", "type": "image/png"}
 }
@@ -159,6 +181,9 @@ credenziali dentro; i redirect non vengono seguiti.
 
 - `mode`: `publish` (pubblica) o `draft` (salva come bozza).
 - `translation_of`: nelle traduzioni, lo slug dell'originale.
+- `recipe`: nelle ricette, la scheda descritta in "Ricette"; in `jsonld`
+  c'è già anche il `Recipe` di schema.org (senza `image`: aggiungi tu
+  l'indirizzo della copertina che hai salvato).
 - `image`: scarica l'immagine e salvala da te. Il link funziona, ma è
   meglio non dipendere da Redazia per servirla.
 - `markdown` e `html` contengono anche il titolo come `#`/`<h1>`: se il tuo
@@ -239,7 +264,7 @@ sito con un indirizzo segreto:
 Ogni voce del JSON Feed ha `id`, `title`, `summary`, `content_html`,
 `image`, `date_published`, `language` e, sotto `_redazia`, `slug`,
 `subtitle`, `markdown`, `seo_title`, `meta_description`, `keyphrase`,
-`image_alt`, `sources`, `jsonld` e `translation_of`. Usa `id` per non
+`image_alt`, `sources`, `jsonld`, `translation_of` e `recipe`. Usa `id` per non
 importare due volte lo stesso articolo.
 
 Il feed contiene gli ultimi 50 articoli approvati e non avvisa di

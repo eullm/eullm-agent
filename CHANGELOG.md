@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.32.1
+
+### Added
+
+- **Formato ricetta.** Quando una fonte seguita dal sito dà una ricetta
+  intera (ingredienti e passaggi), la proposta può avere il formato
+  "ricetta". La bozza ha una breve introduzione e due sezioni nella lingua
+  del sito, "Ingredienti" (elenco puntato) e "Procedimento" (elenco
+  numerato). Ogni ingrediente e ogni passaggio ha la sua fonte come le
+  altre frasi. Porzioni e tempi restano solo se le fonti citate li danno:
+  un numero che le fonti non hanno non si pubblica.
+- **Scheda `Recipe` per Google.** Il JSON-LD dell'articolo ha anche
+  `Recipe` di schema.org (ingredienti, passaggi `HowToStep`, porzioni,
+  tempi in ISO 8601). La scheda arriva:
+  - nel front matter delle destinazioni GitHub, come `recipe`;
+  - nel webhook e nel JSON Feed, come campo `recipe`;
+  - nella pagina scaricabile, con la copertina come immagine.
+
+  Le correzioni del caporedattore e le traduzioni la tengono, con i titoli
+  tradotti. Il modello pubblico redazia-site-template la trasforma in
+  `Recipe` sulla pagina dell'articolo. La guida
+  `editor-mode/docs/template-su-misura.md` spiega cosa aggiungere a un
+  template su misura.
+
+### Changed
+
+- I formati "confronto" e "dati" hanno ora il loro nome nella pagina delle
+  proposte, in tutte le lingue.
+
 ## 0.32.0
 
 ### Added
