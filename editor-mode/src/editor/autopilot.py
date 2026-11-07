@@ -271,7 +271,8 @@ def _auto_jobs(proposal_id, statuses: tuple[str, ...]):
                               j.subject == literal("proposal ").concat(cast(proposal_id, Text))).exists()
 
 
-def made_since(s, site_id: int, since: datetime, fix: bool = False) -> tuple[int, int]:
+def made_since(s, site_id: int, since: datetime, fix: bool = False,
+               until: datetime | None = None) -> tuple[int, int]:
     """Articles of the automatic newsroom since the given time, as (kept,
     tried): kept are those not discarded (published, on their way or held
     for a person), tried every article it took on, discarded ones included.
@@ -282,15 +283,19 @@ def made_since(s, site_id: int, since: datetime, fix: bool = False) -> tuple[int
     20 a day, 9 published by 13:00, then nothing): an accepted proposal
     whose job ended in an error without a draft, and, with `fix` (nothing
     waits for a person), a draft no job is working on any more that was
-    neither approved nor discarded."""
+    neither approved nor discarded. With `until`, a past period: only its
+    drafts count, nothing is still being written."""
     pr, dr = m.proposals.c, m.drafts.c
     working = _auto_jobs(dr.proposal_id, ("queued", "running"))
     alive = (dr.status != "rejected") if not fix else or_(dr.status == "approved", and_(dr.status != "rejected", working))
     mine = (select(dr.proposal_id, func.max(case((alive, 1), else_=0)).label("kept"))
             .join(m.proposals, pr.id == dr.proposal_id)
-            .where(pr.site_id == site_id, pr.decided_by == AUTO, dr.translation_of.is_(None), dr.created_at >= since)
+            .where(pr.site_id == site_id, pr.decided_by == AUTO, dr.translation_of.is_(None), dr.created_at >= since,
+                   *([dr.created_at < until] if until is not None else []))
             .group_by(dr.proposal_id).subquery())
     tried, kept = s.execute(select(func.count(), func.coalesce(func.sum(mine.c.kept), 0)).select_from(mine)).one()
+    if until is not None:
+        return int(kept), int(tried)
     accepted = (pr.site_id == site_id, pr.decided_by == AUTO, pr.status == "accepted",
                 pr.created_at >= since - timedelta(days=1))
     writing = s.execute(select(func.count()).select_from(m.proposals).where(*accepted)).scalar() or 0
@@ -600,11 +605,14 @@ def breaking_news(s, site_id: int, cfg: dict, now: datetime):
     return None
 
 
-def over_today(settings: dict, local) -> dict:
+def over_today(settings: dict, local, kept_over: int | None = None) -> dict:
     """What the newsroom brought forward from tomorrow and paid with credits
     today, and what it owes from yesterday: {day, borrowed, paid, debt}.
-    The record rolls over with the day, carrying yesterday's borrowed
-    articles as today's debt (tomorrow it makes fewer)."""
+    The record rolls over with the day, carrying yesterday's articles beyond
+    its limit as today's debt (tomorrow it makes fewer). `kept_over`: those
+    yesterday actually kept beyond its limit; without it, every extra it
+    accepted (some may have been discarded: Francesco 2026-11-07, 10 of 12
+    every day after two extras that never came out)."""
     rec = dict(settings.get("auto_over") or {})
     today = local.date().isoformat()
     if rec.get("day") == today:
@@ -612,6 +620,8 @@ def over_today(settings: dict, local) -> dict:
                 "breaking": int(rec.get("breaking", 0)), "debt": int(rec.get("debt", 0))}
     yesterday = (local.date() - timedelta(days=1)).isoformat()
     owed = int(rec.get("borrowed", 0)) + int(rec.get("breaking", 0)) if rec.get("day") == yesterday else 0
+    if kept_over is not None and rec.get("day") == yesterday:
+        owed = min(owed, max(0, kept_over))
     return {"day": today, "borrowed": 0, "paid": 0, "breaking": 0, "debt": owed}
 
 
@@ -630,7 +640,14 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
     if not allowed:
         return {"waiting": "plan"}
     local = now.astimezone(ZoneInfo(tz))
-    over = over_today((body.get("settings") or {}), local)
+    rec = (body.get("settings") or {}).get("auto_over") or {}
+    kept_over = None
+    if rec.get("day") == (local.date() - timedelta(days=1)).isoformat():
+        start = datetime.combine(local.date(), time(), local.tzinfo).astimezone(UTC)
+        with db.tenant(tenant_id) as s:
+            kept_y = made_since(s, site_id, start - timedelta(days=1), fix=cfg["on_problem"] == "fix", until=start)[0]
+        kept_over = kept_y - max(1, cfg["per_day"] - int(rec.get("debt", 0)))
+    over = over_today((body.get("settings") or {}), local, kept_over)
     with db.tenant(tenant_id) as s:
         have = credits.state(s)
         price = credits.price(s, "article")
@@ -675,7 +692,10 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
         if month_over:
             extra = "paid"
         elif kept >= target:
-            if over["borrowed"] < cfg["borrow"]:
+            # Brought forward: the articles kept beyond the day's limit (breaking news
+            # aside), not those accepted, which may be discarded; tries capped.
+            if (kept - target - over["breaking"] < cfg["borrow"]
+                    and over["borrowed"] < cfg["borrow"] * TRIES_PER_ARTICLE):
                 extra = "borrowed"
             elif can_pay:
                 extra = "paid"
@@ -683,7 +703,8 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
                 # The day is done and no extra is allowed: how many good news stay out, counted
                 # here once an hour (the Desk only shows it; counting takes a while).
                 done = {"done": target, "left_out": left_out(s, site_id, cfg, now)} \
-                    | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                    | ({"borrowed": over["borrowed"]} if over["borrowed"] else {}) \
+                    | ({"debt": over["debt"]} if over["debt"] else {})
                 extra = "done"
         if extra is None and tried >= cfg["per_day"] * TRIES_PER_ARTICLE:
             return {"tried": tried, "kept": kept}
@@ -693,7 +714,8 @@ def run(db, tenant_id: str, site_id: int, core: CoreClient | None, now: datetime
             # One at a time, only for news that is worth it, a round after the other.
             picked = choose(s, site_id, cfg, now, 1, minimum=cfg["extra_min_opportunity"], since=since)
             if not picked:  # nothing worth more than the day's articles: the day is done
-                done = {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {})
+                done = {"done": target} | ({"borrowed": over["borrowed"]} if over["borrowed"] else {}) \
+                    | ({"debt": over["debt"]} if over["debt"] else {})
                 extra = "done"
             want = 1
             paid = extra == "paid"

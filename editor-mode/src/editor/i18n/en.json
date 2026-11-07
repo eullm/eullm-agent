@@ -2661,5 +2661,6 @@
  "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Your site has only {n} articles on «{theme}», fewer than on the other subjects of its profile.",
  "ricetta": "recipe",
  "confronto": "comparison",
- "dati": "data"
+ "dati": "data",
+ "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "It has done today's articles ({n} of {tot}: {d} were brought forward yesterday) and resumes tomorrow at {h}:00."
 }

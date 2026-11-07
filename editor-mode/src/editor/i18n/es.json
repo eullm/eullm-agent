@@ -2661,5 +2661,6 @@
  "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Tu sitio solo tiene {n} artículos sobre «{theme}», menos que sobre los otros temas de su perfil.",
  "ricetta": "receta",
  "confronto": "comparativa",
- "dati": "datos"
+ "dati": "datos",
+ "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "Ha hecho los artículos de hoy ({n} de {tot}: {d} se adelantaron ayer) y reanuda mañana a las {h}:00."
 }
