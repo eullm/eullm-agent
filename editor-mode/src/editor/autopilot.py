@@ -1030,6 +1030,18 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             if correct(db, tenant_id, d, fixable, core):
                 res = finish(db, tenant_id, draft_id, core, publish, translate, rewrite, cover, rounds, corrected=True)
                 return res if res.get("discarded") or res.get("held") else {**res, "corrected": fixable}
+        if evening:
+            # The evening analysis is never lost: first its headline goes plain (its name and date), the
+            # text unchanged, and the editor-in-chief reads it again; still refused, it is written again
+            # once, and then it waits for a person instead of being discarded.
+            from . import evening as ev
+
+            if ev.plain_headline(db, tenant_id, d):
+                step(N_("Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri"))
+                res = finish(db, tenant_id, draft_id, core, publish, translate, rewrite, cover, rounds, corrected=True)
+                return res if res.get("held") or res.get("discarded") else {**res, "plain_headline": fixable}
+            if rewrite is None or rounds >= FIX_ROUNDS:
+                return _stop(db, tenant_id, d, fixable, out, discard=False)
         if rewrite is None or rounds >= FIX_ROUNDS:
             return _stop(db, tenant_id, d, fixable, out, discard=True)
         step(N_("Il modello più forte riscrive l'articolo per correggere: {why}"), why="; ".join(fixable)[:300])

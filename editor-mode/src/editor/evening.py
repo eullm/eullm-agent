@@ -48,6 +48,27 @@ PIECE = {"it": "Il Punto della Sera", "en": "The Evening Brief", "de": "Der Aben
 SECTION = {"it": "Analisi e Approfondimenti", "en": "Analysis", "de": "Analysen und Hintergründe",
            "fr": "Analyses et décryptages", "es": "Análisis y profundización"}
 DEFAULTS = {"enabled": False, "hour": 21, "min_articles": 6, "section": ""}
+MONTHS = {
+    "it": ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre",
+           "novembre", "dicembre"],
+    "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+           "November", "December"],
+    "de": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+           "November", "Dezember"],
+    "fr": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+           "novembre", "décembre"],
+    "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+           "noviembre", "diciembre"],
+}
+DATED = {"it": "{piece} del {d} {month}", "en": "{piece}, {d} {month}", "de": "{piece} vom {d}. {month}",
+         "fr": "{piece} du {d} {month}", "es": "{piece} del {d} de {month}"}
+PLAIN_SUBTITLE = {
+    "it": "Le notizie del giorno lette insieme dal caporedattore AI.",
+    "en": "The day's news read together by the AI editor-in-chief.",
+    "de": "Die Nachrichten des Tages, zusammen gelesen vom KI-Chefredakteur.",
+    "fr": "Les nouvelles du jour lues ensemble par le rédacteur en chef IA.",
+    "es": "Las noticias del día leídas juntas por el redactor jefe IA.",
+}
 
 
 class _Evening(BaseModel):
@@ -202,7 +223,8 @@ SYSTEM = (
     "No em dashes, en dashes or double hyphens as pauses, no rhetorical questions, no triplets of adjectives, "
     "none of the stock phrases of machine-written text (" + style.examples() + "). "
     "Format: the title says the day's story (not the name of the piece); the subtitle is one analytical "
-    "sentence; then 3 or 4 sections with headings, the first section without a heading, and the short last "
+    "sentence. The title and the subtitle state only what the articles say, no more certain and no larger: a "
+    "link between two stories, a cause or an effect stays out of them and goes in the text as a reading; then 3 or 4 sections with headings, the first section without a heading, and the short last "
     "section if any; 600 to 1200 words. Write it as claims: every claim is one to three sentences and lists the "
     "ids of the articles it rests on; a claim that connects two stories cites both. Reply with JSON only: "
     '{"title": "...", "subtitle": "...", "sections": [{"heading": "<or null>", "claims": '
@@ -210,6 +232,40 @@ SYSTEM = (
     '"seo": {"keyphrase": "<2-4 words>", "title": "<search title, max 60 chars>", '
     '"description": "<meta description, 120-155 chars>", "slug": "<url-words-with-hyphens>"}}'
 )
+
+
+def plain_title(language: str | None, day) -> str:
+    """The analysis' name and date, as its title when the one it was given
+    said more than the day's articles."""
+    lang = (language or "en")[:2] if (language or "en")[:2] in PIECE else "en"
+    return DATED[lang].format(piece=PIECE[lang], d=day.day, month=MONTHS[lang][day.month - 1])
+
+
+def plain_headline(db, tenant_id: str, d) -> bool:
+    """The analysis with its name and date as title and a plain subtitle, the
+    text unchanged (2026-11-06: the evening analysis of aitoday.it discarded
+    for a title and a subtitle more certain than the articles). False when it
+    already has them."""
+    from datetime import date
+
+    with db.tenant(tenant_id) as s:
+        basis = s.execute(select(m.proposals.c.basis).where(m.proposals.c.id == d.proposal_id)).scalar() or {}
+        text = drafts.as_text(drafts.stored_claims(s, d.id))
+    try:
+        day = date.fromisoformat(str(basis.get("evening")))
+    except ValueError:
+        day = (d.created_at or datetime.now(UTC)).date()
+    lang = (d.language or "en")[:2]
+    title = plain_title(d.language, day)
+    if d.title == title:
+        return False
+    piece = PIECE.get(lang, PIECE["en"])
+    subtitle = f"{piece}. {PLAIN_SUBTITLE.get(lang, PLAIN_SUBTITLE['en'])}"
+    try:
+        drafts.edit_text(db, tenant_id, d.id, title, subtitle, text, search={"title": title[:60], "description": None})
+    except (ValueError, LookupError):
+        return False
+    return True
 
 
 def _prompt(profile: dict, piece: str, day: str, sources: dict, sections: dict, notes: str | None) -> str:

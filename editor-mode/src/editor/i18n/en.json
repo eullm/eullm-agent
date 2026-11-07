@@ -2633,5 +2633,6 @@
  "Breaking news spente: oltre gli articoli del giorno non esce niente.": "Breaking news off: nothing goes out beyond the day's articles.",
  "Le proposte": "The proposals",
  "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Not written by the automatic newsroom: “{title}”. It cost nothing and another proposal takes its place.",
- "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "only {n} words of the news could be read: too few to write an article without making things up"
+ "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "only {n} words of the news could be read: too few to write an article without making things up",
+ "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "The AI editor-in-chief rereads the Evening Brief with a plain title and subtitle"
 }
