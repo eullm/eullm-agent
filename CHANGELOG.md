@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.32.2
+
+### Fixed
+
+- **La redazione automatica si fermava a 10 articoli su 12 ogni giorno**
+  (Francesco, 7 novembre, aitoday.it). Gli articoli anticipati dal giorno
+  dopo si contavano quando la proposta veniva accettata, non quando
+  l'articolo usciva. Un anticipato scartato (per esempio un doppione) o mai
+  scritto esauriva le anticipazioni del giorno ed era sottratto anche al
+  giorno dopo, e il giro si ripeteva. Ora:
+  - si anticipa finché gli articoli usciti oltre il tetto sono meno di
+    quelli permessi, con al massimo due tentativi ciascuno;
+  - il giorno dopo si sottraggono solo gli articoli usciti davvero oltre il
+    tetto.
+
+  Il Desk spiega il tetto ridotto: "10 su 12: 2 li aveva anticipati ieri".
+  Il messaggio sulle notizie rimaste fuori dal tetto compare solo quando le
+  anticipazioni sono davvero finite.
+
 ## 0.32.1
 
 ### Added

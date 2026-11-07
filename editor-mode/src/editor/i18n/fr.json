@@ -2661,5 +2661,6 @@
  "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Votre site n'a que {n} articles sur « {theme} », moins que sur les autres sujets de son profil.",
  "ricetta": "recette",
  "confronto": "comparatif",
- "dati": "données"
+ "dati": "données",
+ "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "Elle a fait les articles du jour ({n} sur {tot} : {d} avaient été avancés hier) et reprend demain à {h}:00."
 }

@@ -194,6 +194,60 @@ def test_an_important_story_goes_out_beyond_the_day_brought_forward_from_tomorro
         assert ap.left_out(s, site_id, ap.settings_of(body), now) >= 0
 
 
+def test_an_extra_that_never_came_out_is_not_owed_tomorrow(db, tenant):
+    """Francesco 2026-11-07: "10 su 12" every day. The two articles brought
+    forward were accepted, one discarded and one never written, and still
+    owed the next day."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    from editor.profile import _set_settings
+
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    settings(db, tenant, site_id, per_day=1, borrow=1, extra_min_opportunity=0)
+    now = datetime(2026, 10, 28, 11, tzinfo=UTC)
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.proposals SET created_at = :t"), {"t": now})
+    queued = []
+    run = lambda: ap.run(db, tenant, site_id, None, now, "Europe/Rome", lambda pid, paid=False: queued.append(pid))
+    assert len(run()["accepted"]) == 1  # the day's article
+    with db.tenant(tenant) as s:  # a second story, told by the same outlets
+        first = s.execute(select(m.proposals).where(m.proposals.c.id == queued[0])).one()
+        s.execute(insert(m.proposals).values(tenant_id=tenant, site_id=site_id, topic_id=first.topic_id,
+                                             profile_id=first.profile_id, opportunity=80, title="Seconda notizia",
+                                             generated_by="model", status="proposed", created_at=now))
+        second = s.execute(select(func.max(m.proposals.c.id))).scalar()
+        for item in s.execute(select(m.proposal_citations.c.item_id).where(
+                m.proposal_citations.c.proposal_id == first.id)).scalars().all():
+            s.execute(insert(m.proposal_citations).values(tenant_id=tenant, proposal_id=second, item_id=item))
+    out = run()
+    assert out["extra"] == "borrowed" and out["accepted"] == [second]
+    with db.tenant(tenant) as s:  # too thin to be written: refused, it never comes out
+        s.execute(update(m.proposals).where(m.proposals.c.id == second).values(status="rejected"))
+    # The allowance is still there (nothing came out); with nothing else worth it the day is done,
+    # without saying that good news stayed out because of the limit.
+    after = run()
+    assert after["done"] == 1 and "left_out" not in after
+    # Tomorrow: yesterday's record says one brought forward, but nothing beyond the day was kept.
+    with db.tenant(tenant) as s:
+        _set_settings(s, site_id, auto_over={"day": "2026-10-28", "borrowed": 1, "paid": 0, "breaking": 0, "debt": 0})
+    local = (now + timedelta(days=1)).astimezone(ZoneInfo("Europe/Rome"))
+    rec = {"auto_over": {"day": "2026-10-28", "borrowed": 1, "paid": 0, "breaking": 0, "debt": 0}}
+    assert ap.over_today(rec, local, kept_over=0)["debt"] == 0
+    assert ap.over_today(rec, local, kept_over=3)["debt"] == 1  # never more than it took
+    assert ap.over_today(rec, local)["debt"] == 1
+    settings(db, tenant, site_id, per_day=2, borrow=1, extra_min_opportunity=0)
+    ap.run(db, tenant, site_id, None, now + timedelta(days=1), "Europe/Rome", lambda pid, paid=False: None)
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(
+            m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
+        since = datetime(2026, 10, 27, 23, tzinfo=UTC)
+        assert ap.made_since(s, site_id, since, until=since + timedelta(days=1))[0] <= 1
+    assert body["settings"]["auto_over"]["day"] == "2026-10-29"
+    assert body["settings"]["auto_over"]["debt"] == 0  # yesterday kept only its own article
+
+
 def test_breaking_news_goes_out_past_the_day_and_out_of_hours(db, tenant):
     """Francesco 2026-11-06: a story that comes out 3 or 4 times in a short
     while goes out even when the day's articles are done, one fewer the
