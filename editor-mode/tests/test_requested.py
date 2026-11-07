@@ -62,6 +62,7 @@ def test_a_request_is_written_from_its_links_and_the_archive_news(db, tenant):
     asked = []
     with respx.mock(assert_all_called=False) as router:
         router.get(url__regex=r".*/robots\.txt").mock(return_value=httpx.Response(404))
+        router.get(url__regex=r".*/\.well-known/tdmrep\.json").mock(return_value=httpx.Response(404))
         router.get("https://press.example/starlink").mock(
             return_value=httpx.Response(200, text=PRESS, headers={"content-type": "text/html"}))
         router.get(url__regex=r"https://(news|rete)\.example/.*").mock(return_value=httpx.Response(404))
@@ -101,6 +102,7 @@ def test_nothing_to_cite_means_no_draft(db, tenant):
 
     with respx.mock(assert_all_called=False) as router:
         router.get(url__regex=r".*/robots\.txt").mock(return_value=httpx.Response(404))
+        router.get(url__regex=r".*/\.well-known/tdmrep\.json").mock(return_value=httpx.Response(404))
         router.get("https://blocked.example/x").mock(return_value=httpx.Response(403))
         router.post(CORE).mock(side_effect=answer)
         with httpx.Client() as client:

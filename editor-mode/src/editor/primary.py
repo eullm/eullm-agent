@@ -28,7 +28,7 @@ from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
 from .i18n import N_
 from .progress import step
-from .site import RobotsCache
+from .site import RobotsCache, tdm_marked
 from .text import tokens
 
 log = logging.getLogger(__name__)
@@ -170,14 +170,14 @@ def look(db, tenant_id: str, prop, main: list, existing: bool, core: CoreClient,
         if reads >= MAX_PAGES:
             return None
         try:
-            if not robots.allowed(url):
+            if not robots.allowed(url) or robots.reserved(url):
                 return None
             reads += 1
             r = client.get(url, headers={"Accept": "text/html"})
         except httpx.HTTPError as e:
             log.info("cannot read %s: %s", url, e)
             return None
-        if r.status_code != 200 or "html" not in r.headers.get("content-type", "html"):
+        if r.status_code != 200 or "html" not in r.headers.get("content-type", "html") or tdm_marked(r):
             return None
         pages[url] = (parse_html(r.text, url), r)
         return pages[url]

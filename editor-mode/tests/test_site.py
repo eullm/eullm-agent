@@ -227,3 +227,28 @@ def test_a_missing_feed_or_sitemap_is_a_note_not_a_gap():
     # The articles are found through sitemap and links anyway.
     assert is_note("no RSS or Atom feed found") and is_note("no usable sitemap") and is_note("page budget reached")
     assert not is_note("no publication dates found") and not is_note(f"8 articles read (at least {GOOD_POSTS} wanted)")
+
+
+def test_a_publisher_reservation_against_ai_is_seen():
+    """GPTBot shut out in robots.txt, /.well-known/tdmrep.json, or the
+    tdm-reservation header and meta tag: the page is reserved."""
+    from editor.site import RobotsCache, tdm_marked
+
+    with respx.mock() as router, httpx.Client() as c:
+        router.get("https://paper.example/robots.txt").mock(return_value=httpx.Response(
+            200, text="User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n"))
+        router.get("https://open.example/robots.txt").mock(return_value=httpx.Response(404))
+        router.get("https://open.example/.well-known/tdmrep.json").mock(return_value=httpx.Response(
+            200, json=[{"location": "/news/*", "tdm-reservation": 1}, {"location": "/press/*", "tdm-reservation": 0}]))
+        robots = RobotsCache(c)
+        assert robots.allowed("https://paper.example/news/1") and robots.reserved("https://paper.example/news/1")
+        assert robots.reserved("https://open.example/news/1?ref=rss")
+        assert not robots.reserved("https://open.example/press/1")
+        assert not robots.reserved("https://open.example/")
+        assert router.calls.call_count == 3  # tdmrep.json read once per host
+    html = {"content-type": "text/html"}
+    assert tdm_marked(httpx.Response(200, text="<p>x</p>", headers={**html, "tdm-reservation": "1"}))
+    assert tdm_marked(httpx.Response(200, text='<head><meta name="tdm-reservation" content="1"></head>', headers=html))
+    assert tdm_marked(httpx.Response(200, text="<head><META content='1' name='TDM-Reservation'></head>", headers=html))
+    assert not tdm_marked(httpx.Response(200, text='<meta name="tdm-reservation" content="0">', headers=html))
+    assert not tdm_marked(httpx.Response(200, text="<p>free</p>", headers=html))

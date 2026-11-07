@@ -151,6 +151,35 @@ def test_article_text_is_not_read_where_robots_forbid_it(db, tenant):
     assert content is None and at is not None
 
 
+def test_article_text_is_not_read_where_the_publisher_reserves_it_against_ai(db, tenant):
+    """A publisher that shuts out the AI crawlers, or marks its page
+    tdm-reservation, gets written from its feed summary only."""
+    _, cited = accepted_proposal(db, tenant)
+    with db.tenant(tenant) as s:
+        urls = [s.execute(text("SELECT url FROM editor.source_items WHERE id = :i"), {"i": i}).scalar() for i in cited[:2]]
+    hosts = {httpx.URL(u).host for u in urls}
+    marked = ARTICLE_PAGE.replace("<head>", '<head><meta name="tdm-reservation" content="1">', 1)
+    with respx.mock(assert_all_called=False) as router, httpx.Client() as c:
+        for h in hosts:
+            router.get(f"https://{h}/.well-known/tdmrep.json").mock(return_value=httpx.Response(404))
+        router.get(f"https://{httpx.URL(urls[0]).host}/robots.txt").mock(
+            return_value=httpx.Response(200, text="User-agent: CCBot\nDisallow: /\n"))
+        first = router.get(urls[0]).mock(return_value=httpx.Response(200, text=ARTICLE_PAGE, headers={"content-type": "text/html"}))
+        drafts.fetch_contents(db, tenant, cited[:1], c)
+        assert not first.called
+    with respx.mock(assert_all_called=False) as router, httpx.Client() as c:
+        for h in hosts:
+            router.get(f"https://{h}/robots.txt").mock(return_value=httpx.Response(404))
+            router.get(f"https://{h}/.well-known/tdmrep.json").mock(return_value=httpx.Response(404))
+        second = router.get(urls[1]).mock(return_value=httpx.Response(200, text=marked, headers={"content-type": "text/html"}))
+        drafts.fetch_contents(db, tenant, cited[1:2], c)
+        assert second.called
+    with db.tenant(tenant) as s:
+        rows = [s.execute(text("SELECT content, content_fetched_at FROM editor.source_items WHERE id = :i"), {"i": i}).one()
+                for i in cited[:2]]
+    assert len(rows) == 2 and all(r.content is None and r.content_fetched_at is not None for r in rows)
+
+
 def test_an_article_tells_one_event(db, tenant):
     """Other outlets' reports of the same event come in; news of the same
     sector does not, nor a cited item about something else."""
@@ -208,6 +237,7 @@ def test_the_original_document_is_read_and_can_be_cited(db, tenant):
         router.get(url__regex=r"https://(news|rete)\.example/.*").mock(
             return_value=httpx.Response(200, text=page, headers={"content-type": "text/html"}))
         router.get(url__regex=r"https://www\.bea\.gov/robots\.txt").mock(return_value=httpx.Response(404))
+        router.get("https://www.bea.gov/.well-known/tdmrep.json").mock(return_value=httpx.Response(404))
         router.get("https://www.bea.gov/news/2026/gdp-q3").mock(
             return_value=httpx.Response(200, text=official, headers={"content-type": "text/html"}))
         holder = {}
