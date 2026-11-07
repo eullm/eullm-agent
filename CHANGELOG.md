@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.31.6
+
+### Added
+
+- **Guida per chi costruisce il proprio template**
+  (`editor-mode/docs/template-su-misura.md`, Francesco, 7 novembre). Copre
+  i tre canali (GitHub, webhook, feed) con tutto quello che serve:
+  - struttura del repository, campi del front matter e nomi riconosciuti;
+  - cosa deve fare il template;
+  - come Redazia pubblica, modifica e ritira;
+  - firma del webhook con esempi in Node, PHP e Python, risposta attesa;
+  - verifiche prima di andare in produzione.
+
+### Changed
+
+- **Webhook più completo.** La pubblicazione e la modifica mandano anche
+  `translation_of`, cioè lo slug dell'originale, perché il sito possa
+  collegare le lingue. La pubblicazione manda anche `date`. Se il sito
+  risponde con `{"id": ..., "url": "https://..."}`, Redazia ricorda
+  l'indirizzo vero dell'articolo e lo mostra nella bozza e nelle
+  pubblicazioni.
+
 ## 0.31.5
 
 ### Changed

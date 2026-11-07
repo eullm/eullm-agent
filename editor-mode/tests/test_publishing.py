@@ -121,15 +121,19 @@ def test_webhook_is_signed_and_telegram_token_is_not_logged(db, tenant, monkeypa
     tg = pub.add_target(db, tenant, site_id, "telegram_channel", "canale", {"chat_id": "@canale"}, "TG_TOKEN")
     publisher = pub.Publisher(resolver=public_resolver)
     with respx.mock() as router:
-        route = router.post("https://hooks.example/in").mock(return_value=httpx.Response(200))
+        # The site may answer with its own id and the article's address: the dashboard links it.
+        route = router.post("https://hooks.example/in").mock(
+            return_value=httpx.Response(200, json={"id": 9, "url": "https://sito.example/news/bari-in-fibra"}))
         router.post("https://api.telegram.org/bot123:ABC/sendMessage").mock(return_value=httpx.Response(500))
         p1 = pub.request(db, tenant, did, hook, "publish", "redazione")
         p2 = pub.request(db, tenant, did, tg, "publish", "redazione")
         for p in (p1, p2):
             pub.decide(db, tenant, p, True, "francesco")
-        assert publisher.run(db, tenant, p1)["status"] == "published"
+        assert publisher.run(db, tenant, p1) == {"status": "published", "url": "https://sito.example/news/bari-in-fibra"}
         failed = publisher.run(db, tenant, p2)
     req = route.calls[0].request
+    sent = json.loads(req.content)
+    assert sent["event"] == "publication" and "translation_of" in sent and sent["date"]
     expected = hmac.new(b"s3cret", req.content, hashlib.sha256).hexdigest()
     assert req.headers["x-editor-signature"] == f"sha256={expected}"
     assert failed["status"] == "failed" and "123:ABC" not in failed["error"]

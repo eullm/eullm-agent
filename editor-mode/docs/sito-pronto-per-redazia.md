@@ -188,6 +188,10 @@ l'articolo va tolto dal sito. Rispondi con
 un codice 2xx quando l'articolo è salvato; con un errore la pubblicazione
 risulta fallita in Pubblicazioni, con il motivo.
 
+Chi costruisce un proprio template o endpoint trova il contratto completo
+(campi, firma con esempi in Node, PHP e Python, risposta, modifiche e
+ritiri) in [Un template su misura per Redazia](template-su-misura.md).
+
 ## Nessuna delle tre: un sito nuovo accanto al tuo
 
 Se la tua piattaforma non permette di scrivere da fuori (Squarespace, molti
