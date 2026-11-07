@@ -4,14 +4,17 @@
 
 ### Changed
 
-- **Rispetto delle riserve degli editori contro l'AI** (Francesco,
-  7 novembre; art. 70-quater della legge sul diritto d'autore e art. 4
-  della direttiva 2019/790). Una pagina è riservata se:
-  - il suo `robots.txt` chiude la pagina a uno dei crawler AI noti
-    (GPTBot, ChatGPT-User, OAI-SearchBot, CCBot, Google-Extended,
-    ClaudeBot, anthropic-ai, PerplexityBot, Applebot-Extended,
-    Meta-ExternalAgent, Bytespider e altri), anche se è aperta a tutti
-    gli altri;
+- **Rispetto delle riserve degli editori contro la lettura da parte
+  dell'AI** (Francesco, 7 novembre). Una pagina è riservata se:
+  - il suo `robots.txt` chiude la pagina a uno degli agenti con cui gli
+    assistenti AI leggono il web per rispondere agli utenti (ChatGPT-User,
+    OAI-SearchBot, PerplexityBot, Perplexity-User, Claude-User,
+    Claude-SearchBot, MistralAI-User, DuckAssistBot), anche se è aperta a
+    tutti gli altri. Il blocco dei soli crawler di addestramento (GPTBot,
+    CCBot, Google-Extended…) non conta: ce l'ha il 62% delle fonti comuni,
+    e con la regola rigida quasi tutti gli articoli si sarebbero scritti dal
+    solo sommario (scelta di Francesco). Le fonti comuni che riservano così
+    sono circa il 46%;
   - `/.well-known/tdmrep.json` la riserva (`tdm-reservation: 1`);
   - la pagina porta l'intestazione o il meta tag `tdm-reservation: 1`.
 

@@ -230,13 +230,17 @@ def test_a_missing_feed_or_sitemap_is_a_note_not_a_gap():
 
 
 def test_a_publisher_reservation_against_ai_is_seen():
-    """GPTBot shut out in robots.txt, /.well-known/tdmrep.json, or the
-    tdm-reservation header and meta tag: the page is reserved."""
+    """ChatGPT-User shut out in robots.txt, /.well-known/tdmrep.json, or the
+    tdm-reservation header and meta tag: the page is reserved. Training
+    crawlers shut out alone are not a reservation."""
     from editor.site import RobotsCache, tdm_marked
 
     with respx.mock() as router, httpx.Client() as c:
         router.get("https://paper.example/robots.txt").mock(return_value=httpx.Response(
-            200, text="User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n"))
+            200, text="User-agent: ChatGPT-User\nDisallow: /\n\nUser-agent: *\nAllow: /\n"))
+        router.get("https://trained.example/robots.txt").mock(return_value=httpx.Response(
+            200, text="User-agent: GPTBot\nUser-agent: CCBot\nDisallow: /\n"))
+        router.get("https://trained.example/.well-known/tdmrep.json").mock(return_value=httpx.Response(404))
         router.get("https://open.example/robots.txt").mock(return_value=httpx.Response(404))
         router.get("https://open.example/.well-known/tdmrep.json").mock(return_value=httpx.Response(
             200, json=[{"location": "/news/*", "tdm-reservation": 1}, {"location": "/press/*", "tdm-reservation": 0}]))
@@ -245,7 +249,8 @@ def test_a_publisher_reservation_against_ai_is_seen():
         assert robots.reserved("https://open.example/news/1?ref=rss")
         assert not robots.reserved("https://open.example/press/1")
         assert not robots.reserved("https://open.example/")
-        assert router.calls.call_count == 3  # tdmrep.json read once per host
+        assert not robots.reserved("https://trained.example/news/1")
+        assert router.calls.call_count == 5  # robots.txt and tdmrep.json read once per host
     html = {"content-type": "text/html"}
     assert tdm_marked(httpx.Response(200, text="<p>x</p>", headers={**html, "tdm-reservation": "1"}))
     assert tdm_marked(httpx.Response(200, text='<head><meta name="tdm-reservation" content="1"></head>', headers=html))

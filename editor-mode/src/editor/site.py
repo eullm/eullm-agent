@@ -133,12 +133,13 @@ def gunzip_limited(data: bytes, limit: int) -> bytes | None:
     return out
 
 
-# Crawlers of AI companies a publisher names in robots.txt to keep its texts away from AI: a page
-# closed to any of them is reserved (text and data mining opt-out, art. 70-quater of the Italian
-# copyright law, art. 4 of directive 2019/790), even when it is open to everyone else.
-AI_AGENTS = ("GPTBot", "ChatGPT-User", "OAI-SearchBot", "CCBot", "Google-Extended", "ClaudeBot", "Claude-Web",
-             "anthropic-ai", "PerplexityBot", "Applebot-Extended", "Meta-ExternalAgent", "Bytespider", "cohere-ai",
-             "Amazonbot", "Diffbot", "omgili")
+# Agents with which AI assistants read a page live to answer a user, the use closest to ours (an
+# article written from what was read): a page closed to any of them in robots.txt is reserved,
+# even when it is open to everyone else. A block on the training crawlers alone (GPTBot, CCBot,
+# Google-Extended...) does not count: 62% of the shared sources has one (Francesco 2026-11-07
+# chose this line over the strict one, which left most articles to the feed summary).
+AI_AGENTS = ("ChatGPT-User", "OAI-SearchBot", "PerplexityBot", "Perplexity-User", "Claude-User", "Claude-SearchBot",
+             "MistralAI-User", "DuckAssistBot")
 _TDM_META = re.compile(r"""<meta\s[^>]*name\s*=\s*["']tdm-reservation["'][^>]*content\s*=\s*["']\s*1|"""
                        r"""<meta\s[^>]*content\s*=\s*["']\s*1\s*["'][^>]*name\s*=\s*["']tdm-reservation["']""", re.I)
 
@@ -159,8 +160,8 @@ def _tdm_location(pattern: str, path: str) -> bool:
 class RobotsCache:
     """robots.txt per host, read once through the Core. Unreachable or 5xx
     means "do not read", a missing file means "read". With `reserved`, the
-    reservations of a publisher against AI as well: AI crawlers shut out in
-    robots.txt, and /.well-known/tdmrep.json."""
+    reservations of a publisher against AI as well: AI assistants' readers
+    shut out in robots.txt, and /.well-known/tdmrep.json."""
 
     def __init__(self, client: httpx.Client):
         self.client = client
