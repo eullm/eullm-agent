@@ -585,13 +585,29 @@ class Publisher:
             r.raise_for_status()
         return None
 
+    @staticmethod
+    def _webhook_answer(r) -> tuple[str | None, str | None]:
+        """What the site answered, when it says it: {"id": ..., "url": "https://..."}, the
+        article's own id and address, so the dashboard links the article on the site."""
+        try:
+            body = r.json()
+        except ValueError:
+            return None, None
+        if not isinstance(body, dict):
+            return None, None
+        url = body.get("url")
+        url = url if isinstance(url, str) and url.startswith(("https://", "http://")) and len(url) <= 2000 else None
+        ext = body.get("id")
+        return (str(ext)[:200] if isinstance(ext, (str, int)) and str(ext) else None), url
+
     def _webhook_event(self, target, pub, payload, secret, event: str, image=None):
         url = target.config["url"]
         check_public_url(url, self.resolver)
         data = {"event": event, "mode": pub.mode, "publication_id": pub.id, "url": pub.external_url}
         if event == "update":
             data |= {k: payload.get(k) for k in ("title", "subtitle", "markdown", "html", "language", "slug", "section",
-                                                 "seo_title", "meta_description", "keyphrase", "jsonld")}
+                                                 "seo_title", "meta_description", "keyphrase", "jsonld",
+                                                 "translation_of")}
             # The cover as on publishing: the receiver replaces its own when the link changes.
             data["image"] = ({"url": f"{self.public_url}/media/{image.token}", "alt": image.alt, "type": image.mime}
                              if image is not None and self.public_url else None)
@@ -602,7 +618,7 @@ class Publisher:
         r = self.http.post(url, content=raw, headers={"Content-Type": "application/json", "X-Editor-Signature": f"sha256={sig}"})
         _ensure_no_redirect(r, url, self.resolver)
         r.raise_for_status()
-        return None
+        return self._webhook_answer(r)[1] if event == "update" else None
 
     def _webhook_update(self, target, pub, payload, secret, image=None):
         return self._webhook_event(target, pub, payload, secret, "update", image)
@@ -796,14 +812,15 @@ class Publisher:
             cover = {"url": f"{self.public_url}/media/{image.token}", "alt": image.alt, "type": image.mime}
         data = json.dumps({"event": "publication", "mode": pub.mode, "publication_id": pub.id,
                            "url": cms_url, **{k: pub.payload[k] for k in ("title", "subtitle", "markdown", "html", "language")},
-                           **{k: pub.payload.get(k) for k in ("slug", "section", "seo_title", "meta_description", "keyphrase", "jsonld")},
-                           "image": cover},
+                           **{k: pub.payload.get(k) for k in ("slug", "section", "seo_title", "meta_description", "keyphrase",
+                                                              "jsonld", "translation_of")},
+                           "date": datetime.now(UTC).isoformat(), "image": cover},
                           ensure_ascii=False).encode()
         sig = hmac.new(_need(secret, target).encode(), data, hashlib.sha256).hexdigest()
         r = self.http.post(url, content=data, headers={"Content-Type": "application/json", "X-Editor-Signature": f"sha256={sig}"})
         _ensure_no_redirect(r, url, self.resolver)
         r.raise_for_status()
-        return None, None
+        return self._webhook_answer(r)
 
     def _telegram_channel(self, target, pub, cms_url, secret, image=None):
         import html as h
