@@ -22,7 +22,7 @@ from . import drafts, models as m, repo
 from .html_extract import parse_html
 from .i18n import N_
 from .progress import step
-from .site import RobotsCache
+from .site import RobotsCache, tdm_marked
 from .text import item_terms, tokens
 
 log = logging.getLogger(__name__)
@@ -101,9 +101,9 @@ def read_links(db, tenant_id: str, links: list[str], client: httpx.Client | None
         page = None
         if client is not None:
             try:
-                if robots.allowed(url):
+                if robots.allowed(url) and not robots.reserved(url):
                     r = client.get(drafts.reading_url(url), headers={"Accept": "text/html"})
-                    if r.status_code == 200 and "html" in r.headers.get("content-type", "html"):
+                    if r.status_code == 200 and "html" in r.headers.get("content-type", "html") and not tdm_marked(r):
                         page = parse_html(r.text, url)
             except httpx.HTTPError as e:
                 log.info("cannot read %s: %s", url, e)

@@ -10,6 +10,7 @@ could not read is recorded as a problem instead of being guessed.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import xml.etree.ElementTree as ET
 import zlib
@@ -132,13 +133,62 @@ def gunzip_limited(data: bytes, limit: int) -> bytes | None:
     return out
 
 
+# Crawlers of AI companies a publisher names in robots.txt to keep its texts away from AI: a page
+# closed to any of them is reserved (text and data mining opt-out, art. 70-quater of the Italian
+# copyright law, art. 4 of directive 2019/790), even when it is open to everyone else.
+AI_AGENTS = ("GPTBot", "ChatGPT-User", "OAI-SearchBot", "CCBot", "Google-Extended", "ClaudeBot", "Claude-Web",
+             "anthropic-ai", "PerplexityBot", "Applebot-Extended", "Meta-ExternalAgent", "Bytespider", "cohere-ai",
+             "Amazonbot", "Diffbot", "omgili")
+_TDM_META = re.compile(r"""<meta\s[^>]*name\s*=\s*["']tdm-reservation["'][^>]*content\s*=\s*["']\s*1|"""
+                       r"""<meta\s[^>]*content\s*=\s*["']\s*1\s*["'][^>]*name\s*=\s*["']tdm-reservation["']""", re.I)
+
+
+def tdm_marked(r: httpx.Response) -> bool:
+    """A page that says its rights holder reserves text and data mining
+    (TDMRep: the `tdm-reservation: 1` header or meta tag)."""
+    if (r.headers.get("tdm-reservation") or "").strip() == "1":
+        return True
+    return "html" in r.headers.get("content-type", "html") and bool(_TDM_META.search(r.text[:200_000]))
+
+
+def _tdm_location(pattern: str, path: str) -> bool:
+    rx = re.escape(pattern if pattern.startswith("/") else "/" + pattern).replace(r"\*", ".*")
+    return re.fullmatch(rx, path) is not None
+
+
 class RobotsCache:
     """robots.txt per host, read once through the Core. Unreachable or 5xx
-    means "do not read", a missing file means "read"."""
+    means "do not read", a missing file means "read". With `reserved`, the
+    reservations of a publisher against AI as well: AI crawlers shut out in
+    robots.txt, and /.well-known/tdmrep.json."""
 
     def __init__(self, client: httpx.Client):
         self.client = client
         self._robots: dict[str, RobotFileParser] = {}
+        self._tdmrep: dict[str, list[tuple[str, bool]]] = {}
+
+    def reserved(self, url: str) -> bool:
+        """Whether the publisher keeps this page away from AI: then the
+        newsroom does not read it, and writes from the feed's summary."""
+        self.allowed(url)  # reads robots.txt once
+        u = httpx.URL(url)
+        rp = self._robots[u.host]
+        if any(not rp.can_fetch(agent, url) for agent in AI_AGENTS):
+            return True
+        rules = self._tdmrep.get(u.host)
+        if rules is None:
+            rules = []
+            try:
+                r = self.client.get(f"{u.scheme}://{u.host}/.well-known/tdmrep.json", headers={"Accept": "application/json"})
+                body = r.json() if r.status_code == 200 else []
+                for x in body if isinstance(body, list) else []:
+                    if isinstance(x, dict) and isinstance(x.get("location"), str):
+                        rules.append((x["location"], str(x.get("tdm-reservation")) == "1"))
+            except (httpx.HTTPError, ValueError):
+                pass
+            self._tdmrep[u.host] = rules
+        path = u.raw_path.decode("ascii", "replace").split("?")[0] or "/"
+        return any(flag for pattern, flag in rules if _tdm_location(pattern, path))
 
     def allowed(self, url: str) -> bool:
         u = httpx.URL(url)

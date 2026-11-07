@@ -32,7 +32,7 @@ from .core_client import CoreClient, CoreError
 from .html_extract import parse_html
 from .i18n import N_, t
 from .progress import step
-from .site import RobotsCache
+from .site import RobotsCache, tdm_marked
 from .normalize import normalize_text
 from .text import item_terms, tokens
 
@@ -547,14 +547,21 @@ def fetch_contents(db, tenant_id: str, item_ids: list[int], client: httpx.Client
     for row in todo:
         content, url = None, reading_url(row.url)
         try:
-            if robots.allowed(url):
+            if not robots.allowed(url):
+                log.info("robots.txt forbids reading %s: drafting from its summary", row.url)
+            elif robots.reserved(url):
+                # The publisher keeps its texts away from AI (Francesco 2026-11-07): the article is
+                # written from the summary its feed gives out, as for a page closed to us.
+                log.info("%s is reserved against AI: drafting from its summary", row.url)
+            else:
                 r = client.get(url, headers={"Accept": "text/html"})
                 if r.status_code == 200 and "html" in r.headers.get("content-type", "html"):
-                    page = parse_html(r.text, url)
-                    content = page.text[:MAX_CONTENT] or None
-                    found[row.id] = document_links(page, url)
-            else:
-                log.info("robots.txt forbids reading %s: drafting from its summary", row.url)
+                    if tdm_marked(r):
+                        log.info("%s says tdm-reservation: drafting from its summary", row.url)
+                    else:
+                        page = parse_html(r.text, url)
+                        content = page.text[:MAX_CONTENT] or None
+                        found[row.id] = document_links(page, url)
         except httpx.HTTPError as e:
             log.info("cannot read %s: %s", row.url, e)
         # Read once for everyone: the item is in the archive, or (collected
@@ -616,13 +623,13 @@ def read_documents(db, tenant_id: str, links: dict[int, list[str]], client: http
                 out.append(known)
                 continue
             try:
-                if not robots.allowed(url):
+                if not robots.allowed(url) or robots.reserved(url):
                     continue
                 r = client.get(url, headers={"Accept": "text/html"})
             except httpx.HTTPError as e:
                 log.info("cannot read the document %s: %s", url, e)
                 continue
-            if r.status_code != 200 or "html" not in r.headers.get("content-type", "html"):
+            if r.status_code != 200 or "html" not in r.headers.get("content-type", "html") or tdm_marked(r):
                 continue
             stored = store_document(db, tenant_id, item_id, url, parse_html(r.text, url))
             if stored is not None:
