@@ -37,7 +37,7 @@ def test_the_base_is_read_for_every_newsroom_whatever_it_follows(db, tenant):
     runner.collect_now(tenant, datetime.now(UTC), done, failed)
     assert not failed
     # Every base feed was read, besides the newsroom's own sources.
-    assert {url for _, url, _, _ in news_base.BASE} <= set(asked)
+    assert {t[1] for t in news_base.BASE} <= set(asked)
     archive = repo.archive_of(db, tenant)
     with db.tenant(archive) as s:
         titles = set(s.execute(text("SELECT title FROM editor.source_items")).scalars())
@@ -77,3 +77,21 @@ def test_the_index_ranks_topics_by_section(db, tenant):
     assert "2 notizie" in page and "built-in" not in page
     only = c.get("/index?section=economy").text
     assert "interest" in only.lower() and "Bari" not in only
+
+
+def test_every_base_feed_has_its_country_and_none_dominates():
+    """The base, balanced by country (Francesco 2026-11-07: 55 of 150 feeds were
+    American): every feed says its country, and world and economy news come
+    from at most six feeds of one foreign country."""
+    import re
+    from collections import Counter
+
+    assert all(re.fullmatch(r"[A-Z]{2}|", t[4]) for t in news_base.BASE)
+    assert len({t[1] for t in news_base.BASE}) == len(news_base.BASE)
+    general = Counter(t[4] for t in news_base.BASE if t[3] in ("world", "economy") and t[4])
+    home = {"IT", "DE", "FR", "ES"}  # the national news of the dashboard's languages
+    assert max(n for c, n in general.items() if c not in home) <= 7
+    assert sum(1 for n in general.values() if n >= 2) >= 25
+    nyt = "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    assert news_base.voice(1, nyt) == news_base.voice(2, "https://feeds.npr.org/1004/rss.xml") == "country:US"
+    assert news_base.voice(3, "https://example.org/feed") == "source:3"

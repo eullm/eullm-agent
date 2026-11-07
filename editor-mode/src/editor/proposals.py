@@ -10,6 +10,7 @@ that is not stored.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, select, update
@@ -30,6 +31,16 @@ log = logging.getLogger(__name__)
 REASONS = ("already_covered", "off_topic", "too_generic", "unreliable_source")
 SOURCE_PENALTY = 0.15
 
+# Where a story happens, asked to the model with the proposal: the automatic newsroom keeps each
+# foreign country to a share of the day (autopilot.choose; Francesco 2026-11-07: "una grande
+# sproporzione verso articoli incentrati sugli stati uniti").
+COUNTRY = (
+    "ISO 3166-1 alpha-2 code of the country the story is about, e.g. US, IT, CN; EU for the institutions "
+    "of the European Union; empty when it is about several countries or none"
+)
+_ISO = re.compile(r"^[A-Z]{2}$")
+SECTION = "the one of the site's sections it belongs to, written exactly as listed; empty when none are listed"
+
 FORMATS = ["news", "analysis", "guide", "tutorial", "review", "comparison", "opinion", "interview", "data"]
 MIN_OPPORTUNITY = 35.0
 MIN_ITEMS = 2
@@ -44,7 +55,9 @@ SYSTEM = (
     "original article for the site described. Write in the site's language. Reply with JSON only: "
     '{"title": "<headline, max 120 chars>", "angle": "<the specific angle for this site, 1-3 sentences>", '
     '"why_now": "<why this matters now, from the items>", "format": "<one of: ' + ", ".join(FORMATS) + '>", '
-    '"citations": [<ids of the items the proposal relies on>]}. Cite at least one id; cite only ids from the list.'
+    '"country": "<' + COUNTRY + '>", "section": "<' + SECTION + '>", '
+    '"citations": [<ids of the items the proposal relies on>]}. '
+    "Cite at least one id; cite only ids from the list."
 )
 
 
@@ -71,6 +84,8 @@ def _validator(allowed_ids: set[int]):
             "angle": str(v.get("angle") or "").strip()[:1000],
             "why_now": str(v.get("why_now") or "").strip()[:1000],
             "format": fmt,
+            "country": country if _ISO.match(country := str(v.get("country") or "").strip().upper()) else "",
+            "section": str(v.get("section") or "").strip()[:80],
             "citations": list(dict.fromkeys(ids)),
         }
 
@@ -126,6 +141,21 @@ def lessons(s, site_id: int, days: int = 60) -> list[str]:
     return out
 
 
+def mix(o: dict, profile: dict) -> dict:
+    """The country and section of a proposal, for the automatic newsroom's
+    balance (autopilot.choose): the section only when the site lists it."""
+    from .autopilot import section_of, settings_of
+
+    out = {"country": o["country"]} if o.get("country") else {}
+    if sec := section_of(settings_of(profile), o.get("section")):
+        out["section"] = sec
+    return out
+
+
+def full_line(full: list[str] | None) -> list[str]:
+    return [f"Today the site already has enough of: {'; '.join(full)}. Choose something else."] if full else []
+
+
 def _prompt(profile: dict, label: str, items, learned: list[str] | None = None) -> str:
     from .autopilot import brief_lines
 
@@ -165,7 +195,7 @@ def made_today(s, site_id: int, since: datetime, outlets: bool = False) -> int:
 
 
 def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], core: CoreClient | None = None,
-            limit: int | None = None, outlets: int = 0) -> list[int]:
+            limit: int | None = None, outlets: int = 0, full: list[str] | None = None) -> list[int]:
     """Create proposals for the best opportunities; returns their ids."""
     p = m.editorial_profiles
     created = []
@@ -193,7 +223,8 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
         if core is not None:
             try:
                 with usage.tagged(db, tenant_id, "proposal", site_id=site_id, ref=f"topic:{o.topic_id}"):
-                    value, calls = core.chat_json(SYSTEM, _prompt(prof.body, label, items, learned), _validator(allowed))
+                    value, calls = core.chat_json(SYSTEM, _prompt(prof.body, label, items, learned + full_line(full)),
+                                                 _validator(allowed))
                 by = "model"
             except CoreError as e:
                 log.warning("proposal for topic %s failed: %s", o.topic_id, e)
@@ -205,6 +236,8 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
                 # The dashboard explains a proposal made without the model.
                 "why_now": "",
                 "format": "analysis",
+                "country": "",
+                "section": "",
                 "citations": [it.id for it in items[:3]],
             }
         with db.tenant(tenant_id) as s:
@@ -212,7 +245,8 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
                 tenant_id=tenant_id, site_id=site_id, topic_id=o.topic_id, profile_id=prof.id,
                 opportunity=o.score, title=value["title"], angle=value["angle"], why_now=value["why_now"],
                 format=value["format"], generated_by=by,
-                basis={"kind": "topic"} | ({"outlets": len({it.source_id for it in items})} if outlets > 1 else {}),
+                basis={"kind": "topic"} | mix(value, prof.body)
+                | ({"outlets": len({it.source_id for it in items})} if outlets > 1 else {}),
             ).returning(m.proposals.c.id)).scalar_one()
             s.execute(insert(m.proposal_citations).values(
                 [{"tenant_id": tenant_id, "proposal_id": pid, "item_id": i} for i in value["citations"]]))
@@ -221,7 +255,7 @@ def propose(db, tenant_id: str, site_id: int, opportunities: list[Opportunity], 
 
 
 def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit: int | None = None,
-         now: datetime | None = None, outlets: int = 0) -> list[int]:
+         now: datetime | None = None, outlets: int = 0, full: list[str] | None = None) -> list[int]:
     """The day's proposals: first the topics told by several sources, then,
     for what is left of the number, the best single news for the site
     (picks.fill). Never empty while news comes in. With `outlets` (the
@@ -238,8 +272,8 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit
     if only:
         limit = min(limit, quotas.PROPOSALS_ONLY_PER_DAY)
     ids = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=limit,
-                  outlets=outlets)
-    return ids + picks.fill(db, tenant_id, site_id, limit - len(ids), core, now=now, outlets=outlets)
+                  outlets=outlets, full=full)
+    return ids + picks.fill(db, tenant_id, site_id, limit - len(ids), core, now=now, outlets=outlets, full=full)
 
 
 TITLES_SYSTEM = (
@@ -248,7 +282,8 @@ TITLES_SYSTEM = (
     "different angles, not the same headline reworded. Write in the site's language. Reply with JSON only: "
     '{{"options": [{{"title": "<headline, max 120 chars>", "angle": "<what the article says, for this site, '
     '1-3 sentences>", "why_now": "<why this matters now, from the items>", "format": "<one of: '
-    + ", ".join(FORMATS) + '>", "citations": [<ids of the items it relies on>]}}]}}. '
+    + ", ".join(FORMATS) + '>", "country": "<' + COUNTRY + '>", "section": "<' + SECTION + '>", '
+    '"citations": [<ids of the items it relies on>]}}]}}. '
     "Cite at least one id in each option; cite only ids from the list."
 )
 

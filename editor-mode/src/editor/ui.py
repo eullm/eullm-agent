@@ -1055,6 +1055,7 @@ def register(app, ctx) -> None:
             "cost": cost[0], "calls": cost[1],
             "discards": props.discards(s, site.id, month_ago),
             "auto_month": auto_month(s, site.id),
+            "home_country": autopilot.HOME.get(tr.main_language(s, site.id) or "", ""),
         }
 
     def auto_month(s, site_id: int) -> dict | None:
@@ -1381,6 +1382,7 @@ def register(app, ctx) -> None:
                 enabled: str = Form(""), credit: str = Form(""), language: str = Form("it"),
                 on_problem: str = Form("fix"), morning_share: int = Form(50), borrow: int = Form(2),
                 extra_credits: int = Form(0), extra_min_opportunity: float = Form(65),
+                country_share: int = Form(34), home_country: str = Form(""), section_share: int = Form(25),
                 action: str = Form("save"), c: auth.Caller = Depends(ctx.need("owner"))):
         def lines(x: str) -> list[str]:
             return [y.strip() for y in re.split(r"[\n,;]", x) if y.strip()]
@@ -1390,7 +1392,8 @@ def register(app, ctx) -> None:
                   "target_id": int(target_id) if target_id.isdigit() else None, "credit": bool(credit),
                   "on_problem": on_problem if on_problem in autopilot.ON_PROBLEM else "fix",
                   "morning_share": morning_share, "borrow": borrow, "extra_credits": extra_credits,
-                  "extra_min_opportunity": extra_min_opportunity}
+                  "extra_min_opportunity": extra_min_opportunity, "country_share": country_share,
+                  "home_country": home_country, "section_share": section_share}
         with db.tenant(c.tenant_id) as s:  # set in "Come scrive il sito", not here
             current = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar())

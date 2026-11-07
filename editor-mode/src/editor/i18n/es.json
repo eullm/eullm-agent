@@ -2634,5 +2634,11 @@
  "Le proposte": "Las propuestas",
  "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "No escrito por la redacción automática: «{title}». No ha costado nada y otra propuesta ocupa su lugar.",
  "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "solo se pudieron leer {n} palabras de la noticia: demasiado pocas para escribir un artículo sin inventar",
- "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "El redactor jefe IA relee el Punto de la Noche con título y subtítulo neutros"
+ "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "El redactor jefe IA relee el Punto de la Noche con título y subtítulo neutros",
+ "Massimo per paese straniero (%)": "Máximo para un país extranjero (%)",
+ "degli articoli del giorno sullo stesso paese, per esempio gli Stati Uniti; 0 = nessun limite": "de los artículos del día sobre el mismo país, por ejemplo Estados Unidos; 0 = sin límite",
+ "Paese del sito": "País del sitio",
+ "sigla di due lettere, senza limite; vuoto = dalla lingua del sito": "código de dos letras, sin límite; vacío = según el idioma del sitio",
+ "Massimo per rubrica (%)": "Máximo para una sección (%)",
+ "degli articoli del giorno nella stessa rubrica, se il sito ne ha più di una; 0 = nessun limite": "de los artículos del día en la misma sección, si el sitio tiene más de una; 0 = sin límite"
 }

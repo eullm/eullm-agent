@@ -21,14 +21,15 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
-from . import repo
+from . import news_base, repo
 from .db import Database
 
-FORMULA_VERSION = "hype-v1"
+# v2 (0.31.5): coverage counts countries for the outlets of the news base, not outlets.
+FORMULA_VERSION = "hype-v2"
 
 WEIGHTS = {
     "velocity": 0.30,  # items in the last 24 hours against the previous days
-    "coverage": 0.20,  # distinct sources talking about it
+    "coverage": 0.20,  # distinct voices talking about it: countries of the news base, other sources one by one
     "community": 0.20,  # Hacker News points and comments
     "code": 0.10,  # GitHub stars gained
     "models": 0.10,  # Hugging Face trending score
@@ -44,6 +45,7 @@ class Member:
     metrics: dict = field(default_factory=dict)
     # (observed_at, numeric metrics) oldest first
     observations: list[tuple[datetime, dict]] = field(default_factory=list)
+    voice: str = ""  # news_base.voice; empty: the source itself
 
 
 @dataclass
@@ -80,7 +82,7 @@ def components(members: list[Member], now: datetime) -> dict[str, float]:
     ratio = len(recent) / max(base_per_day, 0.5)
     out["velocity"] = ratio / (ratio + 1)
     window = [x for x in members if x.at >= now - timedelta(days=3)]
-    out["coverage"] = min(1.0, max(len({x.source_id for x in window}) - 1, 0) / 4)
+    out["coverage"] = min(1.0, max(len({x.voice or x.source_id for x in window}) - 1, 0) / 4)
 
     hn = [x for x in members if x.kind == "hackernews"]
     if hn:
@@ -122,7 +124,7 @@ def hype(members: list[Member], now: datetime | None = None) -> Hype:
 def load_members(s, topic_id: int) -> list[Member]:
     si, src = m.source_items, m.sources
     rows = s.execute(
-        select(si.c.id, si.c.source_id, src.c.kind, si.c.published_at, si.c.fetched_at, si.c.metrics)
+        select(si.c.id, si.c.source_id, src.c.kind, src.c.url, si.c.published_at, si.c.fetched_at, si.c.metrics)
         .join(m.topic_items, m.topic_items.c.item_id == si.c.id)
         .join(src, src.c.id == si.c.source_id)
         .where(m.topic_items.c.topic_id == topic_id)
@@ -137,7 +139,8 @@ def load_members(s, topic_id: int) -> list[Member]:
         ):
             obs[o.item_id].append((o.observed_at, o.metrics))
     return [
-        Member(r.source_id, r.kind, r.published_at or r.fetched_at, r.metrics or {}, obs[r.id]) for r in rows
+        Member(r.source_id, r.kind, r.published_at or r.fetched_at, r.metrics or {}, obs[r.id],
+               news_base.voice(r.source_id, r.url)) for r in rows
     ]
 
 

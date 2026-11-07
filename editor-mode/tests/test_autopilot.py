@@ -698,3 +698,73 @@ def test_the_writer_never_talks_about_its_sources():
     assert drafts.about_sources("What is not yet clear")
     assert not drafts.about_sources("Le fonti rinnovabili disponibili crescono")
     assert "never your sources or your checking" in drafts.SYSTEM
+
+
+def test_one_foreign_country_keeps_to_its_share_of_the_day(db, tenant):
+    """Francesco 2026-11-07: "una grande sproporzione verso articoli incentrati
+    sugli stati uniti". Each proposal carries the country of its story; the
+    automatic newsroom gives one foreign country a third of the day at most."""
+    one = props._validator({1})
+    assert one({"title": "Un titolo qualsiasi", "citations": [1], "country": "us"})["country"] == "US"
+    assert one({"title": "Un titolo qualsiasi", "citations": [1], "country": "USA"})["country"] == ""
+    assert one({"title": "Un titolo qualsiasi", "citations": [1]})["country"] == ""
+    assert ap.check_settings({"home_country": "it"})["home_country"] == "IT"
+    with pytest.raises(ValueError):
+        ap.check_settings({"home_country": "1T"})
+    assert ap.country_cap({"per_day": 6, "country_share": 34}) == 2
+    assert ap.country_cap({"per_day": 24, "country_share": 34}) == 8
+    assert ap.country_cap({"per_day": 6, "country_share": 0}) is None
+
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    now = datetime(2026, 11, 7, 9, tzinfo=UTC)
+    stories = [("Elezioni di metà mandato, il Senato cambia maggioranza", "US"),
+               ("La Federal Reserve taglia i tassi di un quarto di punto", "US"),
+               ("Sciopero dei portuali sulla costa occidentale americana", "US"),
+               ("Manovra, il governo presenta gli emendamenti al Senato", "IT")]
+    with db.tenant(tenant) as s:
+        first = s.execute(select(m.proposals).where(m.proposals.c.site_id == site_id)).first()
+        s.execute(m.proposals.delete().where(m.proposals.c.site_id == site_id))
+        ids = [s.execute(insert(m.proposals).values(
+            tenant_id=tenant, site_id=site_id, topic_id=first.topic_id, profile_id=first.profile_id, opportunity=60,
+            title=title, angle="", format="news", generated_by="model", status="proposed", created_at=now,
+            basis={"kind": "news", "country": country}).returning(m.proposals.c.id)).scalar_one()
+            for title, country in stories]
+    cfg = {**ap.settings_of(None), "min_sources": 0, "min_opportunity": 0, "per_day": 3, "home_country": "IT"}
+    with db.tenant(tenant) as s:
+        picked = ap.choose(s, site_id, cfg, now, 10)
+        countries = [r.basis["country"] for r in picked]
+        assert countries.count("US") == 1 and "IT" in countries  # a third of 3; the site's own country is free
+        assert len(ap.choose(s, site_id, {**cfg, "country_share": 0}, now, 10)) == len(ids)
+        # An American story already written today: no other one until tomorrow.
+        s.execute(update(m.proposals).where(m.proposals.c.id == ids[0]).values(status="accepted", decided_by=ap.AUTO))
+        assert ap.mix_today(s, site_id, now.replace(hour=0), now) == ({"US": 1}, {})
+        assert [r.basis["country"] for r in ap.choose(s, site_id, cfg, now, 10)] == ["IT"]
+        assert ap.full_today(s, site_id, cfg, now, now.replace(hour=0)) == ["news about US"]
+
+
+def test_one_section_keeps_to_its_share_of_the_day(db, tenant):
+    """Francesco 2026-11-07, aitoday.it: Mondo 32, Economia 18, Clima 1. Each
+    proposal carries the site's section it belongs to; one section has a
+    quarter of the day at most."""
+    assert props._validator({1})({"title": "Un titolo qualsiasi", "citations": [1], "section": " Mondo "})["section"] == "Mondo"
+    cfg = {**ap.settings_of(None), "sections": ["Mondo", "Scienza", "Clima"], "per_day": 4,
+           "min_sources": 0, "min_opportunity": 0}
+    assert ap.section_cap(cfg) == 1 and ap.section_cap({**cfg, "sections": ["Mondo"]}) is None
+    assert ap.section_of(cfg, "mondo") == "Mondo" and ap.section_of(cfg, "Sport") is None
+    assert props.mix({"country": "US", "section": "clima"}, {"settings": {"auto": cfg}}) == \
+        {"country": "US", "section": "Clima"}
+    site_id = setup_site(db, tenant)
+    props.propose(db, tenant, site_id, opp.score_site(db, tenant, site_id), None, limit=5)
+    now = datetime(2026, 11, 7, 9, tzinfo=UTC)
+    stories = [("Vertice a Bruxelles sui dazi europei", "Mondo"), ("Tregua a Gaza, i negoziati riprendono", "Mondo"),
+               ("Scoperta una nuova cometa interstellare", "Scienza")]
+    with db.tenant(tenant) as s:
+        first = s.execute(select(m.proposals).where(m.proposals.c.site_id == site_id)).first()
+        s.execute(m.proposals.delete().where(m.proposals.c.site_id == site_id))
+        for title, section in stories:
+            s.execute(insert(m.proposals).values(
+                tenant_id=tenant, site_id=site_id, topic_id=first.topic_id, profile_id=first.profile_id,
+                opportunity=60, title=title, angle="", format="news", generated_by="model", status="proposed",
+                created_at=now, basis={"kind": "news", "section": section}))
+        assert sorted(r.basis["section"] for r in ap.choose(s, site_id, cfg, now, 10)) == ["Mondo", "Scienza"]

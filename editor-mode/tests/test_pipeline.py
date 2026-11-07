@@ -206,7 +206,7 @@ def test_topics_labels_and_scores(db, tenant):
     assert hn_topic and all("community" not in h.missing for h in hn_topic)
     with db.tenant(tenant) as s:
         stored = s.execute(text("SELECT formula_version, missing FROM editor.trend_scores LIMIT 1")).one()
-    assert stored[0] == "hype-v1"
+    assert stored[0] == "hype-v2"
 
 
 def test_topics_without_core_use_keyword_labels(db, tenant):

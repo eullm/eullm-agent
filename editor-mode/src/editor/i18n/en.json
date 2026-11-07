@@ -2634,5 +2634,11 @@
  "Le proposte": "The proposals",
  "Non scritto dalla redazione automatica: «{title}». Non è costato niente e un'altra proposta prende il suo posto.": "Not written by the automatic newsroom: “{title}”. It cost nothing and another proposal takes its place.",
  "della notizia si sono lette solo {n} parole: troppo poche per scriverne un articolo senza inventare": "only {n} words of the news could be read: too few to write an article without making things up",
- "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "The AI editor-in-chief rereads the Evening Brief with a plain title and subtitle"
+ "Il caporedattore AI rilegge il Punto della Sera con titolo e sommario neutri": "The AI editor-in-chief rereads the Evening Brief with a plain title and subtitle",
+ "Massimo per paese straniero (%)": "Most for one foreign country (%)",
+ "degli articoli del giorno sullo stesso paese, per esempio gli Stati Uniti; 0 = nessun limite": "of the day's articles on the same country, for example the United States; 0 = no limit",
+ "Paese del sito": "Site's country",
+ "sigla di due lettere, senza limite; vuoto = dalla lingua del sito": "two-letter code, with no limit; empty = from the site's language",
+ "Massimo per rubrica (%)": "Most for one section (%)",
+ "degli articoli del giorno nella stessa rubrica, se il sito ne ha più di una; 0 = nessun limite": "of the day's articles in the same section, when the site has more than one; 0 = no limit"
 }

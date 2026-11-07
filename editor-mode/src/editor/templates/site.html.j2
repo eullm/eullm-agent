@@ -104,6 +104,9 @@
         <div class="row fields top">
           <label class="field">{{ _('Opportunità minima') }}<input name="min_opportunity" type="number" min="0" max="100" value="{{ a.min_opportunity|int }}"><span class="hint">{{ _('su 100: quanto la notizia conviene al sito') }}</span></label>
           <label class="field">{{ _('Testate sullo stesso fatto') }}<input name="min_sources" type="number" min="1" max="3" value="{{ a.min_sources }}"><span class="hint">{{ _('prima queste; se mancano, le notizie migliori con meno testate') }}</span></label>
+          <label class="field">{{ _('Massimo per paese straniero (%)') }}<input name="country_share" type="number" min="0" max="100" value="{{ a.country_share }}"><span class="hint">{{ _('degli articoli del giorno sullo stesso paese, per esempio gli Stati Uniti; 0 = nessun limite') }}</span></label>
+          <label class="field">{{ _('Paese del sito') }}<input name="home_country" maxlength="2" size="3" placeholder="{{ numbers.home_country }}" value="{{ a.home_country }}" style="width: 5em; text-transform: uppercase;"><span class="hint">{{ _('sigla di due lettere, senza limite; vuoto = dalla lingua del sito') }}</span></label>
+          <label class="field">{{ _('Massimo per rubrica (%)') }}<input name="section_share" type="number" min="0" max="100" value="{{ a.section_share }}"><span class="hint">{{ _('degli articoli del giorno nella stessa rubrica, se il sito ne ha più di una; 0 = nessun limite') }}</span></label>
         </div>
       </fieldset>
       <fieldset class="group">
