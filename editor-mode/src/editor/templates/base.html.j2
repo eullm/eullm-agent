@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" href="/static/redazia-icon.png">
 {% include "_style.html.j2" %}
 </head>
+{% from "_icons.html.j2" import icon %}
 <body>
 <div class="shell">
 <nav class="nav" aria-label="{{ _('Sezioni') }}">
@@ -37,28 +38,26 @@
     <noscript><button class="btn sm" type="submit">{{ _('Vai') }}</button></noscript>
   </form>
   {% endif %}
-  {% if starting or active == 'start' %}<a href="/start" {% if active == 'start' %}class="on" aria-current="page"{% endif %}>{{ _('Primi passi') }}</a>{% endif %}
-  <a href="/" {% if active == 'today' %}class="on" aria-current="page"{% endif %}>{{ _('Desk') }}</a>
-  <a href="/site" {% if active == 'site' %}class="on" aria-current="page"{% endif %}>{{ _('Sito e profilo') }}</a>
-  <a href="/sources" {% if active == 'sources' %}class="on" aria-current="page"{% endif %}>{{ _('Fonti') }}</a>
-  <a href="/trends" {% if active == 'trends' %}class="on" aria-current="page"{% endif %}>{{ _('Trend e piano') }}</a>
-  <a href="/index" {% if active == 'index' %}class="on" aria-current="page"{% endif %}>{{ _('Indice notizie') }}</a>
-  <a href="/drafts" {% if active == 'drafts' %}class="on" aria-current="page"{% endif %}>{{ _('Bozze') }}</a>
-  <a href="/publications" {% if active == 'publications' %}class="on" aria-current="page"{% endif %}>{{ _('Pubblicazioni') }}</a>
+  {% if starting or active == 'start' %}<a href="/start" {% if active == 'start' %}class="on" aria-current="page"{% endif %}>{{ icon('start') }}{{ _('Primi passi') }}</a>{% endif %}
+  <a href="/" {% if active == 'today' %}class="on" aria-current="page"{% endif %}>{{ icon('desk') }}{{ _('Desk') }}</a>
+  <a href="/site" {% if active == 'site' %}class="on" aria-current="page"{% endif %}>{{ icon('site') }}{{ _('Sito e profilo') }}</a>
+  <a href="/sources" {% if active == 'sources' %}class="on" aria-current="page"{% endif %}>{{ icon('sources') }}{{ _('Fonti') }}</a>
+  <a href="/trends" {% if active == 'trends' %}class="on" aria-current="page"{% endif %}>{{ icon('trends') }}{{ _('Trend e piano') }}</a>
+  <a href="/index" {% if active == 'index' %}class="on" aria-current="page"{% endif %}>{{ icon('index') }}{{ _('Indice notizie') }}</a>
+  <a href="/drafts" {% if active == 'drafts' %}class="on" aria-current="page"{% endif %}>{{ icon('drafts') }}{{ _('Bozze') }}</a>
+  <a href="/publications" {% if active == 'publications' %}class="on" aria-current="page"{% endif %}>{{ icon('publications') }}{{ _('Pubblicazioni') }}</a>
   <span class="grow"></span>
   <div class="nav-foot">
-  <a href="/plan" class="plan-link{% if active == 'plan' %} on{% endif %}" {% if active == 'plan' %}aria-current="page"{% endif %}><span>{{ _('Il mio piano') }}</span>{% if plan_state %}<small>{{ plan_state.plan_name }} · {{ (_('{n} giorno rimasto', n=plan_state.days_left) if plan_state.days_left == 1 else _('{n} giorni rimasti', n=plan_state.days_left)) if plan_state.status == 'trialing' else plan_state.label|lower }}</small>{% elif plan_name %}<small>{{ plan_name }}</small>{% endif %}</a>
-  <a href="/guide" {% if active == 'guide' %}class="on" aria-current="page"{% endif %}>{{ _('Guida') }}</a>
-  <a href="/settings" {% if active == 'settings' %}class="on" aria-current="page"{% endif %}>{{ _('Impostazioni') }}</a>
-  {% if caller.operator %}<a href="/admin">{{ _('Amministrazione') }}</a>{% endif %}
-  <div class="who">
-    <span class="name" title="{{ caller.name }}">{{ caller.name }}</span>
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <span>{{ {'owner': _('direttore'), 'editor': _('redattore'), 'viewer': _('lettura')}[caller.role] }}</span>
-      <form method="post" action="/logout"><button class="link" type="submit">{{ _('Esci') }}</button></form>
-    </div>
+  <a href="/plan" class="plan-link{% if active == 'plan' %} on{% endif %}" {% if active == 'plan' %}aria-current="page"{% endif %}>{{ icon('plans') }}<span class="txt"><span>{{ _('Il mio piano') }}</span>{% if plan_state %}<small>{{ plan_state.plan_name }} · {{ (_('{n} giorno rimasto', n=plan_state.days_left) if plan_state.days_left == 1 else _('{n} giorni rimasti', n=plan_state.days_left)) if plan_state.status == 'trialing' else plan_state.label|lower }}</small>{% elif plan_name %}<small>{{ plan_name }}</small>{% endif %}</span></a>
+  <a href="/guide" {% if active == 'guide' %}class="on" aria-current="page"{% endif %}>{{ icon('guide') }}{{ _('Guida') }}</a>
+  <a href="/settings" {% if active == 'settings' %}class="on" aria-current="page"{% endif %}>{{ icon('settings') }}{{ _('Impostazioni') }}</a>
+  {% if caller.operator %}<a href="/admin">{{ icon('admins') }}{{ _('Amministrazione') }}</a>{% endif %}
+  <div class="who me">
+    <span class="avatar" aria-hidden="true">{{ (caller.name or '?')[:1]|upper }}</span>
+    <span class="id"><span class="name" title="{{ caller.name }}">{{ caller.name }}</span><span>{{ {'owner': _('direttore'), 'editor': _('redattore'), 'viewer': _('lettura')}[caller.role] }}</span></span>
+    <form method="post" action="/logout"><button class="out" type="submit" title="{{ _('Esci') }}" aria-label="{{ _('Esci') }}">{{ icon('logout') }}</button></form>
   </div>
-  <small class="hint" style="font-size: 11px; padding: 0 10px; overflow-wrap: anywhere;">{% if version %}Redazia {{ version }}{% endif %}</small>
+  {% if version %}<span class="version">Redazia {{ version }}</span>{% endif %}
   </div>
 </div>
 </nav>

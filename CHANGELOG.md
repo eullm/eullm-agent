@@ -16,6 +16,14 @@
   soli GPTBot, CCBot, Google-Extended e simili non conta più. Le fonti
   comuni riservate scendono a circa il 46%.
 
+- **Menu laterale più chiaro**, nella console `/admin` e nella redazione
+  (Francesco, 7 novembre: "questa barra fa un po' cagare"):
+  - un'icona per ogni voce;
+  - la voce aperta in azzurro tenue con una riga a sinistra, non più nera;
+  - in fondo una scheda con l'iniziale, l'utente, il ruolo e il pulsante per
+    uscire;
+  - la versione installata sotto la scheda.
+
 ## 0.31.7
 
 ### Changed

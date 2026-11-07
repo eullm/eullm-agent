@@ -1,41 +1,40 @@
 {# The menu of the console, the same on every page of /admin: the sale's
    main action at the top, then the sections in three groups. #}
+{% from "_icons.html.j2" import icon %}
 <nav class="nav" aria-label="{{ _('Sezioni') }}">
   <a class="brand" href="/admin"><img class="logo" src="/static/redazia-logo.webp" alt="Redazia" width="111" height="36"><small>{{ _('Amministrazione') }}</small></a>
 <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="{{ _('Sezioni') }}">
 <label for="nav-toggle" class="nav-burger" aria-hidden="true"><span></span><span></span><span></span></label>
 <div class="nav-body">
-  <div class="nav-new"><a class="btn pri" href="/admin/new">+ {{ _('Nuova redazione') }}</a></div>
+  <div class="nav-new"><a class="btn pri" href="/admin/new">{{ icon('plus') }}{{ _('Nuova redazione') }}</a></div>
   <span class="nav-label">{{ _('Clienti') }}</span>
-  <a href="/admin" {% if view in ('redazioni', 'redazione', 'nuova') %}class="on" aria-current="page"{% endif %}>{{ _('Redazioni') }}</a>
-  <a href="/admin/customers" {% if view in ('clienti', 'cliente', 'nuovo-cliente') %}class="on" aria-current="page"{% endif %}>{{ _('Clienti') }}</a>
-  <a href="/admin/payments" {% if view == 'pagamenti' %}class="on" aria-current="page"{% endif %}>{{ _('Pagamenti') }}</a>
+  <a href="/admin" {% if view in ('redazioni', 'redazione', 'nuova') %}class="on" aria-current="page"{% endif %}>{{ icon('rooms') }}{{ _('Redazioni') }}</a>
+  <a href="/admin/customers" {% if view in ('clienti', 'cliente', 'nuovo-cliente') %}class="on" aria-current="page"{% endif %}>{{ icon('customers') }}{{ _('Clienti') }}</a>
+  <a href="/admin/payments" {% if view == 'pagamenti' %}class="on" aria-current="page"{% endif %}>{{ icon('payments') }}{{ _('Pagamenti') }}</a>
   <span class="nav-label">{{ _('Vendite') }}</span>
-  <a href="/admin/plans" {% if view == 'piani' %}class="on" aria-current="page"{% endif %}>{{ _('Piani e crediti') }}</a>
-  <a href="/admin/resellers" {% if view == 'rivenditori' %}class="on" aria-current="page"{% endif %}>{{ _('Rivenditori') }}</a>
-  <a href="/admin/keys" {% if view == 'api' %}class="on" aria-current="page"{% endif %}>{{ _('Chiavi API') }}</a>
+  <a href="/admin/plans" {% if view == 'piani' %}class="on" aria-current="page"{% endif %}>{{ icon('plans') }}{{ _('Piani e crediti') }}</a>
+  <a href="/admin/resellers" {% if view == 'rivenditori' %}class="on" aria-current="page"{% endif %}>{{ icon('resellers') }}{{ _('Rivenditori') }}</a>
+  <a href="/admin/keys" {% if view == 'api' %}class="on" aria-current="page"{% endif %}>{{ icon('keys') }}{{ _('Chiavi API') }}</a>
   <span class="nav-label">{{ _('Sistema') }}</span>
-  <a href="/admin/usage" {% if view == 'consumi' %}class="on" aria-current="page"{% endif %}>{{ _('Consumi') }}</a>
+  <a href="/admin/usage" {% if view == 'consumi' %}class="on" aria-current="page"{% endif %}>{{ icon('usage') }}{{ _('Consumi') }}</a>
   {% if view == 'consumi' %}
   <a class="sub" href="#modelli">{{ _('Modello per passo') }}</a>
   <a class="sub" href="#prezzi">{{ _('Prezzi di riferimento') }}</a>
   <a class="sub" href="#articoli">{{ _('Costo per articolo') }}</a>
   {% endif %}
-  <a href="/admin/operators" {% if view == 'operatori' %}class="on" aria-current="page"{% endif %}>{{ _('Amministratori') }}</a>
-  <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on" aria-current="page"{% endif %}>{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal" style="margin-left: 6px;">{{ updates.available.version }}</span>{% endif %}</a>
-  <a href="/admin/backups" {% if view == 'backup' %}class="on" aria-current="page"{% endif %}>{{ _('Backup') }}</a>
+  <a href="/admin/operators" {% if view == 'operatori' %}class="on" aria-current="page"{% endif %}>{{ icon('admins') }}{{ _('Amministratori') }}</a>
+  <a href="/admin/updates" {% if view == 'aggiornamenti' %}class="on" aria-current="page"{% endif %}>{{ icon('updates') }}{{ _('Aggiornamenti') }}{% if updates.newer %} <span class="chip teal" style="margin-left: auto;">{{ updates.available.version }}</span>{% endif %}</a>
+  <a href="/admin/backups" {% if view == 'backup' %}class="on" aria-current="page"{% endif %}>{{ icon('backup') }}{{ _('Backup') }}</a>
   {% if mine %}<span class="nav-label">{{ _('Le tue redazioni') }}</span>
-  {% for x in mine %}<a href="/admin/enter/{{ x.tenant_id }}">{{ x.name }} <span aria-hidden="true" class="hint" style="margin-left: auto;">↗</span></a>{% endfor %}{% endif %}
+  {% for x in mine %}<a href="/admin/enter/{{ x.tenant_id }}">{{ icon('rooms') }}<span class="txt">{{ x.name }}</span><span class="end">{{ icon('out') }}</span></a>{% endfor %}{% endif %}
   <span class="grow"></span>
   <div class="nav-foot">
-  {% if updates.installed %}<small class="hint" style="font-size: 11px; padding: 0 10px;"><a href="/admin/updates">Redazia {{ updates.installed }}</a></small>{% endif %}
-  <div class="who">
-    <span class="name" title="{{ me.email }}">{{ me.email }}</span>
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <span>{{ _('amministratore') }}</span>
-      <form method="post" action="/logout"><button class="link" type="submit">{{ _('Esci') }}</button></form>
-    </div>
+  <div class="who me">
+    <span class="avatar" aria-hidden="true">{{ (me.email or '?')[:1]|upper }}</span>
+    <span class="id"><span class="name" title="{{ me.email }}">{{ me.email }}</span><span>{{ _('amministratore') }}</span></span>
+    <form method="post" action="/logout"><button class="out" type="submit" title="{{ _('Esci') }}" aria-label="{{ _('Esci') }}">{{ icon('logout') }}</button></form>
   </div>
+  {% if updates.installed %}<a class="version" href="/admin/updates">Redazia {{ updates.installed }}</a>{% endif %}
   </div>
 </div>
 </nav>
