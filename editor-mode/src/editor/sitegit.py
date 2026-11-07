@@ -224,7 +224,8 @@ def front_matter(fmt: Format, payload: dict, slug: str, when: datetime, image_re
     if not fmt.learned:
         fm = {"title": payload["title"], "description": description, "slug": slug, "date": when.isoformat(),
               "lang": payload.get("language"), "section": payload.get("section"), "keywords": tags,
-              "image": image_ref, "image_alt": image_alt, "translation_of": payload.get("translation_of")}
+              "image": image_ref, "image_alt": image_alt, "translation_of": payload.get("translation_of"),
+              "recipe": payload.get("recipe")}
         return "---\n" + "\n".join(f"{k}: {_q(v)}" for k, v in fm.items() if v not in (None, "")) + "\n---\n"
     values = {"title": payload["title"], "description": description, "slug": slug,
               "lang": payload.get("language"), "section": payload.get("section"), "tags": tags,
@@ -266,6 +267,9 @@ def front_matter(fmt: Format, payload: dict, slug: str, when: datetime, image_re
     # posts may not have yet, added for translations.
     if payload.get("translation_of"):
         lines.append(f"translation_of: {_q(payload['translation_of'])}")
+    # A recipe's card (ingredients, steps, servings, times), for the site's schema.org Recipe: JSON is YAML.
+    if payload.get("recipe"):
+        lines.append(f"recipe: {_q(payload['recipe'])}")
     return "---\n" + "\n".join(lines) + "\n---\n"
 
 

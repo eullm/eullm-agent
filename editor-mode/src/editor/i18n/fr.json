@@ -2658,5 +2658,8 @@
  "Una guida sul tema, scritta dalle fonti qui sotto.": "Un guide sur le thème, rédigé à partir des sources ci-dessous.",
  "Il tuo sito non ha articoli su «{theme}», uno degli argomenti del profilo.": "Votre site n'a pas d'articles sur « {theme} », l'un des sujets de son profil.",
  "Su «{theme}» il tuo sito ha {n} articoli, l'ultimo del {date}: è ora di tornarci.": "Votre site a {n} articles sur « {theme} », le dernier du {date} : il est temps d'y revenir.",
- "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Votre site n'a que {n} articles sur « {theme} », moins que sur les autres sujets de son profil."
+ "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Votre site n'a que {n} articles sur « {theme} », moins que sur les autres sujets de son profil.",
+ "ricetta": "recette",
+ "confronto": "comparatif",
+ "dati": "données"
 }

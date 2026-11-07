@@ -2658,5 +2658,8 @@
  "Una guida sul tema, scritta dalle fonti qui sotto.": "Ein Ratgeber zum Thema, geschrieben aus den Quellen unten.",
  "Il tuo sito non ha articoli su «{theme}», uno degli argomenti del profilo.": "Deine Website hat keine Artikel zu «{theme}», einem der Themen ihres Profils.",
  "Su «{theme}» il tuo sito ha {n} articoli, l'ultimo del {date}: è ora di tornarci.": "Deine Website hat {n} Artikel zu «{theme}», der letzte vom {date}: Zeit, darauf zurückzukommen.",
- "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Deine Website hat nur {n} Artikel zu «{theme}», weniger als zu den anderen Themen ihres Profils."
+ "Su «{theme}» il tuo sito ha solo {n} articoli, meno degli altri argomenti del profilo.": "Deine Website hat nur {n} Artikel zu «{theme}», weniger als zu den anderen Themen ihres Profils.",
+ "ricetta": "Rezept",
+ "confronto": "Vergleich",
+ "dati": "Daten"
 }

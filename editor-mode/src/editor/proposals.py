@@ -41,7 +41,8 @@ COUNTRY = (
 _ISO = re.compile(r"^[A-Z]{2}$")
 SECTION = "the one of the site's sections it belongs to, written exactly as listed; empty when none are listed"
 
-FORMATS = ["news", "analysis", "guide", "tutorial", "review", "comparison", "opinion", "interview", "data"]
+FORMATS = ["news", "analysis", "guide", "tutorial", "review", "comparison", "opinion", "interview", "data",
+           "recipe"]  # recipe: only when the items give a whole recipe (drafts.RECIPE)
 MIN_OPPORTUNITY = 35.0
 MIN_ITEMS = 2
 MIN_SOURCES = 2  # the items come from at least two different sources

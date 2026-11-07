@@ -45,7 +45,7 @@ ORIGINS = {
 FORMATS = {
     "analysis": N_("analisi"), "news": N_("notizia"), "opinion": N_("opinione"), "guide": N_("guida"),
     "how-to": N_("guida"), "tutorial": N_("guida"), "interview": N_("intervista"), "review": N_("recensione"),
-    "explainer": N_("spiegazione"),
+    "explainer": N_("spiegazione"), "recipe": N_("ricetta"), "comparison": N_("confronto"), "data": N_("dati"),
 }
 KINDS = {"rss": "RSS", "hackernews": "HN", "github": "GitHub", "huggingface": "Hugging Face", "arxiv": "arXiv"}
 TARGET_KINDS = {"wordpress": "WordPress", "github": N_("GitHub (repo del sito)"), "webhook": "Webhook",

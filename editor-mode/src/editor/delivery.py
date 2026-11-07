@@ -71,12 +71,18 @@ def article(s, draft_id: int, public_url: str = "") -> dict | None:
     }
     if out["approved_at"] is not None and out["jsonld"]:
         out["jsonld"][0]["datePublished"] = out["jsonld"][0]["dateModified"] = out["approved_at"].isoformat()
+        for item in out["jsonld"][1:]:  # a recipe's card: the same date
+            if "datePublished" in item:
+                item["datePublished"] = out["approved_at"].isoformat()
     out["image"] = None
     if img is not None:
         ext = "png" if img.mime == "image/png" else "jpg"
         base = public_url.rstrip("/")
         out["image"] = {"file": f"cover.{ext}", "alt": img.alt, "type": img.mime, "content": bytes(img.content),
                         "url": f"{base}/media/{img.token}" if base else None}
+        for item in out["jsonld"] or []:  # Google shows a recipe's card only with its picture
+            if item.get("@type") == "Recipe" and out["image"]["url"]:
+                item["image"] = [out["image"]["url"]]
     return out
 
 
@@ -259,7 +265,8 @@ def json_feed(arts: list[dict], site: str | None, url: str) -> dict:
             "_redazia": {"subtitle": a["subtitle"], "slug": a["slug"], "seo_title": a["seo_title"],
                          "meta_description": a["meta_description"], "keyphrase": a["keyphrase"],
                          "markdown": a["markdown"], "image_alt": img["alt"] if img else None,
-                         "sources": a["sources"], "jsonld": a["jsonld"], "translation_of": a["translation_of"]},
+                         "sources": a["sources"], "jsonld": a["jsonld"], "translation_of": a["translation_of"],
+                         "recipe": a.get("recipe")},
         }.items() if v is not None})
     return {"version": "https://jsonfeed.org/version/1.1", "title": site or "Redazia",
             "home_page_url": f"https://{site}/" if site else None, "feed_url": url, "items": items}
