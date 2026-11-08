@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.33.2
+
+### Changed
+
+- **Console › Aggiornamenti: solo gli ultimi cinque** (Francesco, 8
+  novembre). Lo storico mostrava fino a 30 aggiornamenti in una tabella
+  sempre più lunga, e la barra di un aggiornamento in corso finiva in
+  fondo alla pagina, sotto la tabella. Ora la barra sta subito sotto lo
+  stato; sotto ci sono gli ultimi cinque aggiornamenti e i precedenti
+  restano chiusi in "Aggiornamenti precedenti".
+
 ## 0.33.1
 
 ### Changed
