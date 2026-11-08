@@ -112,6 +112,7 @@
 {% endif %}
 <section class="card pad" aria-labelledby="h-people">
   <h2 id="h-people">{{ _('Persone della redazione') }}</h2>
+  {% if seats[1] is not none %}<p class="lead">{{ _('Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.', used=seats[0], n=seats[1]) }}</p>{% endif %}
   <p class="hint">{{ _('Ognuno entra con la sua email e la sua password. Lettura vede, redattore decide le proposte e le bozze, direttore approva profili, fonti e pubblicazioni e gestisce le persone.') }}</p>
   <div class="scroll">
     <table style="min-width: 560px;">
