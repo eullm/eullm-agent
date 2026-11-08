@@ -80,7 +80,8 @@ def money(cents: int | None, currency: str = "EUR") -> str:
 
 def plans(admin, public_only: bool = False) -> list[dict]:
     p = m.plans
-    q = select(p).order_by(p.c.sort, p.c.code)
+    # Cheapest first (Francesco 2026-11-08), plans without a price last.
+    q = select(p).order_by(p.c.price_month_cents.is_(None), p.c.price_month_cents, p.c.sort, p.c.code)
     if public_only:
         q = q.where(p.c.public)
     with accounts._read(admin) as conn:
@@ -127,15 +128,22 @@ def plan_code_of(name: str) -> str:
 def create_plan(admin, code: str, name: str) -> str:
     """A new plan in the catalogue, hidden from the public site until its
     prices and limits are set and it is made public."""
-    code = (code or "").strip().lower() or plan_code_of(name)
+    typed = (code or "").strip().lower()
+    code = typed or plan_code_of(name)
     if not re.fullmatch(r"[a-z0-9-]{1,40}", code):
         raise BillingError(t("il codice è fatto di lettere minuscole, numeri e trattini (es. pro-plus)"))
     name = (name or "").strip()[:100]
     if not name:
         raise BillingError(t("il piano ha bisogno di un nome"))
     with admin.engine.begin() as conn:
-        if conn.execute(select(m.plans.c.code).where(m.plans.c.code == code)).first() is not None:
-            raise BillingError(t("il piano {code} esiste già", code=code))
+        taken = set(conn.execute(select(m.plans.c.code)).scalars())
+        if code in taken and typed:
+            owner = conn.execute(select(m.plans.c.name).where(m.plans.c.code == code)).scalar()
+            raise BillingError(t("il codice {code} è già del piano {name}", code=code, name=owner))
+        # A plan renamed keeps its code: a new plan with the old name gets the next free one.
+        base, n = code[:36], 2
+        while code in taken:
+            code, n = f"{base}-{n}", n + 1
         last = conn.execute(select(func.max(m.plans.c.sort))).scalar() or 0
         conn.execute(insert(m.plans).values(code=code, name=name, description="", currency="EUR", trial_days=0,
                                             public=False, sort=last + 10, autopilot=True, evening=False))

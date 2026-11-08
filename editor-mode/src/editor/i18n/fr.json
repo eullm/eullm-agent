@@ -2672,5 +2672,6 @@
  "I crediti servono per andare oltre il piano.": "Les crédits servent à aller au-delà de l'offre.",
  "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Un article en plus coûte {a} crédits, une traduction dans une langue que le site n'a pas {t}, une couverture refaite après les deux gratuites {c}. Les crédits du mois passent en premier, puis ceux des packs, qui n'expirent pas. La rédaction automatique ne les utilise que si tu lui as permis des articles en plus avec les crédits.",
  "Ultimi aggiornamenti": "Dernières mises à jour",
- "Aggiornamenti precedenti ({n})": "Mises à jour précédentes ({n})"
+ "Aggiornamenti precedenti ({n})": "Mises à jour précédentes ({n})",
+ "il codice {code} è già del piano {name}": "le code {code} appartient déjà à l'offre {name}"
 }

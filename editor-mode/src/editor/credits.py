@@ -222,7 +222,7 @@ def set_prices(admin, values: dict) -> None:
 def packs(admin, active_only: bool = False, s=None) -> list[dict]:
     """The packs; with `s`, read in that session (a newsroom's page)."""
     p = m.credit_packs
-    q = select(p).order_by(p.c.sort, p.c.code)
+    q = select(p).order_by(p.c.price_cents, p.c.sort, p.c.code)  # cheapest first
     if active_only:
         q = q.where(p.c.active)
     if s is not None:
