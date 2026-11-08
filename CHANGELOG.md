@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.33.2
+
+### Changed
+
+- **Console › Aggiornamenti: solo gli ultimi cinque** (Francesco, 8
+  novembre). Lo storico mostrava fino a 30 aggiornamenti in una tabella
+  sempre più lunga, e la barra di un aggiornamento in corso finiva in
+  fondo alla pagina, sotto la tabella. Ora la barra sta subito sotto lo
+  stato; sotto ci sono gli ultimi cinque aggiornamenti e i precedenti
+  restano chiusi in "Aggiornamenti precedenti".
+- **Piani e pacchetti di crediti in ordine di prezzo** (Francesco, 8
+  novembre), dal più economico, nella console e in `/api/public/plans`,
+  quindi anche su redazia.com. I piani senza prezzo vanno in fondo.
+
+### Fixed
+
+- **Un piano nuovo con il nome di uno rinominato.** Un piano rinominato
+  tiene il suo codice: creandone un altro con il vecchio nome, la console
+  rispondeva "il piano esiste già". Ora il nuovo piano prende il primo
+  codice libero (`solo-2`). Se il codice lo scrivi tu ed è già usato, la
+  console dice di quale piano è.
+
 ## 0.33.1
 
 ### Changed

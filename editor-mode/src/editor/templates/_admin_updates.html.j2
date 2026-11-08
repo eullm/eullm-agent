@@ -37,22 +37,6 @@
         {% if st.step in ('backup', 'pull') %}{{ _('Non è cambiato niente: il server è ancora alla {old}.', old=st['from']) }}{% else %}{{ _('La {version} è installata ma non risponde come dovrebbe: guarda il registro. Il backup fatto prima è nella cartella backup del server.', version=st.version) }}{% endif %}</p>{% endif %}
       {% if updates.log %}<details class="act sm"><summary><span class="ico" aria-hidden="true">≡</span>{{ _('Registro') }}</summary><pre style="white-space: pre-wrap; font-size: 12px;">{{ updates.log }}</pre></details>{% endif %}
     {% endif %}
-    {% if updates.history %}
-    <h3 style="margin: 20px 0 6px;">{{ _('Storico degli aggiornamenti') }}</h3>
-    <table class="tbl cards">
-      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Dalla versione') }}</th><th>{{ _('Alla versione') }}</th><th>{{ _('Esito') }}</th></tr></thead>
-      <tbody>
-      {% for h in updates.history %}
-      <tr>
-        <td class="num" data-label="{{ _('Quando') }}">{{ (h.at[8:10] ~ '/' ~ h.at[5:7] ~ '/' ~ h.at[0:4] ~ ' ' ~ h.at[11:16]) if h.at else '–' }} <small class="hint" style="display: inline;">UTC</small></td>
-        <td class="num" data-label="{{ _('Dalla versione') }}">{{ h['from'] or '–' }}</td>
-        <td class="num" data-label="{{ _('Alla versione') }}">{{ h.version or '–' }}</td>
-        <td data-label="{{ _('Esito') }}">{% if h.state == 'done' %}<span class="chip green">{{ _('Riuscito') }}</span>{% else %}<span class="chip red">{{ _('Non riuscito') }}</span> <span class="hint">{{ {'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(h.step, h.step or '') }}</span>{% endif %}</td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
     {% if updates.pending or st.state == 'running' %}
     {% set target = (updates.pending or {}).version or st.version %}
     {% set steps = {'request': _('in attesa del server'), 'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica'), 'done': _('fatto')} %}
@@ -94,6 +78,29 @@
       setTimeout(poll, 1000);
     })();
     </script>
+    {% endif %}
+    {% if updates.history %}
+    {# The last five; the older ones (up to 30) stay folded away. #}
+    {% macro rows(items) %}
+    <table class="tbl cards">
+      <thead><tr><th>{{ _('Quando') }}</th><th>{{ _('Dalla versione') }}</th><th>{{ _('Alla versione') }}</th><th>{{ _('Esito') }}</th></tr></thead>
+      <tbody>
+      {% for h in items %}
+      <tr>
+        <td class="num" data-label="{{ _('Quando') }}">{{ (h.at[8:10] ~ '/' ~ h.at[5:7] ~ '/' ~ h.at[0:4] ~ ' ' ~ h.at[11:16]) if h.at else '–' }} <small class="hint" style="display: inline;">UTC</small></td>
+        <td class="num" data-label="{{ _('Dalla versione') }}">{{ h['from'] or '–' }}</td>
+        <td class="num" data-label="{{ _('Alla versione') }}">{{ h.version or '–' }}</td>
+        <td data-label="{{ _('Esito') }}">{% if h.state == 'done' %}<span class="chip green">{{ _('Riuscito') }}</span>{% else %}<span class="chip red">{{ _('Non riuscito') }}</span> <span class="hint">{{ {'backup': _('backup del database'), 'pull': _('download della versione'), 'restart': _('riavvio'), 'check': _('verifica')}.get(h.step, h.step or '') }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endmacro %}
+    <h3 style="margin: 20px 0 6px;">{{ _('Ultimi aggiornamenti') }}</h3>
+    {{ rows(updates.history[:5]) }}
+    {% if updates.history|length > 5 %}
+    <details class="act sm" style="margin-top: 8px;"><summary>{{ _('Aggiornamenti precedenti ({n})', n=updates.history|length - 5) }}</summary>{{ rows(updates.history[5:]) }}</details>
+    {% endif %}
     {% endif %}
     {% else %}
     <p class="hint">{{ _('Per aggiornare da qui serve lo script update.sh sul server: vedi deploy/server/README.md, "Updating from the console". Senza, si aggiorna dal terminale.') }}</p>

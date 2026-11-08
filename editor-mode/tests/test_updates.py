@@ -85,6 +85,15 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     assert "non riuscito durante: download della versione" in page and "manifest unknown" in page
     assert c.get("/admin/updates/progress").json()["state"] == "failed"
 
+    # The last five updates in view, the older ones folded away.
+    (tmp_path / "history.json").write_text(json.dumps({"updates": [
+        {"state": "done", "from": f"1.0.{i}", "version": f"1.0.{i + 1}", "at": f"2026-11-0{9 - i}T10:00:00+00:00"}
+        for i in range(9)]}))
+    page = c.get("/admin/updates").text
+    shown, older = page.split("Ultimi aggiornamenti", 1)[1].split("<details", 1)
+    assert shown.count("<td class=\"num\" data-label=\"Dalla versione\">") == 5
+    assert "Aggiornamenti precedenti (" in older and older.index("</details>") > older.index("1.0.8")
+
     # Not reachable without the console.
     other = TestClient(create_app(db, updates_dir=str(tmp_path)))
     assert other.post("/admin/updates/apply", data={"version": "99.0.0"}).status_code in (401, 403)

@@ -191,6 +191,22 @@ def test_the_console_changes_and_deletes_what_it_created(db):
     c.post(f"/admin/subscriptions/{tid}", data={"plan": "trial"})
     assert "Piano Extra eliminato." in c.post(f"/admin/plans/{code}/delete").text
 
+    # A plan renamed keeps its code: a new plan with the old name gets a free one.
+    name = unique("Nuovo")
+    first = billing.create_plan(admin, "", name)
+    billing.save_plan(admin, first, {"name": name + " vecchio"})
+    second = billing.create_plan(admin, "", name)
+    assert second == f"{first}-2"
+    assert "è già del piano" in c.post("/admin/plans", data={"code": first, "name": "Altro"}).text
+    # Cheapest first, here and on the public site; plans without a price last.
+    billing.save_plan(admin, first, {"price_month_cents": 99999999})
+    order = [p["code"] for p in billing.plans(admin)]
+    assert order.index("trial") < order.index(first) < order.index(second)
+    prices = [p["price_month_cents"] for p in billing.plans(admin) if p["price_month_cents"] is not None]
+    assert prices == sorted(prices)
+    for c_ in (first, second):
+        billing.delete_plan(admin, c_)
+
     rid = billing.create_reseller(admin, "Agenzia Blu", f"{unique('blu')}@example.com")
     r = c.post(f"/admin/resellers/{rid}", data={"name": "Agenzia Azzurra", "email": "azzurra@example.com", "discount": "10"})
     assert "Rivenditore Agenzia Azzurra aggiornato." in r.text

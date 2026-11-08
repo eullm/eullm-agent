@@ -2285,7 +2285,6 @@
  "Senza redazione": "Without newsroom",
  "Soglia 50 su entrambi i punteggi. Si scrive da «Scrivi ora» e «Nicchia utile».": "Threshold 50 on both scores. Write from «Write now» and «Useful niche».",
  "Solo diretti": "Direct only",
- "Storico degli aggiornamenti": "Update history",
  "Tutte le lingue": "All languages",
  "Tutti": "All",
  "Un articolo costa, rispetto a quanto lo paga il cliente": "What an article costs, compared with what the customer pays for it",
@@ -2671,5 +2670,8 @@
  "I limiti sono della redazione, non del singolo sito.": "The limits belong to the newsroom, not to a single site.",
  "Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.": "With 2 sites and 30 articles you have 30 articles in all, split as you like; the same for active sources. For each site you choose the languages (up to the plan's number) and, with the automatic newsroom, how many articles a day.",
  "I crediti servono per andare oltre il piano.": "Credits are for going beyond the plan.",
- "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "One more article costs {a} credits, a translation into a language the site does not have {t}, a cover redrawn after the two free ones {c}. The month's credits go first, then those of the packs, which do not expire. The automatic newsroom uses them only if you allowed it extra articles with credits."
+ "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "One more article costs {a} credits, a translation into a language the site does not have {t}, a cover redrawn after the two free ones {c}. The month's credits go first, then those of the packs, which do not expire. The automatic newsroom uses them only if you allowed it extra articles with credits.",
+ "Ultimi aggiornamenti": "Latest updates",
+ "Aggiornamenti precedenti ({n})": "Earlier updates ({n})",
+ "il codice {code} è già del piano {name}": "the code {code} already belongs to the plan {name}"
 }

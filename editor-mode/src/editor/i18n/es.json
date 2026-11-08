@@ -2285,7 +2285,6 @@
  "Senza redazione": "Sin redacción",
  "Soglia 50 su entrambi i punteggi. Si scrive da «Scrivi ora» e «Nicchia utile».": "Umbral 50 en ambas puntuaciones. Se escribe desde «Escribe ahora» y «Nicho útil».",
  "Solo diretti": "Solo directos",
- "Storico degli aggiornamenti": "Historial de actualizaciones",
  "Tutte le lingue": "Todos los idiomas",
  "Tutti": "Todos",
  "Un articolo costa, rispetto a quanto lo paga il cliente": "Lo que cuesta un artículo, frente a lo que lo paga el cliente",
@@ -2671,5 +2670,8 @@
  "I limiti sono della redazione, non del singolo sito.": "Los límites son de la redacción, no de un solo sitio.",
  "Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.": "Con 2 sitios y 30 artículos tienes 30 artículos en total, repartidos como quieras; lo mismo con las fuentes activas. Para cada sitio eliges los idiomas (hasta el número del plan) y, con la redacción automática, cuántos artículos al día.",
  "I crediti servono per andare oltre il piano.": "Los créditos sirven para ir más allá del plan.",
- "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Un artículo más cuesta {a} créditos, una traducción a un idioma que el sitio no tiene {t}, una portada rehecha después de las dos gratuitas {c}. Primero se usan los créditos del mes, luego los de los paquetes, que no caducan. La redacción automática solo los usa si le permitiste artículos extra con créditos."
+ "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Un artículo más cuesta {a} créditos, una traducción a un idioma que el sitio no tiene {t}, una portada rehecha después de las dos gratuitas {c}. Primero se usan los créditos del mes, luego los de los paquetes, que no caducan. La redacción automática solo los usa si le permitiste artículos extra con créditos.",
+ "Ultimi aggiornamenti": "Últimas actualizaciones",
+ "Aggiornamenti precedenti ({n})": "Actualizaciones anteriores ({n})",
+ "il codice {code} è già del piano {name}": "el código {code} ya es del plan {name}"
 }

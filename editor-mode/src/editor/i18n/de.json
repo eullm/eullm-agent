@@ -2285,7 +2285,6 @@
  "Senza redazione": "Ohne Redaktion",
  "Soglia 50 su entrambi i punteggi. Si scrive da «Scrivi ora» e «Nicchia utile».": "Schwelle 50 bei beiden Werten. Geschrieben wird aus «Jetzt schreiben» und «Nützliche Nische».",
  "Solo diretti": "Nur direkt",
- "Storico degli aggiornamenti": "Verlauf der Updates",
  "Tutte le lingue": "Alle Sprachen",
  "Tutti": "Alle",
  "Un articolo costa, rispetto a quanto lo paga il cliente": "Was ein Artikel kostet, verglichen mit dem, was der Kunde dafür zahlt",
@@ -2671,5 +2670,8 @@
  "I limiti sono della redazione, non del singolo sito.": "Die Grenzen gelten für die Redaktion, nicht für eine einzelne Website.",
  "Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.": "Mit 2 Websites und 30 Artikeln hast du insgesamt 30 Artikel, frei verteilt; ebenso bei den aktiven Quellen. Für jede Website wählst du die Sprachen (bis zur Zahl des Tarifs) und, mit der automatischen Redaktion, wie viele Artikel pro Tag.",
  "I crediti servono per andare oltre il piano.": "Credits dienen dazu, über den Tarif hinauszugehen.",
- "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Ein zusätzlicher Artikel kostet {a} Credits, eine Übersetzung in eine Sprache, die die Website nicht hat, {t}, ein neu gezeichnetes Titelbild nach den zwei kostenlosen {c}. Zuerst werden die Credits des Monats verwendet, dann die der Pakete, die nicht verfallen. Die automatische Redaktion nutzt sie nur, wenn du ihr zusätzliche Artikel mit Credits erlaubt hast."
+ "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Ein zusätzlicher Artikel kostet {a} Credits, eine Übersetzung in eine Sprache, die die Website nicht hat, {t}, ein neu gezeichnetes Titelbild nach den zwei kostenlosen {c}. Zuerst werden die Credits des Monats verwendet, dann die der Pakete, die nicht verfallen. Die automatische Redaktion nutzt sie nur, wenn du ihr zusätzliche Artikel mit Credits erlaubt hast.",
+ "Ultimi aggiornamenti": "Letzte Updates",
+ "Aggiornamenti precedenti ({n})": "Frühere Updates ({n})",
+ "il codice {code} è già del piano {name}": "der Code {code} gehört bereits zum Tarif {name}"
 }
