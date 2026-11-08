@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.33.3
+## 0.33.4
 
 ### Added
 
@@ -34,6 +34,10 @@
   con più articoli, guardando anche dentro `content/`.
 - **Fonti negli articoli pubblicati: "Nessuna"**, in Sito e profilo, per
   ogni sito: senza numeri di nota e senza elenco in fondo.
+
+## 0.33.3
+
+### Added
 
 - **Accessi compresi nel piano** (Francesco, 8 novembre). Ogni piano dice
   quante persone può avere una redazione, il direttore compreso e gli
