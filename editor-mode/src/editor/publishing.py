@@ -168,13 +168,15 @@ def github_config(config: dict) -> dict:
     the covers (else learned from the posts, or ``public/images``), ``url``
     the address of an article with ``{slug}`` (else learned), ``verify``
     false to publish without waiting for the site's checks, ``wait_minutes``
-    for them (default 15) and ``api`` for a GitHub Enterprise server."""
+    for them (default 15) and ``api`` for a GitHub Enterprise server.
+    ``recipe_path`` and ``recipe_url``: where a recipe goes when the site
+    keeps its recipes apart (else found by itself, sitegit.recipe_folder)."""
     config = dict(config or {})
     repo = str(config.get("repo", "")).strip()
     if not GITHUB_REPO.fullmatch(repo) or ".." in repo:
         raise PublishError("a GitHub target needs the repository as owner/name, e.g. primoco/miosito")
     config["repo"] = repo
-    for key in ("branch", "path", "image_path"):
+    for key in ("branch", "path", "image_path", "recipe_path"):
         value = str(config.get(key, "")).strip().strip("/")
         if ".." in value:
             raise PublishError(f"{key} cannot be ..: it stays inside the repository")
@@ -187,13 +189,14 @@ def github_config(config: dict) -> dict:
         check_public_url(config["api"])
     else:
         config.pop("api", None)
-    url = str(config.get("url") or "").strip()
-    if url:
-        if not url.startswith("https://") or "{slug}" not in url or any(c.isspace() for c in url):
-            raise PublishError("the articles' address is an https address with {slug} in it, e.g. https://site.it/blog/{slug}")
-        config["url"] = url
-    else:
-        config.pop("url", None)
+    for key in ("url", "recipe_url"):
+        url = str(config.get(key) or "").strip()
+        if url:
+            if not url.startswith("https://") or "{slug}" not in url or any(c.isspace() for c in url):
+                raise PublishError("the articles' address is an https address with {slug} in it, e.g. https://site.it/blog/{slug}")
+            config[key] = url
+        else:
+            config.pop(key, None)
     if config.get("verify") is False or str(config.get("verify")).lower() in ("0", "false", "no"):
         config["verify"] = False
     else:
@@ -333,10 +336,14 @@ def cover_changed(image, pub) -> bool:
 def build_payload(s, d) -> dict:
     """What a site receives for a draft: text, HTML and search fields."""
     body = d.body_md
-    settings = (s.execute(select(m.editorial_profiles.c.body).where(
-        m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()
-        or {}).get("settings") or {}
-    if settings.get("sources_style") == "list":
+    from .autopilot import recipe_site
+
+    profile = s.execute(select(m.editorial_profiles.c.body).where(
+        m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar() or {}
+    style = (profile.get("settings") or {}).get("sources_style")
+    if style == "none" or (style != "list" and recipe_site(profile)):
+        body = drafts.without_sources(body)
+    elif style == "list":
         body = drafts.discreet_sources(body)
     return {"title": d.title, "subtitle": d.subtitle, "markdown": body, "html": to_html(body),
             "language": d.language, **search_fields(s, d)}
@@ -888,6 +895,13 @@ class Publisher:
         except ValueError:
             when = sitegit.now()
         articles = cfg.get("path", "content/blog")
+        url_pattern, routed = cfg.get("url"), False
+        if payload.get("recipe"):
+            # A recipe goes where the site keeps its recipes, found by itself (connect.github
+            # notes it; else looked for next to the articles), with its own address.
+            recipes = cfg.get("recipe_path") or gh.recipe_folder(articles, base)
+            if recipes and recipes != articles:
+                articles, url_pattern, routed = recipes, cfg.get("recipe_url"), True
         # The blog's other posts: this one, sent before, must not teach its own shape.
         fmt = sitegit.learn([p for p in gh.posts(articles, base, limit=sitegit.SAMPLES + 1) if p.slug != slug][:sitegit.SAMPLES])
         post_dir = f"{articles}/{slug}" if fmt.folder else articles
@@ -907,23 +921,27 @@ class Publisher:
                 guessed = None
                 if fmt.image_sample and fmt.image_sample.startswith("/"):
                     guessed = "public" + posixpath.dirname(fmt.image_sample)
-                img_dir = cfg.get("image_path") or guessed or "public/images"
+                img_dir = (guessed if routed else None) or cfg.get("image_path") or guessed or "public/images"
                 img_path = f"{img_dir}/{slug}.{ext}"
                 image_ref = site_path(img_path)
             files.append((img_path, bytes(image.content)))
-        md = sitegit.front_matter(fmt, payload, slug, when, image_ref, image.alt if image is not None else None) + "\n"
         body = delivery.body_md(payload["markdown"])
-        if not fmt.learned and payload.get("subtitle"):
-            body = f"_{payload['subtitle']}_\n\n{body}"
-        md += (sitegit.mdx_safe(body) if fmt.ext == ".mdx" else body) + "\n"
-        content = md.encode()
+        if fmt.ext == ".json":
+            content = sitegit.json_post(fmt, payload, slug, when, image_ref, image.alt if image is not None else None,
+                                        body).encode()
+        else:
+            md = sitegit.front_matter(fmt, payload, slug, when, image_ref, image.alt if image is not None else None) + "\n"
+            if not fmt.learned and payload.get("subtitle"):
+                body = f"_{payload['subtitle']}_\n\n{body}"
+            md += (sitegit.mdx_safe(body) if fmt.ext == ".mdx" else body) + "\n"
+            content = md.encode()
 
         texts = {}
         for path in ("public/llms.txt", "static/llms.txt", "llms.txt", "public/sitemap.xml", "static/sitemap.xml"):
             found = gh.file(path, base)
             if found is not None:
                 texts[path] = found.decode("utf-8", "replace")
-        pattern = cfg.get("url") or sitegit.guess_url(fmt, articles, payload.get("site_domain"), list(texts.values()))
+        pattern = url_pattern or sitegit.guess_url(fmt, articles, payload.get("site_domain"), list(texts.values()))
         article_url = pattern.replace("{slug}", slug) if pattern else None
         blob_url = f"https://github.com/{gh.repo}/blob/{base}/{post_path}"
 

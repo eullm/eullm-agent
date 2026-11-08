@@ -2676,5 +2676,6 @@
  "il codice {code} è già del piano {name}": "el código {code} ya es del plan {name}",
  "Accessi compresi": "Accesos incluidos",
  "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Invitación no creada: el plan incluye {n} accesos y están todos usados. Quita una persona o una invitación, o pasa a un plan mayor en Mi plan.",
- "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesos incluidos en el plan: {used} usados de {n}, invitaciones abiertas incluidas."
+ "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesos incluidos en el plan: {used} usados de {n}, invitaciones abiertas incluidas.",
+ "Nessuna: le fonti restano solo in Redazia": "Ninguna: las fuentes quedan solo en Redazia"
 }

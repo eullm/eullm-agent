@@ -2676,5 +2676,6 @@
  "il codice {code} è già del piano {name}": "der Code {code} gehört bereits zum Tarif {name}",
  "Accessi compresi": "Inklusive Zugänge",
  "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Einladung nicht erstellt: Der Tarif umfasst {n} Zugänge und alle sind vergeben. Entfernen Sie eine Person oder eine Einladung oder wechseln Sie unter Mein Tarif zu einem größeren Tarif.",
- "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Im Tarif enthaltene Zugänge: {used} von {n} genutzt, offene Einladungen eingeschlossen."
+ "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Im Tarif enthaltene Zugänge: {used} von {n} genutzt, offene Einladungen eingeschlossen.",
+ "Nessuna: le fonti restano solo in Redazia": "Keine: die Quellen bleiben nur in Redazia"
 }

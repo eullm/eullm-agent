@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-POST_EXT = (".md", ".mdx")
+POST_EXT = (".md", ".mdx", ".json")
 SAMPLES = 8  # posts read to learn the format
 
 ROLES = {
@@ -136,6 +136,7 @@ class Post:
     path: str  # file in the repository
     keys: list[tuple[str, str]]
     slug: str
+    data: dict | None = None  # a post kept as JSON (a Next.js site's content/*.json), whole
 
 
 @dataclass
@@ -153,6 +154,7 @@ class Format:
     image_sample: str | None = None  # the newest post's image, as written
     samples: list[Post] = field(default_factory=list)
     learned: bool = False
+    data: dict | None = None  # the newest post, when the posts are JSON files
 
 
 def learn(posts: list[Post]) -> Format:
@@ -169,6 +171,7 @@ def learn(posts: list[Post]) -> Format:
     fmt.samples = [p for _, p in dated]
     fmt.learned = True
     fmt.ext = posixpath.splitext(newest.path)[1] or ".md"
+    fmt.data = newest.data
     fmt.folder = posixpath.basename(newest.path).startswith("index.")
     fmt.keys = [k for k, _ in newest.keys]
     for key, raw in newest.keys:
@@ -286,6 +289,154 @@ def mdx_safe(md: str) -> str:
                            for p in parts)
         out.append(line)
     return "\n".join(out)
+
+
+# --- posts kept as JSON -------------------------------------------------------------
+# A site that keeps each post as a JSON file (a Next.js or a hand-made site)
+# gets the new one in the same shape: the newest post's keys in their order,
+# each value of the same type (a list stays a list, minutes stay a number,
+# ingredients stay {quantity, unit, name}), the values all posts share.
+
+RECIPE_FOLDERS = ("content/ricette", "content/recipes", "src/content/recipes", "src/content/ricette", "recipes",
+                  "_recipes", "data/recipes", "content/rezepte", "content/recettes", "content/recetas")
+BODY_KEYS = ("body", "content", "markdown", "text", "html")
+STEP_KEYS = ("steps", "instructions", "method", "procedimento", "directions")
+SERVING_KEYS = ("servings", "yield", "portions", "porzioni", "recipeyield")
+TIME_KEYS = {"preptime": "prep", "prep_time": "prep", "cooktime": "cook", "cook_time": "cook",
+             "totaltime": "total", "total_time": "total"}
+UNITS = ("kg", "g", "gr", "mg", "l", "dl", "cl", "ml", "cucchiai", "cucchiaio", "cucchiaini", "cucchiaino",
+         "pizzico", "pizzichi", "spicchi", "spicchio", "bustina", "bustine", "fette", "fetta", "rametti", "rametto",
+         "bicchiere", "bicchieri", "tazza", "tazze", "foglie", "foglia", "mazzetto", "noce", "pz", "tbsp", "tsp",
+         "cups", "cup", "oz", "lb", "pinch", "cloves", "clove", "slices", "slice", "el", "tl", "prise",
+         "c. à soupe", "c. à café", "cucharadas", "cucharada", "cucharaditas", "cucharadita")
+_INGREDIENT = re.compile(r"^(?P<q>\d+(?:[.,/]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?|½|¼|¾|mezz[oa]|un[oa]?)\s*"
+                         r"(?:(?P<u>" + "|".join(re.escape(u) for u in sorted(UNITS, key=len, reverse=True))
+                         + r")\.?(?=\s|$))?\s*(?:di\s+|d'|of\s+|de\s+)?(?P<n>.+)$", re.I)
+_TO_TASTE = re.compile(r"^(?P<n>.+?)[,\s]+(?P<q>q\.\s?b\.?|qb|to taste|quanto basta)$", re.I)
+
+
+def is_recipes(posts: list[Post]) -> bool:
+    """Whether the posts are recipes: ingredients and steps in each."""
+    return bool(posts) and all(
+        any(k.lower() == "ingredients" for k, _ in p.keys) and any(k.lower() in STEP_KEYS for k, _ in p.keys)
+        for p in posts)
+
+
+def split_ingredient(text: str) -> dict:
+    """ "320 g di spaghetti" -> {quantity: "320", unit: "g", name: "spaghetti"}."""
+    text = " ".join(text.split())
+    taste = _TO_TASTE.match(text)
+    if taste:
+        return {"quantity": "q.b.", "unit": "", "name": taste.group("n")}
+    found = _INGREDIENT.match(text)
+    if found and found.group("n"):
+        return {"quantity": found.group("q"), "unit": found.group("u") or "", "name": found.group("n")}
+    return {"quantity": "", "unit": "", "name": text}
+
+
+def _minutes(iso: str | None) -> int | None:
+    found = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?", iso or "")
+    return int(found.group(1) or 0) * 60 + int(found.group(2) or 0) if found and (found.group(1) or found.group(2)) else None
+
+
+def blocks(md: str) -> list[dict]:
+    """Markdown as a site's content blocks: headings and paragraphs (a list's items one paragraph each)."""
+    out = []
+    for part in re.split(r"\n\s*\n", md.strip()):
+        part = part.strip()
+        head = re.match(r"^(#{1,6})\s+(.*)$", part)
+        if head:
+            out.append({"type": "heading", "level": len(head.group(1)), "text": head.group(2).strip()})
+            continue
+        lines = part.split("\n")
+        if all(re.match(r"^(\d+[.)]|[-*])\s+", x.strip()) for x in lines):
+            out += [{"type": "paragraph", "text": re.sub(r"^(\d+[.)]|[-*])\s+", "", x.strip())} for x in lines]
+        elif part:
+            out.append({"type": "paragraph", "text": " ".join(x.strip() for x in lines)})
+    return out
+
+
+def json_post(fmt: Format, payload: dict, slug: str, when: datetime, image_ref: str | None,
+              image_alt: str | None, body: str) -> str:
+    """The new post as JSON, in the shape of the site's newest post."""
+    sample = fmt.data or {}
+    card = payload.get("recipe") or {}
+    description = payload.get("meta_description") or payload.get("subtitle")
+    tags = list(card.get("tags") or ([payload["keyphrase"]] if payload.get("keyphrase") else []))
+    minutes = {"prep": card.get("prep_minutes") or _minutes(card.get("prepTime")),
+               "cook": card.get("cook_minutes") or _minutes(card.get("cookTime"))}
+    if minutes["prep"] or minutes["cook"]:
+        minutes["total"] = (minutes["prep"] or 0) + (minutes["cook"] or 0)
+    out: dict = {}
+    for key in sample or ("title", "description", "slug", "date", "image", "tags", "body"):
+        sv, low = sample.get(key), key.lower()
+        role = _role(key)
+        value = None
+        if low == "title":
+            value = payload["title"]
+        elif low == "slug":
+            value = slug
+        elif low == "keywords":
+            words = list(dict.fromkeys(x for x in [payload.get("keyphrase"), *tags] if x))
+            value = (words if isinstance(sv, list) else ", ".join(words)) or None
+        elif low == "tags":
+            value = (tags if not isinstance(sv, str) else ", ".join(tags)) or None
+        elif role == "description":
+            value = description
+        elif role == "date":
+            value = when.strftime("%Y-%m-%d") if isinstance(sv, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", sv) \
+                else when.isoformat()
+        elif role == "image":
+            if image_ref and isinstance(sv, dict):
+                sub = next((k for k in sv if k.lower() in ("src", "url", "path", "image")), "src")
+                value = {sub: image_ref, **({"alt": image_alt} if "alt" in sv and image_alt else {})}
+            else:
+                value = image_ref
+        elif role == "image_alt":
+            value = image_alt if image_ref else None
+        elif role == "section":
+            value = payload.get("section") or (json.loads(fmt.constants[key]) if key in fmt.constants else None)
+        elif role == "lang":
+            value = payload.get("language")
+        elif low in BODY_KEYS:
+            value = blocks(body) if isinstance(sv, list) else body
+        elif card and low == "ingredients":
+            items = card.get("ingredient_list") or [split_ingredient(x) for x in card.get("ingredients") or []]
+            if isinstance(sv, list) and sv and isinstance(sv[0], dict):
+                names = list(sv[0])
+                value = [{k: x.get(k, x.get("name", "") if k not in ("quantity", "unit") else "") for k in names}
+                         for x in items]
+            else:
+                value = list(card.get("ingredients") or [])
+        elif card and low in STEP_KEYS:
+            if isinstance(sv, list) and sv and isinstance(sv[0], dict):
+                sub = next((k for k, v in sv[0].items() if isinstance(v, str)), "text")
+                value = [{sub: x} for x in card.get("steps") or []]
+            else:
+                value = list(card.get("steps") or [])
+        elif card and low in SERVING_KEYS:
+            number = card.get("servings") or next((int(x) for x in re.findall(r"\d+", str(card.get("yield") or ""))), None)
+            value = number if isinstance(sv, (int, float)) else (card.get("yield") or (str(number) if number else None))
+        elif card and low in TIME_KEYS:
+            n = minutes.get(TIME_KEYS[low])
+            value = (n if isinstance(sv, (int, float)) else (f"PT{n}M" if n else None)) if n else None
+        elif card and low == "difficulty":
+            value = card.get("difficulty")
+        elif card and low == "nutrition":
+            value = card.get("nutrition")
+        elif low in ("readingtime", "reading_time") and isinstance(sv, (int, float)):
+            value = max(1, round(len(body.split()) / 200))
+        elif key in fmt.constants:
+            value = json.loads(fmt.constants[key])
+        if value not in (None, "", [], {}):
+            out[key] = value
+    if "title" not in out:
+        out = {"title": payload["title"], **out}
+    if card and not any(k.lower() == "ingredients" for k in out):
+        out["recipe"] = {k: v for k, v in card.items() if k != "ingredient_list"}
+    if payload.get("translation_of"):
+        out["translation_of"] = payload["translation_of"]
+    return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
 
 # --- the site's files ------------------------------------------------------------
@@ -437,6 +588,16 @@ class Repo:
             else:
                 continue
             content = self.file(file_path, ref)
+            if file_path.endswith(".json"):
+                try:
+                    data = json.loads((content or b"").decode("utf-8", "replace"))
+                except ValueError:
+                    continue
+                if not isinstance(data, dict) or not data.get("title"):
+                    continue
+                keys = [(k, json.dumps(v, ensure_ascii=False)) for k, v in data.items()]
+                out.append(Post(file_path, keys, str(data.get("slug") or "") or slug, data))
+                continue
             fm, _ = split_front_matter((content or b"").decode("utf-8", "replace"))
             if fm is None:
                 continue
@@ -444,6 +605,16 @@ class Repo:
             slug = scalar(dict(keys).get("slug", "")) or slug
             out.append(Post(file_path, keys, slug))
         return out
+
+    def recipe_folder(self, near: str, ref: str) -> str | None:
+        """The folder of the site's recipes (posts with ingredients and steps):
+        next to the articles' folder, or where sites usually keep them."""
+        parent = posixpath.dirname(near.rstrip("/"))
+        found = [e["path"] for e in self.listing(parent, ref) if e.get("type") == "dir"] if parent else []
+        for folder in dict.fromkeys([*found, *RECIPE_FOLDERS]):
+            if folder != near and is_recipes(self.posts(folder, ref, limit=2)):
+                return folder
+        return None
 
     def head(self, branch: str) -> str:
         return self._ok(self.call("GET", f"/repos/{self.repo}/git/ref/heads/{quote(branch)}"), "branch")["object"]["sha"]

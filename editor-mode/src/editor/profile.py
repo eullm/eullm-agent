@@ -82,7 +82,8 @@ class _Settings(_Part):
     exclude: list[_Text] = Field(default_factory=list, max_length=200)
     cover_style: Literal["impact", "editorial"] = DEFAULT_SETTINGS["cover_style"]
     cover_text: bool = DEFAULT_SETTINGS["cover_text"]
-    sources_style: Literal["notes", "list"] = DEFAULT_SETTINGS["sources_style"]
+    sources_style: Literal["notes", "list", "none"] = DEFAULT_SETTINGS["sources_style"]
+    site_kind: Literal["recipes", "articles"] | None = None
     content_mode: Literal["news", "evergreen", "mixed"] = "news"
     evergreen_share: int = Field(50, ge=0, le=100)
 
@@ -422,6 +423,26 @@ def _set_settings(s, site_id: int, **values) -> bool:
     return bool(rows)
 
 
+def mark_recipe_site(s, site_id: int, courses: list[str]) -> bool:
+    """A site whose repository keeps recipes (connect.github): its articles are
+    its own recipes, no sources on its pages, and its courses are the sections
+    the newsroom files them under, until the owner sets their own."""
+    p = m.editorial_profiles
+    rows = s.execute(select(p.c.id, p.c.body).where(p.c.site_id == site_id, p.c.status.in_(("approved", "draft")))).all()
+    for r in rows:
+        body = dict(r.body)
+        st = {**DEFAULT_SETTINGS, **(body.get("settings") or {}), "site_kind": "recipes"}
+        if st.get("sources_style") != "list":
+            st["sources_style"] = "none"
+        auto = dict(st.get("auto") or {})
+        if courses and not auto.get("sections"):
+            auto["sections"] = list(courses)[:30]
+            st["auto"] = auto
+        body["settings"] = st
+        s.execute(update(p).where(p.c.id == r.id).values(body=body))
+    return bool(rows)
+
+
 def set_proposals_per_day(s, site_id: int, n: int) -> bool:
     """The number of proposals a day."""
     return _set_settings(s, site_id, proposals_per_day=max(0, min(50, int(n))))
@@ -445,8 +466,9 @@ def set_content_mode(s, site_id: int, mode: str, share: int) -> bool:
 
 def set_sources_style(s, site_id: int, style: str) -> bool:
     """How a published article shows its sources: "notes" (a number after
-    each sentence, the notes at the end) or "list" (one line at the end)."""
-    if style not in ("notes", "list"):
+    each sentence, the notes at the end), "list" (one line at the end) or
+    "none" (no sources on the site: they stay in the newsroom)."""
+    if style not in ("notes", "list", "none"):
         raise ValueError(style)
     return _set_settings(s, site_id, sources_style=style)
 
@@ -640,6 +662,14 @@ def retry_due(s, site_id: int, now: datetime) -> bool:
     return any(g.startswith("model analysis failed") for g in (body or {}).get("gaps") or [])
 
 
+def recipe_repository(db, tenant_id: str, site_id: int) -> bool:
+    """Whether the site's repository keeps recipes (connect.github found them)."""
+    with db.tenant(tenant_id) as s:
+        configs = s.execute(select(m.publish_targets.c.config).where(
+            m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "github")).scalars().all()
+    return any((c or {}).get("recipe_path") for c in configs)
+
+
 def analyse_site(db, tenant_id: str, domain: str, crawler, core: CoreClient | None = None) -> dict:
     """First analysis or periodic review of a site. Returns what happened."""
     snap = crawler.analyse(domain)
@@ -660,6 +690,12 @@ def analyse_site(db, tenant_id: str, domain: str, crawler, core: CoreClient | No
         auto = body.setdefault("settings", {}).setdefault("auto", {})
         if not auto.get("sections"):
             auto["sections"] = list(cms)[:30]
+    if known and recipe_repository(db, tenant_id, known):
+        # Its repository keeps recipes: a recipe site, with no sources on its pages.
+        st = body.setdefault("settings", {})
+        st["site_kind"] = "recipes"
+        if st.get("sources_style") != "list":
+            st["sources_style"] = "none"
     with db.tenant(tenant_id) as s:
         repo.ensure_tenant(s, tenant_id, tenant_id)
         site_id = repo.ensure_site(s, tenant_id, snap.domain, body["name"], snap.language or "und")

@@ -4,6 +4,37 @@
 
 ### Added
 
+- **Siti di ricette: Redazia lo capisce da sola e scrive ricette sue**
+  (Francesco, 8 novembre, sul sito lagrandecucina.it). Un sito è di
+  ricette quando il suo repository ha una cartella di ricette (file con
+  ingredienti e passaggi, trovata collegando GitHub) oppure quando il
+  profilo dice che pubblica ricette. Allora:
+  - le notizie fanno solo da spunto (il piatto, l'ingrediente, la stagione
+    di cui si parla): la ricetta è del sito, con porzioni, tempi,
+    difficoltà, categoria, tag (vegetariano, keto, veloce…), ingredienti
+    con quantità e unità, passaggi e valori nutrizionali stimati; solo
+    l'apertura, sul perché del piatto adesso, cita le notizie;
+  - la categoria è una delle rubriche del sito (le portate lette dalle
+    ricette, I Primi, I Secondi…) o una nuova nello stesso stile, che il
+    sito crea;
+  - la copertina è la foto del piatto finito, come la farebbe un
+    fotografo di cucina;
+  - sulle pagine del sito non ci sono fonti: restano in Redazia.
+  Le ricette scritte da Redazia non vengono tradotte con la loro scheda:
+  per ora un sito di ricette va tenuto in una lingua.
+- **Siti che tengono gli articoli in JSON** (un sito Next.js con
+  `content/*.json`): la destinazione GitHub scrive il nuovo articolo come
+  file JSON con la forma di quelli già presenti (chiavi e ordine, numeri
+  che restano numeri, ingredienti `{quantity, unit, name}`, passaggi
+  `{description}`, valori comuni come l'autore). Le ricette vanno da sole
+  nella cartella delle ricette (`recipe_path`, trovata collegando il sito o
+  accanto alla cartella degli articoli), con l'immagine accanto a quelle
+  delle altre ricette e il loro indirizzo; il resto nella cartella degli
+  articoli. Collegando GitHub senza indicare la cartella si sceglie quella
+  con più articoli, guardando anche dentro `content/`.
+- **Fonti negli articoli pubblicati: "Nessuna"**, in Sito e profilo, per
+  ogni sito: senza numeri di nota e senza elenco in fondo.
+
 - **Accessi compresi nel piano** (Francesco, 8 novembre). Ogni piano dice
   quante persone può avere una redazione, il direttore compreso e gli
   inviti ancora aperti contati. Vuoto vuol dire senza limite. Valori di

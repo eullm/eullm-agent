@@ -59,6 +59,17 @@ def recipe_card(meta: dict | None, claims) -> dict | None:
     sentences under its headings (the director's corrections included)."""
     if not meta:
         return None
+    if meta.get("own"):  # the site's own recipe (drafts.OWN_RECIPE): every field of a recipe card
+        from .drafts import ingredient_line
+
+        prep, cook = meta.get("prep_minutes"), meta.get("cook_minutes")
+        card = {"yield": meta.get("yield"), "prepTime": duration(prep), "cookTime": duration(cook),
+                "totalTime": duration((prep or 0) + (cook or 0)) if prep or cook else None,
+                "ingredients": [ingredient_line(x) for x in meta["items"]], "steps": list(meta["method"]),
+                "servings": meta.get("servings"), "prep_minutes": prep, "cook_minutes": cook,
+                "difficulty": meta.get("difficulty"), "category": meta.get("category"), "tags": meta.get("tags") or None,
+                "nutrition": meta.get("nutrition"), "ingredient_list": meta["items"]}
+        return {k: v for k, v in card.items() if v is not None}
     ingredients = [c.text for c in claims if c.section == meta.get("ingredients")]
     steps = [c.text for c in claims if c.section == meta.get("steps")]
     if len(ingredients) < 2 or not steps:
@@ -247,8 +258,16 @@ def jsonld(*, title: str, description: str, language: str | None, url: str | Non
             "totalTime": recipe.get("totalTime"), "recipeIngredient": recipe["ingredients"],
             "recipeInstructions": [{"@type": "HowToStep", "position": n, "text": x}
                                    for n, x in enumerate(recipe["steps"], 1)],
+            "recipeCategory": recipe.get("category"),
+            "nutrition": ({"@type": "NutritionInformation", "calories": recipe["nutrition"].get("calories"),
+                           "proteinContent": recipe["nutrition"].get("protein"),
+                           "carbohydrateContent": recipe["nutrition"].get("carbs"),
+                           "fatContent": recipe["nutrition"].get("fat"),
+                           "sugarContent": recipe["nutrition"].get("sugars")} if recipe.get("nutrition") else None),
             "mainEntityOfPage": url, "url": url,
         }
+        if card["nutrition"]:
+            card["nutrition"] = {k: v for k, v in card["nutrition"].items() if v}
         out.append({k: v for k, v in card.items() if v is not None})
     if len(faq) >= 2:
         out.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
