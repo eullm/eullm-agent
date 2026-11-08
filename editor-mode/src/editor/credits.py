@@ -36,7 +36,7 @@ from .quotas import QuotaExceeded, _zone, lock
 log = logging.getLogger(__name__)
 
 ACTIONS = ("article", "translation", "image")
-DEFAULT_PRICES = {"article": 25, "translation": 10, "image": 3}
+DEFAULT_PRICES = {"article": 100, "translation": 10, "image": 5}  # 2026-11-08: 1 credit is about 1 cent
 FREE_REDRAWS = 2  # covers drawn again for free, after the first one
 ALERTS = (80, 100)
 

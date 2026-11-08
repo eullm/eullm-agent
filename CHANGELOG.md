@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.33.1
+
+### Changed
+
+- **Listino dei crediti alzato** (Francesco, 8 novembre). Un credito vale
+  circa un centesimo (pacchetto da 500 a 5 €). Un articolo oltre il piano
+  costava 25 crediti, circa 0,25 €: meno di un articolo di qualunque piano.
+  Ora costa 100 crediti, circa 1 €. Una copertina rifatta dopo le due
+  gratuite passa da 3 a 5 crediti. Una traduzione in una lingua che il sito
+  non ha resta a 10 crediti.
+
+  La migrazione 0043 (SQLite 0032) cambia solo i prezzi rimasti quelli di
+  prima: un prezzo cambiato a mano in Console › Piani e crediti › Listino
+  resta com'è.
+
 ## 0.33.0
 
 ### Changed

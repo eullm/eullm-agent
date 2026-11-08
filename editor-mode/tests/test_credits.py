@@ -59,28 +59,28 @@ def test_without_credits_nothing_changes(db, tenant):
 
 def test_articles_beyond_the_plan_are_paid_with_credits(db, tenant, admin):
     fill_drafts(db, tenant, 2)
-    set_plan(db, tenant, max_drafts_month=2, credits_month=30)
+    set_plan(db, tenant, max_drafts_month=2, credits_month=105)
     with db.tenant(tenant) as s:
         assert quotas.check(s, "drafts", pay="article") is True  # beyond the plan, the credits pay
-        assert credits.spend(s, "article", "draft:1") == 25
+        assert credits.spend(s, "article", "draft:1") == 100
     with db.tenant(tenant) as s:
         st = credits.state(s)
-        assert (st["month_used"], st["month_left"], st["extra"]) == (25, 5, 0)
+        assert (st["month_used"], st["month_left"], st["extra"]) == (100, 5, 0)
         # The automatic newsroom (no pay) stays within the plan.
         with pytest.raises(quotas.QuotaExceeded, match="drafts limit reached"):
             quotas.check(s, "drafts")
-        # 5 left, an article costs 25.
-        with pytest.raises(credits.NoCredits, match="25 needed, 5 left"):
+        # 5 left, an article costs 100.
+        with pytest.raises(credits.NoCredits, match="100 needed, 5 left"):
             quotas.check(s, "drafts", pay="article")
-    # A pack (bank transfer): the month's 5 go first, then 20 of the extra.
+    # A pack (bank transfer): the month's 5 go first, then 95 of the extra.
     billing.record_credits(admin, tenant, 500, 500, "op@example.com", "bonifico")
     with db.tenant(tenant) as s:
         quotas.check(s, "drafts", pay="article")
         credits.spend(s, "article", "draft:2")
     with db.tenant(tenant) as s:
         st = credits.state(s)
-        assert (st["month_left"], st["extra"], st["left"]) == (0, 480, 480)
-        assert sorted(x["delta"] for x in credits.ledger(s)) == [-25, -20, -5, 500]
+        assert (st["month_left"], st["extra"], st["left"]) == (0, 405, 405)
+        assert sorted(x["delta"] for x in credits.ledger(s)) == [-100, -95, -5, 500]
     with admin.engine.connect() as conn:
         pay = conn.execute(select(m.payments).where(m.payments.c.tenant_id == tenant)).first()
     assert pay.kind == "credits" and pay.amount_cents == 500 and pay.status == "paid"
@@ -88,14 +88,14 @@ def test_articles_beyond_the_plan_are_paid_with_credits(db, tenant, admin):
 
 def test_three_covers_per_article_are_free_then_they_cost(db, tenant, admin):
     did = fill_drafts(db, tenant, 1)
-    set_plan(db, tenant, credits_month=4)
+    set_plan(db, tenant, credits_month=6)
     with respx.mock() as router:
-        for _ in range(4):  # the first and two redraws free, the fourth 3 credits
+        for _ in range(4):  # the first and two redraws free, the fourth 5 credits
             fake_bfl(router)
             images.make(db, tenant, did, imager(), None)
     with db.tenant(tenant) as s:
-        assert credits.state(s)["month_used"] == 3
-        assert credits.free_covers_left(s, did) == 0 and credits.cover_cost(s, did) == 3
+        assert credits.state(s)["month_used"] == 5
+        assert credits.free_covers_left(s, did) == 0 and credits.cover_cost(s, did) == 5
     with db.tenant(tenant) as s, pytest.raises(credits.NoCredits):  # 1 left
         credits.need(s, credits.cover_cost(s, did))
     credits.grant(admin, tenant, 10, note="regalo")
@@ -104,7 +104,7 @@ def test_three_covers_per_article_are_free_then_they_cost(db, tenant, admin):
         images.make(db, tenant, did, imager(), None)
     with db.tenant(tenant) as s:
         st = credits.state(s)
-        assert (st["month_left"], st["extra"]) == (0, 8)
+        assert (st["month_left"], st["extra"]) == (0, 6)
 
 
 def test_alerts_at_80_and_100_percent_once_a_month(db, tenant, admin):
@@ -191,7 +191,7 @@ def test_the_console_edits_prices_packs_and_credits(db, admin):
     with admin.tenant(tid) as s:
         assert credits.state(s)["month"] == 40
     pub = c.get("/api/public/plans").json()
-    assert pub["credits"]["prices"]["article"] == 25 and pub["credits"]["free_redraws"] == 2
+    assert pub["credits"]["prices"]["article"] == 100 and pub["credits"]["free_redraws"] == 2
     assert pub["plans"] and all("credits_month" in p for p in pub["plans"])  # other tests change the plans
 
 
@@ -291,7 +291,7 @@ def test_a_plan_article_is_one_article_that_comes_out_in_all_the_sites_languages
         s.execute(insert(m.drafts).values(**row, proposal_id=proposal("letta"), version=1, status="rejected",
                                           decided_by="francesco"))  # a person read it and discarded it: counted
         assert quotas.usage(s).used["drafts_month"] == 2
-    set_plan(db, tenant, max_drafts_month=2, credits_month=30)
+    set_plan(db, tenant, max_drafts_month=2, credits_month=105)
     with db.tenant(tenant) as s:
         assert quotas.check(s, "drafts", again=True) is False  # a rewrite at the limit is the same article
         with pytest.raises(quotas.QuotaExceeded):
