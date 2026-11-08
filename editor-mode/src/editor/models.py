@@ -88,6 +88,7 @@ tenants = Table(
     Column("proposals_only", _ts()),  # since: trial or period over, proposals only
     Column("weekly_report", Boolean),  # the weekly report by email (on by default)
     Column("credits_month", Integer),  # credits the plan gives every month (credits.py)
+    Column("max_users", Integer),  # people with access to the newsroom, the director included
     Column("credits_alert", Text),  # last alert sent: "YYYY-MM:80" or "YYYY-MM:100"
 )
 
@@ -711,6 +712,7 @@ plans = Table(
     Column("autopilot", Boolean, nullable=False),
     Column("credits_month", Integer),
     Column("evening", Boolean, nullable=False),
+    Column("max_users", Integer),  # accesses included: people in the newsroom, the director included
 )
 
 subscriptions = Table(

@@ -2673,5 +2673,8 @@
  "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "One more article costs {a} credits, a translation into a language the site does not have {t}, a cover redrawn after the two free ones {c}. The month's credits go first, then those of the packs, which do not expire. The automatic newsroom uses them only if you allowed it extra articles with credits.",
  "Ultimi aggiornamenti": "Latest updates",
  "Aggiornamenti precedenti ({n})": "Earlier updates ({n})",
- "il codice {code} è già del piano {name}": "the code {code} already belongs to the plan {name}"
+ "il codice {code} è già del piano {name}": "the code {code} already belongs to the plan {name}",
+ "Accessi compresi": "Accesses included",
+ "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Invitation not created: the plan includes {n} accesses and they are all taken. Remove a person or an invitation, or move to a bigger plan in My plan.",
+ "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesses included in the plan: {used} used of {n}, open invitations included."
 }

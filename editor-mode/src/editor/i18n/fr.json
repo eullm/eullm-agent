@@ -2673,5 +2673,8 @@
  "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Un article en plus coûte {a} crédits, une traduction dans une langue que le site n'a pas {t}, une couverture refaite après les deux gratuites {c}. Les crédits du mois passent en premier, puis ceux des packs, qui n'expirent pas. La rédaction automatique ne les utilise que si tu lui as permis des articles en plus avec les crédits.",
  "Ultimi aggiornamenti": "Dernières mises à jour",
  "Aggiornamenti precedenti ({n})": "Mises à jour précédentes ({n})",
- "il codice {code} è già del piano {name}": "le code {code} appartient déjà à l'offre {name}"
+ "il codice {code} è già del piano {name}": "le code {code} appartient déjà à l'offre {name}",
+ "Accessi compresi": "Accès inclus",
+ "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Invitation non créée : l'offre comprend {n} accès et ils sont tous utilisés. Retirez une personne ou une invitation, ou passez à une offre plus grande dans Mon offre.",
+ "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accès inclus dans l'offre : {used} utilisés sur {n}, invitations en attente comprises."
 }

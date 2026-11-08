@@ -2343,7 +2343,8 @@ def register(app, ctx) -> None:
                       reports=reports,
                       recipients=recipients, tokens=tokens, new_token=new_token, new_link=new_link,
                       error=error, people=accounts.members(admin, c.tenant_id) if owner else [],
-                      invited=accounts.pending_invites(admin, c.tenant_id) if owner else [])
+                      invited=accounts.pending_invites(admin, c.tenant_id) if owner else [],
+                      seats=accounts.seats(admin, c.tenant_id) if owner else (0, None))
 
     def meters_of(usage, money: bool) -> list[dict]:
         out = []
@@ -2478,6 +2479,13 @@ def register(app, ctx) -> None:
     @app.post("/ui/people/invite", response_class=HTMLResponse)
     def ui_invite(request: Request, email: str = Form(...), role: str = Form("editor"),
                   c: auth.Caller = Depends(ctx.need("owner"))):
+        used, included = accounts.seats(admin, c.tenant_id)
+        if included is not None and used >= included:
+            # The plan's accesses are taken: someone must leave, or a bigger plan.
+            with db.tenant(c.tenant_id) as s:
+                return settings_page(request, c, s, status_code=400, error=t(
+                    "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un "
+                    "invito, oppure passa a un piano più grande in Il mio piano.", n=included))
         try:
             token = accounts.create_invite(admin, email, c.name, tenant_id=c.tenant_id, role=role)
         except accounts.AccountError as e:

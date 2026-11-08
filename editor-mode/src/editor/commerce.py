@@ -178,7 +178,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         """The plans the public site shows, with prices and limits."""
         out = [{k: p[k] for k in ("code", "name", "description", "price_month_cents", "price_year_cents", "currency",
                                   "trial_days", "max_sites", "max_languages", "max_active_sources",
-                                  "max_drafts_month", "autopilot", "credits_month", "evening")}
+                                  "max_drafts_month", "autopilot", "credits_month", "evening", "max_users")}
                for p in billing.plans(admin, public_only=True)]
         trial = next((p for p in billing.plans(admin) if p["code"] == billing.TRIAL_PLAN), None)
         with accounts._read(admin) as conn:
@@ -495,7 +495,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
     def ui_plan(code: str, name: str = Form(...), description: str = Form(""), price_month: str = Form(""),
                 price_year: str = Form(""), trial_days: str = Form("0"), max_sites: str = Form(""),
                 max_languages: str = Form(""), max_active_sources: str = Form(""),
-                max_drafts_month: str = Form(""), credits_month: str = Form(""), public: str = Form(""),
+                max_drafts_month: str = Form(""), credits_month: str = Form(""), max_users: str = Form(""),
+                public: str = Form(""),
                 autopilot: str = Form("1"), evening: str = Form("0"), s=Depends(need_console)):
         try:
             fields = {"name": name.strip(), "description": description.strip(), "price_month_cents": _cents(price_month),
@@ -503,7 +504,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                       "max_sites": _int(max_sites), "max_languages": _int(max_languages),
                       "max_active_sources": _int(max_active_sources),
                       "max_drafts_month": _int(max_drafts_month), "credits_month": _int(credits_month),
-                      "public": public == "1",
+                      "max_users": _int(max_users), "public": public == "1",
                       "autopilot": autopilot == "1", "evening": evening == "1"}
             billing.save_plan(admin, code, fields)
         except ValueError as e:

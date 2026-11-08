@@ -152,6 +152,33 @@ def test_owners_invite_people_with_a_role(db, tenant, admin):
     assert g.get("/", follow_redirects=False).headers["location"] == "/login"
 
 
+def test_the_plan_says_how_many_people_a_newsroom_has(db, tenant, admin):
+    from sqlalchemy import update
+    from editor import models as m
+    from test_billing import unique
+    c, _ = app_for(db)
+    capo = f"{unique('capo')}@example.com"  # the Postgres test database keeps people between runs
+    owner = accounts.create_user(admin, capo, password="password capo")
+    with admin.engine.begin() as conn:
+        accounts.set_member(conn, owner, tenant, "owner")
+    used, _ = accounts.seats(admin, tenant)  # other tests of the module may have left people here
+
+    def limit(n):
+        with admin.engine.begin() as conn:
+            conn.execute(update(m.tenants).where(m.tenants.c.tenant_id == tenant).values(max_users=n))
+    limit(used + 1)
+    c.post("/login", data={"email": capo, "password": "password capo"})
+    assert f"{used} usati su {used + 1}" in c.get("/settings").text
+    assert c.post("/ui/people/invite", data={"email": "uno@example.com", "role": "editor"}).status_code == 200
+    # The open invite takes the last access: one more person waits for one to free up.
+    page = c.post("/ui/people/invite", data={"email": "due@example.com", "role": "editor"})
+    assert page.status_code == 400 and f"comprende {used + 1} accessi" in page.text
+    assert accounts.seats(admin, tenant) == (used + 1, used + 1)
+    limit(None)
+    assert c.post("/ui/people/invite", data={"email": "due@example.com", "role": "editor"}).status_code == 200
+    assert "usati su" not in c.get("/settings").text
+
+
 def test_operator_console_and_entering_a_newsroom(db, tenant, admin):
     c, _ = app_for(db)
     accounts.create_user(admin, "op@example.com", password="password operatore", operator=True)

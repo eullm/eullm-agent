@@ -49,6 +49,7 @@ class LimitsIn(BaseModel):
     max_drafts_month: int | None = Field(None, ge=0)
     max_languages: int | None = Field(None, ge=1)
     credits_month: int | None = Field(None, ge=0)
+    max_users: int | None = Field(None, ge=1)
 
 
 class _Settings(BaseModel):
@@ -789,12 +790,12 @@ def register(app, ctx) -> None:
     def ui_update(tenant_id: str, name: str = Form(""), plan: str = Form(""), max_sites: str = Form(""),
                   max_active_sources: str = Form(""),
                   max_llm_cost_month: str = Form(""), max_drafts_month: str = Form(""), max_languages: str = Form(""),
-                  credits_month: str = Form(""), s=Depends(need_console)):
+                  credits_month: str = Form(""), max_users: str = Form(""), s=Depends(need_console)):
         try:
             limits = {"max_sites": _num(max_sites), "max_active_sources": _num(max_active_sources),
                       "max_llm_cost_month": _num(max_llm_cost_month, money=True),
                       "max_drafts_month": _num(max_drafts_month), "max_languages": _num(max_languages),
-                      "credits_month": _num(credits_month)}
+                      "credits_month": _num(credits_month), "max_users": _num(max_users)}
             res = newsrooms.update_newsroom(admin, tenant_id, {"limits": limits} | (
                 {"plan": plan.strip()[:60]} if plan.strip() else {}) | (
                 {"name": name.strip()} if name.strip() else {}), ctx.core)

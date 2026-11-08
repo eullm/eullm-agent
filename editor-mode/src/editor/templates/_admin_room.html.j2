@@ -209,7 +209,7 @@
     <div class="pad">
       {% set unlimited = _('senza limite') %}
       <dl class="dl">
-        {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese'))] %}
+        {% for key, label in [('max_sites', _('Siti')), ('max_active_sources', _('Fonti attive')), ('max_drafts_month', _('Bozze al mese')), ('max_languages', _('Lingue per sito')), ('credits_month', _('Crediti al mese')), ('max_users', _('Accessi compresi'))] %}
         <div><dt>{{ label }}</dt><dd {% if r[key] is not none %}class="num"{% endif %}>{{ r[key] if r[key] is not none else unlimited }}</dd></div>
         {% endfor %}
         <div><dt>{{ _('Costo modello al mese') }}</dt><dd {% if r.max_llm_cost_month is not none %}class="num"{% endif %}>{{ ('€ ' ~ r.max_llm_cost_month|num) if r.max_llm_cost_month is not none else unlimited }}</dd></div>
@@ -349,6 +349,7 @@
         <label class="field">{{ _('Bozze al mese') }}<input name="max_drafts_month" inputmode="numeric" value="{{ r.max_drafts_month if r.max_drafts_month is not none else '' }}"></label>
         <label class="field">{{ _('Lingue per sito') }}<input name="max_languages" inputmode="numeric" value="{{ r.max_languages if r.max_languages is not none else '' }}"></label>
         <label class="field">{{ _('Crediti al mese') }}<input name="credits_month" inputmode="numeric" value="{{ r.credits_month if r.credits_month is not none else '' }}"></label>
+        <label class="field">{{ _('Accessi compresi') }}<input name="max_users" inputmode="numeric" value="{{ r.max_users if r.max_users is not none else '' }}"></label>
         <label class="field">{{ _('Costo modello al mese (€)') }}<input name="max_llm_cost_month" inputmode="decimal" value="{{ (r.max_llm_cost_month|string)|replace('.', ',') if r.max_llm_cost_month is not none else '' }}"></label>
       </div>
       <p class="hint">{{ _('Vuoto vuol dire senza limite. Il costo del modello diventa anche il limite della redazione nel Core.') }} {{ _('Il piano si cambia in Abbonamento: i suoi limiti sostituiscono questi.') }}</p>

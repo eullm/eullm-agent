@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.33.3
+
+### Added
+
+- **Accessi compresi nel piano** (Francesco, 8 novembre). Ogni piano dice
+  quante persone può avere una redazione, il direttore compreso e gli
+  inviti ancora aperti contati. Vuoto vuol dire senza limite. Valori di
+  partenza: Solo 1, Starter 2, Pro 5, Business 10, Agency e gli altri
+  senza limite; le redazioni prendono quelli del loro piano (migrazione
+  0044, SQLite 0033). Oltre il limite il direttore non può invitare altri,
+  ma chi c'è già resta. Si cambia in Console › Piani e crediti e, per una
+  singola redazione, in "Nome e limiti". In Impostazioni › Persone della
+  redazione si vede "usati su N"; `/api/public/plans` ha `max_users`, che
+  redazia.com mostra nella scheda del piano.
+
 ## 0.33.2
 
 ### Changed

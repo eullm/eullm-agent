@@ -388,6 +388,16 @@ def pending_invites(admin, tenant_id: str | None, now: datetime | None = None) -
         return conn.execute(q.order_by(i.c.created_at.desc())).all()
 
 
+def seats(admin, tenant_id: str) -> tuple[int, int | None]:
+    """The accesses a newsroom uses (people in it and invites still open,
+    each email once) and the ones its plan includes (None: no limit)."""
+    people = {x.email for x in members(admin, tenant_id)}
+    people |= {x.email for x in pending_invites(admin, tenant_id)}
+    with _read(admin) as conn:
+        limit = conn.execute(select(m.tenants.c.max_users).where(m.tenants.c.tenant_id == tenant_id)).scalar()
+    return len(people), limit
+
+
 def revoke_invite(admin, tenant_id: str | None, token_sha256: str) -> bool:
     i = m.invites
     q = delete(i).where(i.c.token_sha256 == token_sha256, i.c.used_at.is_(None))
