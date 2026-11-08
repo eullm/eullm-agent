@@ -221,7 +221,23 @@ HEADLINE = (
     + '{"prompt": "...", "headline": "...", "alt": "..."}'
 )
 
+# The photograph of a recipe (drafts.OWN_RECIPE): the finished dish, as the
+# site's own food photographer would shoot it.
+FOOD = (
+    "You write the prompt for the photograph of a recipe, for an image model. Show the finished dish exactly "
+    "as the recipe makes it (its ingredients, colours and texture, nothing it does not have), plated and ready "
+    "to serve, as a professional food photographer shoots it for a cookery magazine: natural window light from "
+    "the side, a 45-degree or overhead angle, shallow depth of field, a simple table, linen or board and at most "
+    "two ingredients of the recipe as props, true-to-life appetising colours, real textures and small crumbs or "
+    "drops. No people, no hands, no text, no logos, no packaging. End the prompt with: no illustration, no 3D "
+    "render, no CGI, no oversaturated colours. " + RULES + '{"prompt": "...", "alt": "..."}'
+)
+
 STYLES = ("impact", "editorial")
+
+
+def is_recipe(d) -> bool:
+    return bool(((getattr(d, "seo", None) or {}).get("recipe") or {}).get("own"))
 
 
 def style_of(profile: dict) -> tuple[str, bool]:
@@ -242,7 +258,12 @@ def describe(core, d, profile: dict) -> tuple[str, str]:
     """The image prompt and its alternative text, from the article. Without a
     model, or when it fails, a plain prompt from the title."""
     style, words = style_of(profile)
-    if style == "impact":
+    if is_recipe(d):
+        style, words = "food", False
+        plain = (f"Professional food photograph of the finished dish: {d.title}. Plated and ready to serve, natural "
+                 "window light, 45-degree angle, shallow depth of field, simple table, true-to-life colours. No "
+                 "people, no text, no logos, wide 16:9 composition, no illustration, no 3D render, no CGI.")
+    elif style == "impact":
         plain = (f"Documentary news photograph for the story: {d.title}. {d.subtitle or ''} One strong subject, "
                  "close and sharp, natural light with strong contrast, clean background, readable as a "
                  "thumbnail, shot on a full-frame camera, true-to-life colours. No text, no logos, no "
@@ -253,9 +274,11 @@ def describe(core, d, profile: dict) -> tuple[str, str]:
                  "no illustration, no 3D render.")
     if core is None:
         return plain, d.title
-    lead = d.body_md.split("\n## ", 1)[0][:1500]
+    # A recipe's cover shows the dish: its ingredients and steps are the description.
+    lead = d.body_md[:3000] if style == "food" else d.body_md.split("\n## ", 1)[0][:1500]
     try:
-        res = core.chat([{"role": "system", "content": system_for(profile)}, {"role": "user", "content": (
+        res = core.chat([{"role": "system", "content": FOOD if style == "food" else system_for(profile)},
+                         {"role": "user", "content": (
             f"Site: {profile.get('name')} ({profile.get('domain')}); tone: "
             f"{(profile.get('style') or {}).get('tone') or 'not determined'}\n"
             f"Article language: {d.language or profile.get('language') or 'unknown'}\n"

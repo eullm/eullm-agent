@@ -1069,7 +1069,8 @@ def register(app, ctx) -> None:
             "per_day": ((body or {}).get("settings") or {}).get("proposals_per_day", props.PER_DAY) if body else None,
             "cover_style": ((body or {}).get("settings") or {}).get("cover_style") or "impact",
             "cover_text": bool(((body or {}).get("settings") or {}).get("cover_text")),
-            "sources_style": ((body or {}).get("settings") or {}).get("sources_style") or "notes",
+            "sources_style": (lambda st: "none" if st != "list" and autopilot.recipe_site(body) else st)(
+                ((body or {}).get("settings") or {}).get("sources_style") or "notes"),
             "content_mode": evergreen.mode_of(body), "evergreen_share": evergreen.share_of(body),
             "evening": evening.settings_of(body),
             "evening_allowed": evening.allowed(s),
@@ -1320,8 +1321,14 @@ def register(app, ctx) -> None:
                     config["branch"] = branch.strip()
                 if found["articles_path"]:
                     config["path"] = found["articles_path"]
+                if found.get("recipes_path"):  # a recipe site: its recipes, its courses
+                    config["recipe_path"] = found["recipes_path"]
+                    config["categories"] = found.get("categories") or []
                 connect.save_target(db, c.tenant_id, site_id, "github", found["repo"], config, secret.strip(),
                                     "GH", site.domain)
+                if found.get("recipes_path"):
+                    with db.tenant(c.tenant_id) as s:
+                        prof.mark_recipe_site(s, site_id, [x["name"] for x in found.get("categories") or []])
                 found["host"] = chosen
             else:
                 url = address.strip()
@@ -1534,7 +1541,7 @@ def register(app, ctx) -> None:
 
     @app.post("/ui/sites/{site_id}/sources-style")
     def ui_sources_style(site_id: int, style: str = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
-        if style not in ("notes", "list"):
+        if style not in ("notes", "list", "none"):
             raise HTTPException(400, "unknown style")
         with db.tenant(c.tenant_id) as s:
             if not prof.set_sources_style(s, site_id, style):

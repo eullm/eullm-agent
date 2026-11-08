@@ -265,13 +265,28 @@ def github(repo_text: str, token: str, *, branch: str = "", path: str = "", api:
                         text = gh.file(e["path"], base)
                         workflows[e["path"]] = (text or b"").decode("utf-8", "replace")[:6000]
             found = path.strip().strip("/")
-            candidates = [found] if found else list(ARTICLE_FOLDERS)
             articles, posts = None, []
-            for folder in candidates:
-                got = gh.posts(folder, base, limit=sitegit.SAMPLES)
-                if got:
-                    articles, posts = folder, got
-                    break
+            if found:
+                articles, posts = found, gh.posts(found, base, limit=sitegit.SAMPLES)
+                articles = articles if posts else None
+            else:
+                # The folder with the most articles: the usual places, then every folder of
+                # content/ (a Next.js site keeps content/tecnica, content/ricette...). Recipes
+                # are kept apart: they go to their own folder (recipes_path).
+                folders = list(ARTICLE_FOLDERS)
+                for root_dir in ("content", "src/content"):
+                    folders += [e["path"] for e in gh.listing(root_dir, base) if e.get("type") == "dir"]
+                for folder in dict.fromkeys(folders):
+                    got = gh.posts(folder, base, limit=sitegit.SAMPLES)
+                    if got and not sitegit.is_recipes(got) and len(got) > len(posts):
+                        articles, posts = folder, got
+            recipes = gh.recipe_folder(articles or "content/blog", base)
+            # The courses the site files its recipes under: the sections the newsroom fills.
+            categories: dict[str, int] = {}
+            for p in gh.posts(recipes, base, limit=40) if recipes else []:
+                name = str((p.data or {}).get("category") or "").strip()
+                if name:
+                    categories[name] = categories.get(name, 0) + 1
             fmt = sitegit.learn(posts) if posts else None
             texts = {p: gh.file(p, base) for p in ("public/llms.txt", "static/llms.txt", "llms.txt",
                                                     "public/sitemap.xml", "static/sitemap.xml")}
@@ -280,7 +295,8 @@ def github(repo_text: str, token: str, *, branch: str = "", path: str = "", api:
         return {
             "repo": repo, "branch": base, "private": bool(body.get("private")),
             "generator": _detect_generator(names, package), "host": _detect_host(names, workflows),
-            "articles_path": articles, "articles_found": len(posts),
+            "articles_path": articles, "articles_found": len(posts), "recipes_path": recipes,
+            "categories": [{"name": k, "count": v} for k, v in sorted(categories.items(), key=lambda x: -x[1])],
             "format": ({"ext": fmt.ext, "folder": fmt.folder, "keys": fmt.keys[:14], "learned": fmt.learned}
                        if fmt else None),
             "has_llms": any(v and p.endswith("llms.txt") for p, v in texts.items()),
@@ -296,14 +312,15 @@ def github(repo_text: str, token: str, *, branch: str = "", path: str = "", api:
 
 def known_categories(s, site_id: int) -> dict[str, int]:
     """The categories the site's CMS already has, as {name: articles}: what
-    the analysis takes as the sections to fill. Empty without a WordPress."""
+    the analysis takes as the sections to fill: a WordPress's categories, the
+    courses of a site's recipes kept in its repository."""
     from sqlalchemy import select
 
     from . import models as m
 
     out: dict[str, int] = {}
     for config in s.execute(select(m.publish_targets.c.config).where(
-            m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind == "wordpress")).scalars():
+            m.publish_targets.c.site_id == site_id, m.publish_targets.c.kind.in_(("wordpress", "github")))).scalars():
         for c in (config or {}).get("categories") or []:
             if c.get("slug") not in DEFAULT_CATEGORIES and c.get("name"):
                 out.setdefault(c["name"], int(c.get("count") or 0))

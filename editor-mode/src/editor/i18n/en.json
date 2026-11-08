@@ -2676,5 +2676,6 @@
  "il codice {code} è già del piano {name}": "the code {code} already belongs to the plan {name}",
  "Accessi compresi": "Accesses included",
  "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Invitation not created: the plan includes {n} accesses and they are all taken. Remove a person or an invitation, or move to a bigger plan in My plan.",
- "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesses included in the plan: {used} used of {n}, open invitations included."
+ "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesses included in the plan: {used} used of {n}, open invitations included.",
+ "Nessuna: le fonti restano solo in Redazia": "None: the sources stay in Redazia only"
 }

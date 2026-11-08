@@ -353,8 +353,8 @@ def recipe_lists(meta: dict | None) -> dict[str, str]:
 def recipe_meta(meta: dict | None, sources: dict, claims: list) -> dict | None:
     """The recipe's servings and times, kept only when an item it cites
     gives them (a number the sources do not give is never published)."""
-    if not meta:
-        return None
+    if not meta or meta.get("own"):
+        return meta or None
     cited = {i for c in claims if c.section in (meta["ingredients"], meta["steps"]) for i in c.sources}
     text = " ".join(sources[i].text for i in cited if i in sources).lower()
     out = dict(meta)
@@ -368,7 +368,74 @@ def recipe_meta(meta: dict | None, sources: dict, claims: list) -> dict | None:
     return out
 
 
-def parse_article(value, allowed: set[int], language: str | None = None) -> Article:
+DIFFICULTY = {"it": ("Facile", "Medio", "Difficile"), "en": ("Easy", "Medium", "Hard"),
+              "de": ("Einfach", "Mittel", "Schwer"), "fr": ("Facile", "Moyen", "Difficile"),
+              "es": ("Fácil", "Media", "Difícil")}
+
+
+def _short(v, limit: int) -> str:
+    return " ".join(str(v).split())[:limit] if isinstance(v, (str, int, float)) and not isinstance(v, bool) else ""
+
+
+def parse_own_recipe(r, language: str | None) -> dict:
+    """The site's own recipe (OWN_RECIPE), as the model gives it: checked
+    and clamped. Its lines are not claims: the items were the idea only."""
+    if not isinstance(r, dict):
+        raise ValueError("recipe must be an object with ingredients and steps")
+    ingredients = []
+    for x in r.get("ingredients") or []:
+        if isinstance(x, str) and x.strip():
+            x = {"name": x}
+        if not isinstance(x, dict) or not _short(x.get("name"), 120):
+            continue
+        ingredients.append({"quantity": _short(x.get("quantity") or "", 20), "unit": _short(x.get("unit") or "", 30),
+                            "name": humanize(_short(x["name"], 120))})
+    steps = []
+    for x in r.get("steps") or []:
+        text_ = x.get("text") if isinstance(x, dict) else x
+        if isinstance(text_, str) and text_.strip():
+            steps.append(humanize(" ".join(text_.split()))[:800])
+    if len(ingredients) < 2 or not steps:
+        raise ValueError("the recipe needs its ingredients (at least 2, with quantity and unit) and its steps")
+    lang = (language or "")[:2]
+    level = str(r.get("difficulty") or "").strip().lower()
+    words = DIFFICULTY.get(lang, DIFFICULTY["en"])
+    difficulty = {"easy": words[0], "medium": words[1], "hard": words[2]}.get(level) \
+        or next((w for w in words if w.lower() == level), None)
+    try:
+        servings = int(r.get("servings"))
+    except (TypeError, ValueError):
+        servings = None
+    servings = servings if servings and 0 < servings <= 50 else None
+    tags = []
+    for x in r.get("tags") or []:
+        tag = seo.slugify(str(x), 30) if isinstance(x, str) else ""
+        if tag and tag not in tags:
+            tags.append(tag)
+    nutrition = {}
+    if isinstance(r.get("nutrition"), dict):
+        for key in ("calories", "protein", "carbs", "fat", "sugars"):
+            if v := _short(r["nutrition"].get(key) or "", 20):
+                nutrition[key] = v
+        try:
+            weight = int(r["nutrition"].get("servingWeight"))
+            if 0 < weight <= 3000:
+                nutrition["servingWeight"] = weight
+        except (TypeError, ValueError):
+            pass
+    ih, sh = RECIPE_HEADINGS.get(lang, RECIPE_HEADINGS["en"])
+    return {"own": True, "ingredients": ih, "steps": sh, "items": ingredients, "method": steps,
+            "servings": servings, "yield": str(servings) if servings else None,
+            "prep_minutes": _minutes(r.get("prep_minutes")), "cook_minutes": _minutes(r.get("cook_minutes")),
+            "difficulty": difficulty, "category": _short(r.get("category") or "", 60) or None, "tags": tags[:6],
+            "nutrition": nutrition or None}
+
+
+def ingredient_line(x: dict) -> str:
+    return " ".join(p for p in (x.get("quantity"), x.get("unit"), x.get("name")) if p)
+
+
+def parse_article(value, allowed: set[int], language: str | None = None, own: bool = False) -> Article:
     if not isinstance(value, dict):
         raise ValueError("expected an object")
     title = value.get("title")
@@ -396,7 +463,9 @@ def parse_article(value, allowed: set[int], language: str | None = None) -> Arti
                 raise ValueError(f"claim cites ids not in the list: {unknown}")
             claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), heading))
     recipe = None
-    if isinstance(value.get("recipe"), dict):
+    if own:
+        recipe = parse_own_recipe(value.get("recipe"), language)
+    elif isinstance(value.get("recipe"), dict):
         r = value["recipe"]
         ingredients, steps = _sourced(r.get("ingredients"), allowed, "ingredient"), _sourced(r.get("steps"), allowed, "step")
         if len(ingredients) >= 2 and steps:
@@ -404,7 +473,7 @@ def parse_article(value, allowed: set[int], language: str | None = None) -> Arti
             claims += [Claim(t, ids, ih) for t, ids in ingredients] + [Claim(t, ids, sh) for t, ids in steps]
             recipe = {"ingredients": ih, "steps": sh, "yield": " ".join(str(r.get("yield") or "").split())[:60] or None,
                       "prep_minutes": _minutes(r.get("prep_minutes")), "cook_minutes": _minutes(r.get("cook_minutes"))}
-    if len(claims) < 3:
+    if len(claims) < (1 if own else 3):
         raise ValueError("an article needs at least 3 claims")
     # Questions readers ask, each answered with sourced claims like the rest.
     faq = []
@@ -469,6 +538,12 @@ def render(article: Article, sources: dict[int, Source], language: str | None, l
         else:
             para.append(f"{c.text}{marks}")
     flush()
+    own = article.recipe if (article.recipe or {}).get("own") else None
+    if own:
+        lines.append(f"\n## {own['ingredients']}\n")
+        lines += [f"- {ingredient_line(x)}" for x in own["items"]]
+        lines.append(f"\n## {own['steps']}\n")
+        lines += [f"{n}. {x}" for n, x in enumerate(own["method"], 1)]
     if links:
         lines.append(f"\n## {READ_MORE.get((language or '')[:2], 'Read more')}\n")
         lines += [f"- [{x['title']}]({x['url']})" for x in links]
@@ -481,6 +556,15 @@ def render(article: Article, sources: dict[int, Source], language: str | None, l
 
 SOURCES_HEADING = re.compile(r"\n## (Fonti|Sources)\n")
 NOTE = re.compile(r"^\[\^(\d+)\]: \[(?P<title>[^\]]*)\]\((?P<url>[^)\s]+)\)(?:, (?P<name>[^,\n]+))?", re.M)
+
+
+def without_sources(md: str) -> str:
+    """The article for a site that shows no sources (a recipe site, or the
+    owner's choice): no note numbers and no list at the end. The sentences
+    stay tied to their sources in the draft; only the published text changes."""
+    found = list(SOURCES_HEADING.finditer(md))
+    head = md[:found[-1].start()] if found else md
+    return re.sub(r"\[\^\d+\]", "", head).rstrip() + "\n"
 
 
 def discreet_sources(md: str) -> str:
@@ -758,7 +842,7 @@ def _prompt(profile: dict, proposal, sources: dict[int, Source], roles: dict[int
         f"Format: {proposal.format}",
         *brief_lines(profile),
         *([REQUEST] if proposal.format == "request" else []),
-        *([RECIPE] if proposal.format == "recipe" else []),
+        *([OWN_RECIPE if own_recipe(profile, proposal) else RECIPE] if proposal.format == "recipe" else []),
         *([EVERGREEN] if is_evergreen(getattr(proposal, "basis", None)) else _analysis_lines(profile)),
         *_post_lines(posts or []),
         ("Items (MAIN: the news the article is about; ORIGINAL: the original document it reports on; CONTEXT: "
@@ -800,6 +884,37 @@ RECIPE = (
     "repeat the ingredients or the steps in the sections. When no item gives a whole recipe (its ingredients and "
     "its steps), set \"recipe\" to null and write the article without it."
 )
+
+
+# The recipe of a recipe site (autopilot.recipe_site): its own, with every
+# field of the site's recipe cards. Francesco, 2026-11-08: "le fonti dovranno
+# solo essere spunto per l'hype poi le ricette le pubblica lei con tanto di
+# foto". The opening still rests on the items (why this dish now); the
+# recipe itself is the site's and cites nothing.
+OWN_RECIPE = (
+    "This article is a recipe of the site, its own: the items are only the idea (the dish, ingredient, season or "
+    "trend people look for now) and are never copied. The sections are a short opening of one to three sentences "
+    "on why this dish now, from the items and citing them; do not repeat the recipe in them. Then add to the JSON "
+    "\"recipe\": {\"servings\": <number of portions>, \"prep_minutes\": <minutes>, \"cook_minutes\": <minutes>, "
+    "\"difficulty\": \"easy|medium|hard\", \"category\": \"<the site's section for its course (starter, first "
+    "course, main course, side dish, dessert...), written exactly as listed; a new one in the same style only "
+    "when none fits>\", \"tags\": [\"<up to 5 short labels readers browse by, in the site's language, only when "
+    "true of these ingredients and steps: diet (vegetarian, vegan, gluten free, keto, low calorie), occasion "
+    "(christmas, easter), quick (under 30 minutes), technique (low temperature)>\"], \"ingredients\": "
+    "[{\"quantity\": \"<number, or q.b. / to taste>\", \"unit\": \"<g, ml, tablespoons... or empty>\", \"name\": "
+    "\"<ingredient>\"}], \"steps\": [\"<one step, in order, with temperatures and times>\"], \"nutrition\": "
+    "{\"calories\": \"<kcal per portion, e.g. 520 kcal>\", \"protein\": \"<e.g. 25g>\", \"carbs\": \"...\", "
+    "\"fat\": \"...\", \"sugars\": \"...\", \"servingWeight\": <grams of one portion>}}. Write it as a careful "
+    "cook would: real quantities for the portions, steps a person can follow, times and temperatures that work, "
+    "nutrition estimated from the quantities. Write the recipe in the site's language."
+)
+
+
+def own_recipe(profile: dict | None, proposal) -> bool:
+    """Whether the draft is the site's own recipe (OWN_RECIPE)."""
+    from .autopilot import recipe_site
+
+    return getattr(proposal, "format", None) == "recipe" and recipe_site(profile)
 
 
 # An article on a theme the site needs (evergreen.py): a guide or an
@@ -1018,7 +1133,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         with usage.tagged(db, tenant_id, purpose, site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
             res = core.chat(messages)
         try:
-            article = check(parse_article(extract_json(res.content), allowed, profile.get("language")), sources)
+            article = check(parse_article(extract_json(res.content), allowed, profile.get("language"),
+                                          own=own_recipe(profile, prop)), sources)
         except ValueError as e:
             problem = str(e)
         else:
@@ -1044,6 +1160,9 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     sd.checks = seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
                            len({i for c in article.claims for i in c.sources}))
     section = site_section(profile, article.seo.get("section") if isinstance(article.seo, dict) else None)
+    if (article.recipe or {}).get("own") and article.recipe.get("category"):
+        # The course of the site's own recipe, or a new section the site makes for it.
+        section = site_section(profile, article.recipe["category"]) or article.recipe["category"]
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
         # while this one was with the model.
@@ -1195,9 +1314,16 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
                 s.execute(insert(m.draft_claim_sources).values(tenant_id=tenant_id, claim_id=cid, item_id=i))
         s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
             title=title, subtitle=article.subtitle,
-            body_md=render(article, sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
+            body_md=render(_with_own(article, old), sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
             flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
     return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}
+
+
+def _with_own(article: Article, old: dict) -> Article:
+    """The article with the site's own recipe it had, whose lines are not claims."""
+    if (old.get("recipe") or {}).get("own"):
+        article.recipe = old["recipe"]
+    return article
 
 
 def mark_replacement(db, tenant_id: str, draft_id: int, replaces: int) -> None:
@@ -1246,6 +1372,6 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
                 s.execute(update(m.draft_claims).where(m.draft_claims.c.id == c["id"]).values(text=new.text))
         s.execute(update(m.drafts).where(m.drafts.c.id == draft_id).values(
             title=title, subtitle=article.subtitle,
-            body_md=render(article, sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
+            body_md=render(_with_own(article, old), sources, d.language, sd.links, recipe_lists(old.get("recipe"))),
             flags=article.flags, seo={**sd.as_dict(), **keep}, status=status, decided_by=None, decided_at=None))
     return {"status": status, "flags": article.flags, "was_approved": d.status == "approved"}

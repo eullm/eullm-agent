@@ -217,11 +217,36 @@ def save(s, site_id: int, values: dict) -> bool:
     return _set_settings(s, site_id, auto=check_settings(values))
 
 
+# A recipe site (Francesco, 2026-11-08: "redazia deve leggere che è un sito di
+# ricette e si regola da sola"): told by its repository (a folder of recipes,
+# connect.github) or by the sector of its profile. Its articles are its own
+# recipes: the news only says what people cook and look for now.
+RECIPE_WORDS = re.compile(r"\b(ricett\w*|recipes?|rezept\w*|recettes?|recetas?|food blog)\b", re.I)
+
+RECIPE_SITE = (
+    "This is a recipe site: it publishes its own recipes. The items only show what people cook, look for and "
+    "talk about now (a dish, an ingredient, a season, a trend, a festivity): take them as the idea, then the "
+    "article is a complete recipe of the site (format recipe), filed under the site's section for its course. "
+    "A technique, an ingredient or a method explained without one dish to cook is an article of format guide."
+)
+
+
+def recipe_site(body: dict | None) -> bool:
+    """Whether the site publishes recipes of its own."""
+    st = (body or {}).get("settings") or {}
+    if st.get("site_kind"):
+        return st["site_kind"] == "recipes"
+    sector = ((body or {}).get("sector") or {}).get("value") or ""
+    summary = (body or {}).get("summary")
+    summary = (summary.get("value") if isinstance(summary, dict) else summary) or ""
+    return bool(RECIPE_WORDS.search(f"{sector} {summary}"[:800]))
+
+
 def brief_lines(body: dict | None) -> list[str]:
     """The newsroom's brief and directives, for the prompts that plan and
     write its articles; set with or without the automatic mode."""
     cfg = settings_of(body)
-    out = []
+    out = [RECIPE_SITE] if recipe_site(body) else []
     if cfg["brief"]:
         out.append(f"Newsroom brief: {cfg['brief'][:2000]}")
     if cfg["sections"]:
