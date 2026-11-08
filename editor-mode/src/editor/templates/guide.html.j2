@@ -21,6 +21,17 @@
   <p class="hint">{{ _('Tutto il resto è automatico. Una fonte sospesa dalla manutenzione è un avviso, non una decisione.') }}</p>
 </section>
 
+<section class="card pad" aria-labelledby="h-limits">
+  <h2 id="h-limits">{{ _('Cosa contano i limiti del piano') }}</h2>
+  {% if plan.max_drafts_month %}<p class="lead">{{ _('Il tuo piano: {a} articoli al mese, {s} siti, {l} lingue per sito, {f} fonti attive.', a=plan.max_drafts_month, s=plan.max_sites or '–', l=plan.max_languages or 1, f=plan.max_active_sources or '–') }}</p>{% endif %}
+  <ul>
+    <li><strong>{{ _('Un articolo esce in tutte le lingue del sito e conta una volta.') }}</strong> {{ _('Con 30 articoli e 2 lingue hai 30 articoli, ognuno anche tradotto: 60 pagine pubblicate, uno al giorno in ciascuna lingua.') }}</li>
+    <li>{{ _('Un articolo conta una volta anche se il caporedattore AI lo riscrive. Quelli che la redazione automatica scarta non contano; una bozza che scarti tu conta, perché è stata scritta.') }}</li>
+    <li><strong>{{ _('I limiti sono della redazione, non del singolo sito.') }}</strong> {{ _('Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.') }}</li>
+    <li><strong>{{ _('I crediti servono per andare oltre il piano.') }}</strong> {{ _('Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.', a=prices.article, t=prices.translation, c=prices.image) }} <a href="/plan">{{ _('Il mio piano') }}</a></li>
+  </ul>
+</section>
+
 {% set STEPS = [
   (_('Analisi del sito'), _('Aggiungi il dominio; poi ogni lunedì alle 04:00'), _('Il sito risponde e ha articoli leggibili'), _('Profilo in bozza, esito "completa" o "parziale" con il motivo'), '/site'),
   (_('Profilo approvato'), _('Lo approvi tu'), _('Hai controllato temi e articoli d\'esempio'), _('"in uso" accanto al sito, nel Desk'), '/site'),

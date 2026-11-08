@@ -1626,7 +1626,8 @@ def register(app, ctx) -> None:
     @app.get("/guide", response_class=HTMLResponse)
     def guide(request: Request, c: auth.Caller = Depends(viewer)):
         with db.tenant(c.tenant_id) as s:
-            return render(request, "guide.html.j2", c, s, "guide")
+            u = quotas.usage(s)
+            return render(request, "guide.html.j2", c, s, "guide", plan=u.plan if u else {}, prices=credits.prices(s))
 
     # --- Fonti --------------------------------------------------------------------
 

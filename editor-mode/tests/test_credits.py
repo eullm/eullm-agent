@@ -27,10 +27,14 @@ def fill_drafts(db, tenant, n):
     """n drafts this month, as if written."""
     did, site_id = approved_draft(db, tenant)
     with db.tenant(tenant) as s:
-        prop = s.execute(select(m.drafts.c.proposal_id).where(m.drafts.c.id == did)).scalar()
+        prop = s.execute(select(m.proposals).where(m.proposals.c.id == select(m.drafts.c.proposal_id).where(
+            m.drafts.c.id == did).scalar_subquery())).one()
         have = s.execute(select(func.count()).select_from(m.drafts)).scalar()
-        for i in range(max(0, n - have)):
-            s.execute(insert(m.drafts).values(tenant_id=tenant, proposal_id=prop, site_id=site_id, version=10 + i,
+        for i in range(max(0, n - have)):  # each its own article: a proposal of its own
+            other = s.execute(insert(m.proposals).values(
+                tenant_id=tenant, site_id=site_id, topic_id=prop.topic_id, profile_id=prop.profile_id, opportunity=50,
+                title=f"x{i}", generated_by="model", status="drafted").returning(m.proposals.c.id)).scalar_one()
+            s.execute(insert(m.drafts).values(tenant_id=tenant, proposal_id=other, site_id=site_id, version=1,
                                               title="x", body_md="x", status="draft", generated_by="model"))
     return did
 
@@ -260,3 +264,39 @@ def test_a_new_newsroom_starts_on_the_plan_chosen_from_the_menu(db, admin):
     # The plan's limits, but the number written by hand wins.
     assert row.plan == "pro" and row.max_drafts_month == pro["max_drafts_month"] and row.max_sites == 7
     assert f"{pro['name']} · Attivo" in c.get(f"/admin/newsrooms/{tid}").text
+
+
+def test_a_plan_article_is_one_article_that_comes_out_in_all_the_sites_languages(db, tenant):
+    """Francesco 2026-11-07: the plan counts the articles that come out,
+    each in all the languages of the plan; the editor-in-chief's rewrites
+    and the articles the automatic newsroom discarded are not counted."""
+    from editor import autopilot
+
+    did = fill_drafts(db, tenant, 1)
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+        row = dict(tenant_id=tenant, site_id=d.site_id, title="x", body_md="x", generated_by="model")
+        s.execute(insert(m.drafts).values(**row, proposal_id=d.proposal_id, version=2, status="draft"))  # a rewrite
+        s.execute(insert(m.drafts).values(**row, proposal_id=d.proposal_id, version=3, status="draft",
+                                          language="en", translation_of=did))  # its translation
+        prop = s.execute(select(m.proposals).where(m.proposals.c.id == d.proposal_id)).one()
+
+        def proposal(title):
+            return s.execute(insert(m.proposals).values(
+                tenant_id=tenant, site_id=d.site_id, topic_id=prop.topic_id, profile_id=prop.profile_id,
+                opportunity=50, title=title, generated_by="model", status="drafted").returning(m.proposals.c.id)).scalar_one()
+
+        s.execute(insert(m.drafts).values(**row, proposal_id=proposal("scartata"), version=1, status="rejected",
+                                          decided_by=autopilot.AUTO))  # discarded by the newsroom: not counted
+        s.execute(insert(m.drafts).values(**row, proposal_id=proposal("letta"), version=1, status="rejected",
+                                          decided_by="francesco"))  # a person read it and discarded it: counted
+        assert quotas.usage(s).used["drafts_month"] == 2
+    set_plan(db, tenant, max_drafts_month=2, credits_month=30)
+    with db.tenant(tenant) as s:
+        assert quotas.check(s, "drafts", again=True) is False  # a rewrite at the limit is the same article
+        with pytest.raises(quotas.QuotaExceeded):
+            quotas.check(s, "drafts")
+        # Into the site's languages a translation is part of the article; into another one, credits.
+        assert quotas.translation(s, included=True) is False
+        assert quotas.translation(s, included=False) is True
+        assert quotas.translation(s, included=False, pay=False) is False

@@ -930,6 +930,14 @@ def outlets(s, items: list[int], title: str = "", need: int = 0, also: list[int]
     return count(main + same)
 
 
+def written(s, proposal_id: int) -> bool:
+    """Whether the proposal already has its article: writing it again (the
+    editor-in-chief's rewrite, a new version) is not one more of the plan."""
+    d = m.drafts.c
+    return s.execute(select(d.id).where(d.proposal_id == proposal_id, d.translation_of.is_(None)).limit(1)).first() \
+        is not None
+
+
 def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: httpx.Client | None = None,
                 pay: bool = True, purpose: str = "draft", notes: str | None = None, outlets: int = 0,
                 min_words: int = 0) -> int:
@@ -942,7 +950,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         prop = s.execute(select(m.proposals).where(m.proposals.c.id == proposal_id)).first()
         if prop is None or prop.status not in ("accepted", "drafted"):
             raise ValueError("drafts are written for accepted proposals only")
-        quotas.check(s, "drafts", pay="article" if pay else None)
+        quotas.check(s, "drafts", pay="article" if pay else None, again=written(s, proposal_id))
         cited = list(s.execute(select(m.proposal_citations.c.item_id).where(
             m.proposal_citations.c.proposal_id == proposal_id)).scalars())
         # Asked for in the newsroom's words, or on a theme (evergreen.py): every item cited is the subject.
@@ -1039,7 +1047,7 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     with db.tenant(tenant_id) as s:
         # Checked again with the insert: other drafts may have been written
         # while this one was with the model.
-        over = quotas.check(s, "drafts", pay="article" if pay else None)
+        over = quotas.check(s, "drafts", pay="article" if pay else None, again=written(s, proposal_id))
         quotas.lock(s, f"editor-draft-version:{proposal_id}")
         version = (s.execute(select(func.max(m.drafts.c.version)).where(m.drafts.c.proposal_id == proposal_id)).scalar() or 0) + 1
         did = s.execute(insert(m.drafts).values(

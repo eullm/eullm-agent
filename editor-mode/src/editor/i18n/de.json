@@ -2662,5 +2662,14 @@
  "ricetta": "Rezept",
  "confronto": "Vergleich",
  "dati": "Daten",
- "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "Sie hat die heutigen Artikel erledigt ({n} von {tot}: {d} hatte sie gestern vorgezogen) und macht morgen um {h}:00 weiter."
+ "Ha fatto gli articoli di oggi ({n} su {tot}: {d} li aveva anticipati ieri) e riprende domani alle {h}:00.": "Sie hat die heutigen Artikel erledigt ({n} von {tot}: {d} hatte sie gestern vorgezogen) und macht morgen um {h}:00 weiter.",
+ "Cosa contano i limiti del piano": "Was die Grenzen des Tarifs zählen",
+ "Il tuo piano: {a} articoli al mese, {s} siti, {l} lingue per sito, {f} fonti attive.": "Dein Tarif: {a} Artikel im Monat, {s} Websites, {l} Sprachen pro Website, {f} aktive Quellen.",
+ "Un articolo esce in tutte le lingue del sito e conta una volta.": "Ein Artikel erscheint in allen Sprachen der Website und zählt einmal.",
+ "Con 30 articoli e 2 lingue hai 30 articoli, ognuno anche tradotto: 60 pagine pubblicate, uno al giorno in ciascuna lingua.": "Mit 30 Artikeln und 2 Sprachen hast du 30 Artikel, jeden auch übersetzt: 60 veröffentlichte Seiten, einer pro Tag in jeder Sprache.",
+ "Un articolo conta una volta anche se il caporedattore AI lo riscrive. Quelli che la redazione automatica scarta non contano; una bozza che scarti tu conta, perché è stata scritta.": "Ein Artikel zählt einmal, auch wenn der KI-Chefredakteur ihn neu schreibt. Was die automatische Redaktion verwirft, zählt nicht; ein Entwurf, den du verwirfst, zählt, weil er geschrieben wurde.",
+ "I limiti sono della redazione, non del singolo sito.": "Die Grenzen gelten für die Redaktion, nicht für eine einzelne Website.",
+ "Con 2 siti e 30 articoli hai 30 articoli in tutto, divisi come vuoi; lo stesso per le fonti attive. Per ogni sito scegli le lingue (fino al numero del piano) e, con la redazione automatica, quanti articoli al giorno.": "Mit 2 Websites und 30 Artikeln hast du insgesamt 30 Artikel, frei verteilt; ebenso bei den aktiven Quellen. Für jede Website wählst du die Sprachen (bis zur Zahl des Tarifs) und, mit der automatischen Redaktion, wie viele Artikel pro Tag.",
+ "I crediti servono per andare oltre il piano.": "Credits dienen dazu, über den Tarif hinauszugehen.",
+ "Un articolo in più costa {a} crediti, una traduzione in una lingua che il sito non ha {t}, una copertina rifatta dopo le due gratuite {c}. Si usano prima i crediti del mese, poi quelli dei pacchetti, che non scadono. La redazione automatica li usa solo se le hai permesso articoli extra con i crediti.": "Ein zusätzlicher Artikel kostet {a} Credits, eine Übersetzung in eine Sprache, die die Website nicht hat, {t}, ein neu gezeichnetes Titelbild nach den zwei kostenlosen {c}. Zuerst werden die Credits des Monats verwendet, dann die der Pakete, die nicht verfallen. Die automatische Redaktion nutzt sie nur, wenn du ihr zusätzliche Artikel mit Credits erlaubt hast."
 }

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, case, func, select, text
 
 from . import models as m
 from . import repo
@@ -94,9 +94,26 @@ def _used(s, t, now: datetime | None = None) -> dict:
         "llm_tokens_month": one(select(func.coalesce(func.sum(u.c.input_tokens), 0)
                                        + func.coalesce(func.sum(u.c.output_tokens), 0)).where(
             u.c.tenant_id == tid, u.c.at >= month)),
-        "drafts_month": one(select(func.count()).select_from(m.drafts).where(
-            m.drafts.c.tenant_id == tid, m.drafts.c.created_at >= month)),
+        "drafts_month": one(articles(tid, month)),
     }
+
+
+# Who discards an article on its own: the automatic newsroom (autopilot.AUTO).
+AUTO = "redazione automatica"
+
+
+def articles(tid: str, since: datetime):
+    """The plan's articles since `since` (Francesco 2026-11-07: only the
+    articles that come out, each in all the languages of the plan): one per
+    proposal written, whatever its versions (the editor-in-chief's
+    rewrites), not its translations, and not the ones the automatic
+    newsroom discarded. One a person discarded counts: it was read."""
+    d = m.drafts.c
+    key = func.coalesce(d.proposal_id, -d.id)
+    kept = case((and_(d.status == "rejected", d.decided_by == AUTO), 0), else_=1)
+    per = (select(key.label("k")).where(d.tenant_id == tid, d.translation_of.is_(None), d.created_at >= since)
+           .group_by(key).having(func.max(kept) == 1).subquery())
+    return select(func.count()).select_from(per)
 
 
 def usage(s, hold: bool = False) -> Usage | None:
@@ -111,7 +128,7 @@ def usage(s, hold: bool = False) -> Usage | None:
     return Usage(dict(t._mapping), _used(s, t))
 
 
-def check(s, what: str, adding: float = 1, pay: str | None = None) -> bool:
+def check(s, what: str, adding: float = 1, pay: str | None = None, again: bool = False) -> bool:
     """Raise QuotaExceeded when `adding` more would pass the tenant's limit.
     The check holds the tenant's quota lock until the transaction ends: do
     the insert it guards in the same transaction.
@@ -125,6 +142,8 @@ def check(s, what: str, adding: float = 1, pay: str | None = None) -> bool:
         return False
     if what == "drafts" and u.plan.get("proposals_only"):
         raise QuotaExceeded("the trial is over: proposals only until a plan is chosen")
+    if again:  # an article written again (a rewrite, a version): it is the same article of the plan
+        return False
     left = u.remaining(what)
     if left is not None and (left < adding or left <= 0):
         limit_col, used_col = LIMITS[what]
@@ -135,6 +154,24 @@ def check(s, what: str, adding: float = 1, pay: str | None = None) -> bool:
             return True
         raise QuotaExceeded(f"{what} limit reached ({u.used.get(used_col)} of {u.plan[limit_col]}, plan {u.plan.get('plan')})")
     return False
+
+
+def translation(s, included: bool, pay: bool = True) -> bool:
+    """Before a translation: none once the trial is over. Into one of the
+    site's languages it is part of the article; into another language it
+    is paid with credits (when the newsroom has them). Returns whether to
+    pay; holds the quota lock like check."""
+    u = usage(s, hold=True)
+    if u is None:
+        return False
+    if u.plan.get("proposals_only"):
+        raise QuotaExceeded("the trial is over: proposals only until a plan is chosen")
+    if included or not pay or u.plan.get("credits_month") is None:
+        return False
+    from . import credits
+
+    credits.need(s, credits.price(s, "translation"))
+    return True
 
 
 def remaining(s, what: str) -> float | None:
