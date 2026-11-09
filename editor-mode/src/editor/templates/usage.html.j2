@@ -6,6 +6,26 @@
 <title>{{ _('Consumi del modello') }} · Redazia</title>
 <link rel="icon" type="image/png" href="/static/redazia-icon.png">
 {% include "_style.html.j2" %}
+<style>
+.card-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line-2); }
+.card-foot .hint { font-size: 13px; }
+.route-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); column-gap: 40px; padding-top: 4px; padding-bottom: 4px; }
+.route { display: grid; grid-template-columns: minmax(0, 1fr) 170px; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; color: var(--ink-2); }
+.route input, .price-tbl input:not([type=checkbox]) { width: 100%; min-width: 0; min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font: 400 14px var(--sans); color: var(--ink); background: var(--surface); box-sizing: border-box; }
+.route input::placeholder, .price-tbl input::placeholder { color: var(--muted); }
+.route input:focus, .price-tbl input:focus { border-color: var(--ink-2); }
+.price-wrap { overflow-x: auto; }
+.price-tbl { min-width: 680px; }
+.price-tbl td { padding: 6px 10px; }
+.price-tbl th:nth-child(2), .price-tbl th:nth-child(3), .price-tbl td:nth-child(2), .price-tbl td:nth-child(3) { width: 120px; }
+.price-tbl td:nth-child(2) input, .price-tbl td:nth-child(3) input { text-align: right; font-family: var(--mono); }
+.price-tbl th:last-child, .price-tbl td:last-child { width: 56px; text-align: center; }
+.price-tbl input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--ink-2); }
+.price-tbl .mname { font-family: var(--mono); font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.price-tbl td small { display: inline; margin-left: 8px; }
+.price-tbl tr.new td { background: var(--bg); }
+@media (max-width: 640px) { .route { grid-template-columns: minmax(0, 1fr) 130px; } }
+</style>
 </head>
 <body>
 {% macro eur(v) %}{% if v is none %}–{% else %}€ {{ v|num(4) }}{% endif %}{% endmacro %}
@@ -135,38 +155,44 @@
   <section class="card" id="modelli" aria-labelledby="h-routes">
     <div class="card-head"><div><h2 id="h-routes">{{ _('Modello per passo') }}</h2>
       <span class="hint">{{ _('Il nome di un modello della sezione models di core.yaml (per esempio haiku, sonnet, opus); vuoto: il modello predefinito del Core. Un nome che core.yaml non conosce non ferma nulla: risponde il predefinito e il log lo segnala. Le redazioni non vedono quale modello usano.') }}</span></div></div>
-    <form class="pad form-grid" method="post" action="/admin/usage/models" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-      {% for p in routable %}
-      <label class="field">{{ _(purposes[p]) }}<input name="{{ p }}" value="{{ routes.get(p, '') }}" placeholder="default" list="model-names" maxlength="100"></label>
-      {% endfor %}
+    <form method="post" action="/admin/usage/models">
+      <div class="pad route-grid">
+        {% for p in routable %}
+        <label class="route"><span>{{ _(purposes[p]) }}</span><input name="{{ p }}" value="{{ routes.get(p, '') }}" placeholder="default" list="model-names" maxlength="100" autocomplete="off"></label>
+        {% endfor %}
+      </div>
       <datalist id="model-names">{% for name in (['default', 'haiku', 'sonnet', 'opus'] + routes.values()|list)|unique %}<option value="{{ name }}">{% endfor %}</datalist>
-      <div style="grid-column: 1 / -1;"><button class="btn" type="submit">{{ _('Salva') }}</button></div>
+      <div class="card-foot"><span class="hint">{{ _('Valgono dalla prossima chiamata, entro un minuto.') }}</span><button class="btn pri" type="submit">{{ _('Salva i modelli') }}</button></div>
     </form>
   </section>
 
   <section class="card" id="prezzi" aria-labelledby="h-prices">
     <div class="card-head"><div><h2 id="h-prices">{{ _('Prezzi di riferimento') }}</h2>
       <span class="hint">{{ _("Euro per milione di token, per modello (il nome come compare in \"Per modello\"). Servono a stimare il costo anche dei modelli gratuiti: metti il prezzo che pagheresti per un servizio equivalente.") }}</span></div></div>
-    <div class="pad" style="display: flex; flex-direction: column; gap: 10px;">
-      {% for model in r.models %}{% set p = r.prices.get(model) %}
-      <form class="row" method="post" action="/admin/usage/prices" style="gap: 8px; align-items: end;">
-        <input type="hidden" name="model" value="{{ model }}">
-        <span style="min-width: 260px;"><strong>{{ model }}</strong>{% if not p %} <span class="hint">· {{ _('senza prezzo') }}</span>{% endif %}</span>
-        <label class="field">{{ _('Entrata €/M') }}<input name="input_per_mtok" inputmode="decimal" value="{{ p.input if p else '' }}" style="width: 110px;"></label>
-        <label class="field">{{ _('Uscita €/M') }}<input name="output_per_mtok" inputmode="decimal" value="{{ p.output if p else '' }}" style="width: 110px;"></label>
-        <label class="field">{{ _('Nota') }}<input name="note" value="{{ p.note if p else '' }}" style="width: 220px;"></label>
-        <button class="btn sm" type="submit">{{ _('Salva') }}</button>
-        {% if p %}<button class="btn sm danger" type="submit" formaction="/admin/usage/prices/delete">{{ _('Togli') }}</button>{% endif %}
-      </form>
-      {% endfor %}
-      <form class="row" method="post" action="/admin/usage/prices" style="gap: 8px; align-items: end;">
-        <label class="field">{{ _('Altro modello') }}<input name="model" required style="width: 260px;"></label>
-        <label class="field">{{ _('Entrata €/M') }}<input name="input_per_mtok" inputmode="decimal" required style="width: 110px;"></label>
-        <label class="field">{{ _('Uscita €/M') }}<input name="output_per_mtok" inputmode="decimal" required style="width: 110px;"></label>
-        <label class="field">{{ _('Nota') }}<input name="note" style="width: 220px;"></label>
-        <button class="btn sm" type="submit">{{ _('Aggiungi') }}</button>
-      </form>
-    </div>
+    <form method="post" action="/admin/usage/prices/all">
+      <div class="pad price-wrap"><table class="tbl price-tbl">
+        <thead><tr><th>{{ _('Modello') }}</th><th class="num">{{ _('Entrata €/M') }}</th><th class="num">{{ _('Uscita €/M') }}</th><th>{{ _('Nota') }}</th><th class="num">{{ _('Togli') }}</th></tr></thead>
+        <tbody>
+        {% for model in r.models %}{% set p = r.prices.get(model) %}
+        <tr>
+          <td><input type="hidden" name="model" value="{{ model }}"><span class="mname">{{ model }}</span>{% if not p %}<small>{{ _('senza prezzo') }}</small>{% endif %}</td>
+          <td class="num"><input name="input_per_mtok" inputmode="decimal" value="{{ '%g'|format(p.input) if p else '' }}" placeholder="–" aria-label="{{ _('Entrata €/M') }} · {{ model }}"></td>
+          <td class="num"><input name="output_per_mtok" inputmode="decimal" value="{{ '%g'|format(p.output) if p else '' }}" placeholder="–" aria-label="{{ _('Uscita €/M') }} · {{ model }}"></td>
+          <td><input name="note" value="{{ p.note if p else '' }}" maxlength="200" aria-label="{{ _('Nota') }} · {{ model }}"></td>
+          <td class="num">{% if p %}<input type="checkbox" name="remove" value="{{ model }}" aria-label="{{ _('Togli') }} · {{ model }}">{% endif %}</td>
+        </tr>
+        {% endfor %}
+        <tr class="new">
+          <td><input name="model" placeholder="{{ _('Altro modello') }}" maxlength="200" aria-label="{{ _('Altro modello') }}"></td>
+          <td class="num"><input name="input_per_mtok" inputmode="decimal" aria-label="{{ _('Entrata €/M') }}"></td>
+          <td class="num"><input name="output_per_mtok" inputmode="decimal" aria-label="{{ _('Uscita €/M') }}"></td>
+          <td><input name="note" maxlength="200" aria-label="{{ _('Nota') }}"></td>
+          <td></td>
+        </tr>
+        </tbody>
+      </table></div>
+      <div class="card-foot"><span class="hint">{{ _('Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.') }}</span><button class="btn pri" type="submit">{{ _('Salva i prezzi') }}</button></div>
+    </form>
   </section>
 </main>
 </div>

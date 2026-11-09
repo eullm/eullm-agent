@@ -459,6 +459,30 @@ def register(app, ctx) -> None:
             return back_usage(t("Prezzo non salvato: servono due numeri, zero o più (per esempio 0,40)."))
         return back_usage(t("Prezzo di riferimento di {model} salvato.", model=model.strip()))
 
+    @app.post("/admin/usage/prices/all")
+    async def usage_prices_all(request: Request, s=Depends(need_console)):
+        """The whole table of reference prices with one Save: a row with
+        both prices empty has no price, a ticked Togli removes it."""
+        form = await request.form()
+        remove = {str(v) for v in form.getlist("remove")}
+        bad = []
+        for model, i, o, note in zip(form.getlist("model"), form.getlist("input_per_mtok"),
+                                     form.getlist("output_per_mtok"), form.getlist("note"), strict=False):
+            model, i, o = str(model).strip(), str(i).strip(), str(o).strip()
+            if not model:
+                continue
+            if model in remove or (not i and not o):
+                usage.delete_price(admin, model)
+                continue
+            try:
+                usage.set_price(admin, model, float(i.replace(",", ".")), float(o.replace(",", ".")), str(note))
+            except ValueError:
+                bad.append(model)
+        if bad:
+            return back_usage(t("Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).",
+                                models=", ".join(bad)))
+        return back_usage(t("Prezzi di riferimento salvati."))
+
     @app.post("/admin/usage/models")
     async def usage_models(request: Request, s=Depends(need_console)):
         form = await request.form()

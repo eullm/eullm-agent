@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.33.6
+
+### Changed
+
+- **Console › Consumi: "Modello per passo" e "Prezzi di riferimento" in
+  ordine** (Francesco, 9 novembre: "che brutti sono questi 2 blocchi").
+  I passi sono righe allineate, nome a sinistra e modello a destra, in tre
+  colonne su schermo largo e una sul telefono, con un solo "Salva i
+  modelli" in fondo. I prezzi sono una tabella compatta (modello, entrata
+  €/M, uscita €/M, nota, Togli) con una riga vuota per un altro modello e
+  un solo "Salva i prezzi": niente più etichette ripetute per ogni modello
+  né un pulsante per riga. Entrata e uscita vuote lasciano il modello senza
+  prezzo; un numero sbagliato non ferma gli altri e il messaggio dice quale
+  modello non è stato salvato.
+
 ## 0.33.5
 
 ### Fixed
