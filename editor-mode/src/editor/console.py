@@ -681,7 +681,9 @@ def register(app, ctx) -> None:
             return back(t("Aggiornamenti dal pannello non attivi su questo server."), "aggiornamenti", error=True)
         known = updates.state(where, INSTALLED)
         # Only the release GitHub announced, and only forward.
-        if version != (known["available"] or {}).get("version") or not known["newer"]:
+        # A retry after a release whose images carried another version, republished since.
+        again = known["mismatch"] and version == known["mismatch"]
+        if version != (known["available"] or {}).get("version") or not (known["newer"] or again):
             return back(t("Versione non disponibile."), "aggiornamenti", error=True)
         if known["pending"] or (known["status"] or {}).get("state") == "running":
             return back(t("Un aggiornamento è già in corso."), "aggiornamenti")

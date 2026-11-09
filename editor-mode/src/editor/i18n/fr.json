@@ -2677,5 +2677,7 @@
  "Accessi compresi": "Accès inclus",
  "Invito non creato: il piano comprende {n} accessi e sono tutti usati. Togli una persona o un invito, oppure passa a un piano più grande in Il mio piano.": "Invitation non créée : l'offre comprend {n} accès et ils sont tous utilisés. Retirez une personne ou une invitation, ou passez à une offre plus grande dans Mon offre.",
  "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accès inclus dans l'offre : {used} utilisés sur {n}, invitations en attente comprises.",
- "Nessuna: le fonti restano solo in Redazia": "Aucune : les sources restent seulement dans Redazia"
+ "Nessuna: le fonti restano solo in Redazia": "Aucune : les sources restent seulement dans Redazia",
+ "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contenevano un'altra versione. Se la versione è stata ripubblicata, riprova: il server scarica di nuovo le immagini.": "La mise à jour vers la {version} est terminée, mais le serveur répond encore en {installed} : les images publiées en {version} contenaient une autre version. Si la version a été republiée, réessayez : le serveur télécharge à nouveau les images.",
+ "Riprova l'aggiornamento alla {version}": "Réessayer la mise à jour vers la {version}"
 }
