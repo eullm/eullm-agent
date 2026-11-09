@@ -2679,5 +2679,12 @@
  "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accesses included in the plan: {used} used of {n}, open invitations included.",
  "Nessuna: le fonti restano solo in Redazia": "None: the sources stay in Redazia only",
  "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contenevano un'altra versione. Se la versione è stata ripubblicata, riprova: il server scarica di nuovo le immagini.": "The update to {version} finished, but the server still answers as {installed}: the images published as {version} held another version. If the version has been republished, try again: the server downloads the images again.",
- "Riprova l'aggiornamento alla {version}": "Retry the update to {version}"
+ "Riprova l'aggiornamento alla {version}": "Retry the update to {version}",
+ "Modello": "Model",
+ "Salva i modelli": "Save models",
+ "Valgono dalla prossima chiamata, entro un minuto.": "They apply from the next call, within a minute.",
+ "Salva i prezzi": "Save prices",
+ "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Input and output empty: the model stays without a price. Tick Remove to delete a price.",
+ "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Prices saved, except {models}: two numbers are needed, zero or more (for example 0.40).",
+ "Prezzi di riferimento salvati.": "Reference prices saved."
 }

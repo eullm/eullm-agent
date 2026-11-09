@@ -59,6 +59,7 @@ def test_every_call_is_recorded_when_it_happens_even_when_the_work_fails(db, ten
 def test_the_console_shows_tokens_per_step_model_site_and_article(db, tenant):
     from editor import accounts
     from editor.db import Database
+    from editor import usage as u
     from test_billing import client, unique
 
     pid, cited = accepted_proposal(db, tenant)
@@ -93,6 +94,17 @@ def test_the_console_shows_tokens_per_step_model_site_and_article(db, tenant):
     csv = c.get("/admin/usage.csv?days=7")
     assert csv.status_code == 200 and "draft" in csv.text and f"proposal:{pid}" in csv.text
     assert "tolto" in c.post("/admin/usage/prices/delete", data={"model": model}).text
+
+    # The whole table with one Save: the new row adds a price, a bad number
+    # is named, a ticked Togli removes, empty prices stay without one.
+    page = c.post("/admin/usage/prices/all", data={
+        "model": [model, "altro", "terzo", ""], "input_per_mtok": ["0,40", "1", "", ""],
+        "output_per_mtok": ["2", "x", "", ""], "note": ["", "", "", ""]}).text
+    assert "tranne altro" in page and "€ 0,0028" in page and "Salva i prezzi" in page
+    assert set(u.prices(Database.from_url(db.admin_url))) == {model}
+    page = c.post("/admin/usage/prices/all", data={"model": [model], "input_per_mtok": ["0,40"],
+                                                   "output_per_mtok": ["2"], "note": [""], "remove": [model]}).text
+    assert "Prezzi di riferimento salvati" in page and model not in u.prices(Database.from_url(db.admin_url))
 
 
 def test_each_step_can_use_its_own_model(db, tenant):

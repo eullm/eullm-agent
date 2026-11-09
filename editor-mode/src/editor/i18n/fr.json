@@ -2679,5 +2679,12 @@
  "Accessi compresi nel piano: {used} usati su {n}, inviti aperti compresi.": "Accès inclus dans l'offre : {used} utilisés sur {n}, invitations en attente comprises.",
  "Nessuna: le fonti restano solo in Redazia": "Aucune : les sources restent seulement dans Redazia",
  "L'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contenevano un'altra versione. Se la versione è stata ripubblicata, riprova: il server scarica di nuovo le immagini.": "La mise à jour vers la {version} est terminée, mais le serveur répond encore en {installed} : les images publiées en {version} contenaient une autre version. Si la version a été republiée, réessayez : le serveur télécharge à nouveau les images.",
- "Riprova l'aggiornamento alla {version}": "Réessayer la mise à jour vers la {version}"
+ "Riprova l'aggiornamento alla {version}": "Réessayer la mise à jour vers la {version}",
+ "Modello": "Modèle",
+ "Salva i modelli": "Enregistrer les modèles",
+ "Valgono dalla prossima chiamata, entro un minuto.": "Ils s'appliquent dès le prochain appel, dans la minute.",
+ "Salva i prezzi": "Enregistrer les prix",
+ "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Entrée et sortie vides : le modèle reste sans prix. Coche Retirer pour supprimer un prix.",
+ "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Prix enregistrés, sauf {models} : il faut deux nombres, zéro ou plus (par exemple 0,40).",
+ "Prezzi di riferimento salvati.": "Prix de référence enregistrés."
 }
