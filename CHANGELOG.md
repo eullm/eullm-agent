@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.5
+
+### Fixed
+
+- **Aggiornamento da riprovare dopo una versione ripubblicata** (Francesco,
+  9 novembre). La 0.33.4 era stata taggata sul commit della 0.33.3: il
+  server, aggiornato, rispondeva ancora 0.33.3 e Console › Aggiornamenti
+  toglieva il pulsante dicendo di aspettare la versione successiva, anche
+  dopo che la release era stata rifatta sul commit giusto. Ora il messaggio
+  resta, con il pulsante "Riprova l'aggiornamento alla …": il server
+  scarica di nuovo le immagini.
+
 ## 0.33.4
 
 ### Added

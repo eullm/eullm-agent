@@ -27,7 +27,11 @@
       </form>
       <p class="hint">{{ _('Leggi le note della versione prima di aggiornare: il link è sul numero di versione.') }}</p>
     {% elif updates.mismatch %}
-      <p class="error">{{ _('L\'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contengono un\'altra versione. Rilanciarlo non serve: aspetta la prossima versione.', version=updates.mismatch, installed=updates.installed) }}</p>
+      <p class="error">{{ _('L\'aggiornamento alla {version} è finito, ma il server risponde ancora come {installed}: le immagini pubblicate come {version} contenevano un\'altra versione. Se la versione è stata ripubblicata, riprova: il server scarica di nuovo le immagini.', version=updates.mismatch, installed=updates.installed) }}</p>
+      <form method="post" action="/admin/updates/apply" onsubmit='return confirm({{ _('Aggiornare alla versione {version}? Prima viene fatto un backup; il pannello resta fermo per qualche secondo.', version=updates.mismatch)|string|tojson }})'>
+        <input type="hidden" name="version" value="{{ updates.mismatch }}">
+        <button class="btn" type="submit">{{ _('Riprova l\'aggiornamento alla {version}', version=updates.mismatch) }}</button>
+      </form>
     {% else %}
       <p class="hint">{{ _('Il server è aggiornato.') }}</p>
     {% endif %}

@@ -85,6 +85,16 @@ def test_an_operator_asks_for_the_update_from_the_console(db, tmp_path):
     assert "non riuscito durante: download della versione" in page and "manifest unknown" in page
     assert c.get("/admin/updates/progress").json()["state"] == "failed"
 
+    # Done, but the server still answers the old version (v0.33.4 tagged on 0.33.3, 2026-11-09):
+    # once the release is made again, the update can be asked once more.
+    (tmp_path / "status.json").write_text(json.dumps({"state": "done", "step": "done", "version": "99.0.0",
+                                                      "from": INSTALLED, "at": "2026-10-29T20:00:00Z"}))
+    page = c.get("/admin/updates").text
+    assert "Riprova l&#39;aggiornamento alla 99.0.0" in page or "Riprova l'aggiornamento alla 99.0.0" in page
+    c.post("/admin/updates/apply", data={"version": "99.0.0"})
+    assert json.loads((tmp_path / "request.json").read_text())["version"] == "99.0.0"
+    (tmp_path / "request.json").unlink()
+
     # The last five updates in view, the older ones folded away.
     (tmp_path / "history.json").write_text(json.dumps({"updates": [
         {"state": "done", "from": f"1.0.{i}", "version": f"1.0.{i + 1}", "at": f"2026-11-0{9 - i}T10:00:00+00:00"}
@@ -195,7 +205,7 @@ def test_an_update_in_progress_or_gone_wrong_is_not_offered_again(tmp_path):
     (tmp_path / "status.json").write_text(json.dumps({"state": "running", "step": "pull", "percent": 47,
                                                       "version": "0.28.13"}))
     assert updates.state(tmp_path, "0.28.12", now)["percent"] == 47
-    # Done, but the images of 0.28.13 held 0.28.12: no button to do the same again.
+    # Done, but the images of 0.28.13 held 0.28.12: the console says so and offers a retry, for a release republished.
     (tmp_path / "status.json").write_text(json.dumps({"state": "done", "version": "0.28.13", "from": "0.28.13"}))
     st = updates.state(tmp_path, "0.28.12", now)
     assert st["mismatch"] == "0.28.13" and not st["newer"] and not st["busy"]
