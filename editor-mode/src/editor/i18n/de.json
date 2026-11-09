@@ -2686,5 +2686,8 @@
  "Salva i prezzi": "Preise speichern",
  "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Eingabe und Ausgabe leer: das Modell bleibt ohne Preis. Hake Entziehen an, um einen Preis zu löschen.",
  "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Preise gespeichert, außer {models}: es braucht zwei Zahlen, null oder mehr (zum Beispiel 0,40).",
- "Prezzi di riferimento salvati.": "Referenzpreise gespeichert."
+ "Prezzi di riferimento salvati.": "Referenzpreise gespeichert.",
+ "Cartella delle ricette": "Ordner der Rezepte",
+ "Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.": "Rezeptseite: Redazia schreibt hier eigene Rezepte, mit Fotos und ohne Quellen.",
+ "Categorie": "Kategorien"
 }

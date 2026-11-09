@@ -476,3 +476,22 @@ def test_the_sections_become_the_wordpress_menu(db, tenant, monkeypatch):
     with db.tenant(tenant) as s:
         args = s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "wpmenu")).scalars().all()
     assert args == [{"site_id": site_id, "sections": ["Casi pratici", "Norme"]}]
+
+
+def test_the_connection_shows_the_recipes_folder_and_its_categories(db, tenant, monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setattr(connect, "resolver", public_resolver)
+    monkeypatch.setenv(vault.KEY_ENV, vault.new_key())
+    c = logged_in(db, tenant, "owner")
+    did, site_id = approved_draft(db, tenant)
+    recipe = {"title": "Carbonara", "category": "I Primi", "ingredients": [{"quantity": "320", "unit": "g",
+              "name": "spaghetti"}, {"quantity": "4", "unit": "", "name": "tuorli"}],
+              "steps": [{"description": "Cuoci la pasta."}]}
+    gh = astro_repo(**{"content/ricette/carbonara.json": json.dumps(recipe),
+                       "content/ricette/amatriciana.json": json.dumps({**recipe, "title": "Amatriciana"})})
+    with respx.mock(assert_all_called=False) as router:
+        gh.route(router)
+        ok = c.post(f"/ui/connect/{site_id}/check", data={
+            "kind": "github", "address": "me/site", "secret": "github_pat_x", "host": ""})
+    assert ok.status_code == 200 and "Cartella delle ricette" in ok.text
+    assert "content/ricette" in ok.text and "I Primi" in ok.text

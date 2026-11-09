@@ -48,6 +48,9 @@
   <div class="list-row"><span>{{ _('Costruito con') }}</span><span>{{ f.generator or _('non riconosciuto') }}</span></div>
   <div class="list-row"><span>{{ _('Lo pubblica') }}</span><span>{{ {'vercel': 'Vercel', 'cloudflare': 'Cloudflare Pages', 'netlify': 'Netlify', 'github_pages': 'GitHub Pages'}.get(f.host, _('un altro servizio')) }}</span></div>
   <div class="list-row"><span>{{ _('Cartella degli articoli') }}</span><span>{% if f.articles_path %}<code>{{ f.articles_path }}</code> <small class="hint">{{ _('{n} articoli letti per copiarne il formato', n=f.articles_found) }}</small>{% else %}<span class="chip amber">{{ _('non trovata') }}</span> <small class="hint">{{ _('Non vedo ancora articoli: creo la cartella content/blog con il primo. Se i tuoi stanno altrove, indicala in Pubblicazioni › Destinazioni.') }}</small>{% endif %}</span></div>
+  {% if f.recipes_path %}
+  <div class="list-row"><span>{{ _('Cartella delle ricette') }}</span><span><code>{{ f.recipes_path }}</code> <small class="hint">{{ _('Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.') }}{% if f.categories %} {{ _('Categorie') }}: {{ f.categories | map(attribute='name') | join(', ') }}{% endif %}</small></span></div>
+  {% endif %}
   <div class="list-row"><span>{{ _('llms.txt e sitemap') }}</span><span>{{ _('llms.txt') }}: {{ _('sì') if f.has_llms else _('no') }} · {{ _('sitemap') }}: {{ _('sì') if f.has_sitemap else _('no') }}</span></div>
   {% if f.host in ['vercel', 'cloudflare', 'netlify'] %}
   <p class="hint">{{ _('Ogni articolo passa da una pull request: Redazia aspetta che l\'anteprima si costruisca senza errori e solo allora la unisce, così un build rotto non tocca il sito.') }}</p>

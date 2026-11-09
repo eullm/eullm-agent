@@ -2686,5 +2686,8 @@
  "Salva i prezzi": "Save prices",
  "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Input and output empty: the model stays without a price. Tick Remove to delete a price.",
  "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Prices saved, except {models}: two numbers are needed, zero or more (for example 0.40).",
- "Prezzi di riferimento salvati.": "Reference prices saved."
+ "Prezzi di riferimento salvati.": "Reference prices saved.",
+ "Cartella delle ricette": "Recipes folder",
+ "Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.": "Recipe site: Redazia writes its own recipes here, with photos and no sources.",
+ "Categorie": "Categories"
 }

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.33.7
+
+### Changed
+
+- **Collega il sito mostra la cartella delle ricette.** Su un sito di
+  ricette collegato via GitHub la pagina diceva solo «Cartella degli
+  articoli» (per esempio content/tecnica) e sembrava che le ricette
+  finissero lì. Ora c'è anche la riga «Cartella delle ricette» con la
+  cartella trovata (content/ricette) e le categorie lette dalle ricette
+  (I Primi, I Secondi, I Dessert…): le ricette di Redazia vanno lì, le
+  altre pagine nella cartella degli articoli.
+
 ## 0.33.6
 
 ### Changed

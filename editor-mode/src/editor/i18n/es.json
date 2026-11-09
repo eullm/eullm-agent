@@ -2686,5 +2686,8 @@
  "Salva i prezzi": "Guardar los precios",
  "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Entrada y salida vacías: el modelo queda sin precio. Marca Quitar para borrar un precio.",
  "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Precios guardados, excepto {models}: hacen falta dos números, cero o más (por ejemplo 0,40).",
- "Prezzi di riferimento salvati.": "Precios de referencia guardados."
+ "Prezzi di riferimento salvati.": "Precios de referencia guardados.",
+ "Cartella delle ricette": "Carpeta de las recetas",
+ "Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.": "Sitio de recetas: Redazia escribe aquí recetas propias, con fotos y sin fuentes.",
+ "Categorie": "Categorías"
 }

@@ -2686,5 +2686,8 @@
  "Salva i prezzi": "Enregistrer les prix",
  "Entrata e uscita vuote: il modello resta senza prezzo. Spunta Togli per cancellare un prezzo.": "Entrée et sortie vides : le modèle reste sans prix. Coche Retirer pour supprimer un prix.",
  "Prezzi salvati, tranne {models}: servono due numeri, zero o più (per esempio 0,40).": "Prix enregistrés, sauf {models} : il faut deux nombres, zéro ou plus (par exemple 0,40).",
- "Prezzi di riferimento salvati.": "Prix de référence enregistrés."
+ "Prezzi di riferimento salvati.": "Prix de référence enregistrés.",
+ "Cartella delle ricette": "Dossier des recettes",
+ "Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.": "Site de recettes : Redazia écrit ici ses propres recettes, avec photos et sans sources.",
+ "Categorie": "Catégories"
 }
