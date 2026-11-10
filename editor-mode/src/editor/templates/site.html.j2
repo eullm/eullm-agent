@@ -452,7 +452,7 @@
 {% if tab == 'publish' %}
 <section class="card pad" id="h-languages">
   <h2>{{ _('Lingue degli articoli') }}</h2>
-  <p class="hint">{{ _("Gli articoli si scrivono nella lingua del sito ({language}). Scegli in quali altre lingue tradurli: quando approvi un articolo, l'agente scrive una traduzione per ogni lingua, con le stesse fonti e gli stessi controlli, da approvare a parte. Ogni traduzione conta come un articolo del piano.", language=langs.get(own_language, own_language or '?')) }}{% if max_languages %} {{ _('Il tuo piano permette {n} lingue per sito, compresa la sua.', n=max_languages) }}{% endif %}</p>
+  <p class="hint">{{ _("Gli articoli si scrivono nella lingua del sito ({language}). Scegli in quali altre lingue tradurli: quando approvi un articolo, l'agente scrive una traduzione per ogni lingua, con le stesse fonti e gli stessi controlli, da approvare a parte. Le traduzioni nelle lingue scelte qui sono comprese: l'articolo conta uno solo nel piano, in tutte le lingue.", language=langs.get(own_language, own_language or '?')) }}{% if max_languages %} {{ _('Il tuo piano permette {n} lingue per sito, compresa la sua.', n=max_languages) }}{% endif %}</p>
   {% if caller.can('owner') %}
   <form method="post" action="/ui/sites/{{ site.id }}/languages" class="row" style="gap: 14px; align-items: center;">
     {% for code, name in langs.items() if code != own_language %}

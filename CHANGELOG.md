@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.2
+
+### Fixed
+
+- **Sito e profilo › Lingue diceva ancora che ogni traduzione conta come
+  un articolo del piano.** Dalla 0.33.0 non è così: un articolo uscito conta
+  uno solo, in tutte le lingue scelte per il sito. Il testo ora lo dice,
+  in tutte e 5 le lingue del pannello.
+
 ## 0.34.1
 
 ### Changed
