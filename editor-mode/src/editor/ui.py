@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import connect, evergreen, opportunity as oppo, queue
+from . import connect, evergreen, opportunity as oppo, queue, ratelimit
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
@@ -358,6 +358,9 @@ def register(app, ctx) -> None:
         token = accounts.start_session(admin, s.user_id, tenant)
         return signed_in(request, token, "/" if tenant else "/admin")
 
+    # Wrong passwords counted per address (ratelimit.py); a test may pass its own.
+    limiter = getattr(ctx, "limiter", None) or ratelimit.Limiter()
+
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
         return login_form(request)
@@ -397,9 +400,14 @@ def register(app, ctx) -> None:
 
     @app.post("/login")
     def login(request: Request, email: str = Form(""), password: str = Form(""), token: str = Form("")):
+        ip = request.client.host if request.client else None
+        if limiter.blocked(ip, "" if token.strip() else email):
+            return login_form(request, t("Troppi tentativi sbagliati da questa connessione: riprova fra qualche minuto."),
+                              429, email)
         if token.strip():
             c = auth.resolve(db, token.strip())
             if c is None or token.strip().startswith("eds_"):
+                limiter.failed(ip)
                 return login_form(request, t("Token non valido"), 401)
             return signed_in(request, token.strip())
         try:
@@ -407,7 +415,9 @@ def register(app, ctx) -> None:
         except accounts.AccountError as e:
             return login_form(request, f"{str(e)[:1].upper()}{str(e)[1:]}.", 429, email)
         if u is None:
+            limiter.failed(ip, email)
             return login_form(request, t("Email o password sbagliate"), 401, email)
+        limiter.succeeded(ip, email)
         return session_for(request, accounts.Session(u.id, u.email, u.name, bool(u.operator), None, None))
 
     @app.post("/logout")
@@ -462,7 +472,9 @@ def register(app, ctx) -> None:
     def forgot(request: Request, email: str = Form(...)):
         """The same answer whether the account exists or not."""
         mail = ctx_mail()
-        if mail is not None:
+        ip = request.client.host if request.client else None
+        if mail is not None and not limiter.blocked(ip):
+            limiter.failed(ip)  # every request counts: one address cannot ask for many accounts
             try:
                 e = accounts.normalise_email(email)
                 with accounts._read(admin) as conn:

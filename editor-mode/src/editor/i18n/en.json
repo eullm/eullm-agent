@@ -2706,5 +2706,6 @@
  "Pubblica": "Publish",
  "Pubblicazione partita: la segui nel riquadro Attività.": "Publication started: follow it in the Activity panel.",
  "Pubblicazione non partita: {e}": "Publication not started: {e}",
- "«Approva e pubblica», in alto, la manda online con un clic.": "“Approve and publish”, at the top, puts it online in one click."
+ "«Approva e pubblica», in alto, la manda online con un clic.": "“Approve and publish”, at the top, puts it online in one click.",
+ "Troppi tentativi sbagliati da questa connessione: riprova fra qualche minuto.": "Too many wrong attempts from this connection: try again in a few minutes."
 }

@@ -34,7 +34,10 @@ SESSION_DAYS = 30
 INVITE_DAYS = 7
 RESET_HOURS = 24
 RESET_GAP_MINUTES = 10  # a reset link per address at most this often
-MAX_FAILED_LOGINS = 5
+# The account itself locks only after many wrong passwords: the few tries
+# of one address are stopped before (ratelimit.py), so a stranger cannot
+# keep the owner out by typing their email.
+MAX_FAILED_LOGINS = 50
 LOCK_MINUTES = 15
 MIN_PASSWORD = 10
 EMAIL = re.compile(r"^[^@\s,;<>\"']{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+$")

@@ -60,3 +60,37 @@ def test_the_api_refuses_a_cross_site_put_with_the_cookie(db, tenant):
 def test_cover_images_are_served_as_images_whatever_was_stored():
     assert images.mime_of(b"\x89PNG\r\n\x1a\n....") == "image/png"
     assert images.mime_of(b"<html><script>alert(1)</script>") == "image/jpeg"
+
+
+def test_wrong_passwords_stop_the_address_not_the_owner():
+    from editor.ratelimit import Limiter
+
+    now = [0.0]
+    lim = Limiter(clock=lambda: now[0])
+    for _ in range(5):
+        lim.failed("6.6.6.6", "francesco@example.com")
+    assert lim.blocked("6.6.6.6", "Francesco@example.com")
+    assert not lim.blocked("1.2.3.4", "francesco@example.com")  # the owner, from home
+    for n in range(20):
+        lim.failed("6.6.6.6", f"x{n}@example.com")
+    assert lim.blocked("6.6.6.6", "nuovo@example.com")  # many emails: the address as a whole
+    now[0] += 15 * 60 + 1
+    assert not lim.blocked("6.6.6.6", "francesco@example.com")
+
+
+def test_the_login_page_answers_429_after_a_few_wrong_passwords(db, tenant):
+    c = TestClient(create_app(db))
+    for _ in range(5):
+        assert c.post("/login", data={"email": "a@example.com", "password": "sbagliata-123"}).status_code == 401
+    r = c.post("/login", data={"email": "a@example.com", "password": "sbagliata-123"})
+    assert r.status_code == 429 and "connessione" in r.text
+
+
+def test_the_fonts_are_served_by_the_dashboard(db):
+    from editor.api import FONTS
+
+    c = TestClient(create_app(db))
+    for name in FONTS:
+        r = c.get(f"/static/{name}.woff2")
+        assert r.status_code == 200 and r.content[:4] == b"wOF2" and r.headers["content-type"] == "font/woff2"
+    assert "/static/ibm-plex-sans-latin-400-normal.woff2" in c.get("/login").text
