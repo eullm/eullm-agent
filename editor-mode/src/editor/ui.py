@@ -1987,7 +1987,8 @@ def register(app, ctx) -> None:
                                                       for x in (d.seo or {}).get("checks", []) if x.get("key") in SEO_CHECKS])
 
     @app.post("/ui/drafts/{draft_id}/decision")
-    def ui_draft_decision(draft_id: int, accept: str = Form(...), c: auth.Caller = Depends(ctx.need("editor"))):
+    def ui_draft_decision(draft_id: int, accept: str = Form(...), publish_to: int = Form(0),
+                          c: auth.Caller = Depends(ctx.need("editor"))):
         if not drafts.decide(db, c.tenant_id, draft_id, accept == "1", c.name):
             return done(f"/drafts/{draft_id}", t("Questa bozza era già stata decisa."))
         if accept != "1":
@@ -1996,6 +1997,8 @@ def register(app, ctx) -> None:
         mailed = getattr(ctx, "run_delivery", None) and ctx.run_delivery(c.tenant_id, draft_id)
         extra = (" " + t("La mandiamo anche per email ai destinatari della redazione, con il pacchetto da pubblicare.")
                  if mailed else "")
+        if publish_to and c.can("owner"):  # «Approva e pubblica»: a director's yes covers the publication too
+            return publish_now(c, draft_id, publish_to, "publish", extra)
         if todo:
             return done(f"/drafts/{draft_id}", t("Bozza approvata. Traduzioni in scrittura ({languages}): le segui nel "
                                                  "riquadro Attività, ognuna conta come un articolo.",
@@ -2147,6 +2150,8 @@ def register(app, ctx) -> None:
         if mode not in ("draft", "publish"):
             raise HTTPException(400, "unknown mode")
         file_under(c, draft_id, section)
+        if c.can("owner"):  # a director does not ask himself: it goes out now
+            return publish_now(c, draft_id, target_id, mode)
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
@@ -2154,6 +2159,18 @@ def register(app, ctx) -> None:
         except IntegrityError:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta."))
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
+
+    def publish_now(c: auth.Caller, draft_id: int, target_id: int, mode: str, extra: str = ""):
+        """A director's publication: asked and approved in one step, sent by the worker."""
+        try:
+            pub_id = publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
+        except publishing.PublishError as e:
+            return done(f"/drafts/{draft_id}", t("Pubblicazione non partita: {e}", e=problem(e)) + extra)
+        except IntegrityError:
+            return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta.") + extra)
+        publishing.decide(db, c.tenant_id, pub_id, True, c.name)
+        ctx.run_publication(c.tenant_id, pub_id)
+        return done(f"/drafts/{draft_id}", t("Pubblicazione partita: la segui nel riquadro Attività.") + extra)
 
     @app.post("/ui/publications/{pub_id}/update")
     def ui_pub_update(pub_id: int, draft_id: int = Form(0), section: str = Form(""),

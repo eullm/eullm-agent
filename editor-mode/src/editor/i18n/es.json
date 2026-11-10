@@ -2689,5 +2689,22 @@
  "Prezzi di riferimento salvati.": "Precios de referencia guardados.",
  "Cartella delle ricette": "Carpeta de las recetas",
  "Sito di ricette: Redazia scrive qui ricette sue, con foto e senza fonti.": "Sitio de recetas: Redazia escribe aquí recetas propias, con fotos y sin fuentes.",
- "Categorie": "Categorías"
+ "Categorie": "Categorías",
+ "Approva senza pubblicare": "Aprobar sin publicar",
+ "Approva e pubblica": "Aprobar y publicar",
+ "Categoria": "Categoría",
+ "Difficoltà": "Dificultad",
+ "Porzioni": "Raciones",
+ "Preparazione": "Preparación",
+ "Cottura": "Cocción",
+ "Calorie": "Calorías",
+ "Valori per porzione": "Valores por ración",
+ "proteine": "proteínas",
+ "carboidrati": "hidratos de carbono",
+ "di cui zuccheri": "de los cuales azúcares",
+ "grassi": "grasas",
+ "Pubblica": "Publicar",
+ "Pubblicazione partita: la segui nel riquadro Attività.": "Publicación iniciada: la sigues en el panel Actividad.",
+ "Pubblicazione non partita: {e}": "Publicación no iniciada: {e}",
+ "«Approva e pubblica», in alto, la manda online con un clic.": "«Aprobar y publicar», arriba, lo pone en línea con un clic."
 }

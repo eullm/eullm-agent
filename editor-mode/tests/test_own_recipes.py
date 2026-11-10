@@ -222,3 +222,19 @@ def test_github_sends_the_recipe_to_the_recipes_folder(db, tenant, monkeypatch):
 def test_no_sources_on_the_page():
     md = "# T\n\nUno.[^1] Due.[^2]\n\n_Etichetta AI_\n\n## Fonti\n\n[^1]: [a](https://a.example), A\n"
     assert drafts.without_sources(md) == "# T\n\nUno. Due.\n\n_Etichetta AI_\n"
+
+
+def test_the_newsroom_sees_the_recipe_as_it_goes_out(db, tenant):
+    """Francesco 2026-11-10: in the newsroom he saw only the opening, not the
+    recipe card; the checks asked a recipe for sources and subheadings."""
+    from test_ui import logged_in
+
+    pid, cited, _site = recipe_site(db, tenant)
+    did, prompt = write(db, tenant, pid, cited[0])
+    assert "never speaks of an article, a blog" in prompt
+    page = logged_in(db, tenant, "owner").get(f"/drafts/{did}").text
+    assert "350 g</strong> spaghetti" in page and "Rosola il guanciale" in page
+    assert "Porzioni" in page and "540 kcal" in page and "I Primi" in page
+    with db.tenant(tenant) as s:
+        checks = {x["key"]: x["ok"] for x in s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar()["checks"]}
+    assert "sources" not in checks and checks["headings"]

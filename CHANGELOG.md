@@ -4,6 +4,24 @@
 
 ### Changed
 
+- **La ricetta si rilegge com'è sul sito** (Francesco, 10 novembre: nella
+  bozza vedeva solo titolo e apertura). La pagina della bozza mostra in
+  cima la copertina e, per le ricette proprie di un sito di ricette, la
+  scheda completa: categoria, difficoltà, porzioni, tempi, calorie e valori
+  per porzione, ingredienti con le quantità, passaggi numerati ed etichette.
+- **Meno passaggi per pubblicare.** Il direttore ha «Approva e pubblica»
+  sulla bozza da leggere: un clic approva e manda l'articolo alla
+  destinazione del sito (se ce n'è più d'una la sceglie accanto al
+  bottone). Su una bozza già approvata il suo bottone è «Pubblica» e parte
+  subito, senza passare da Pubblicazioni ad approvare la propria
+  richiesta. Il modo predefinito è «Pubblica subito». Chi non è direttore
+  continua a chiedere la pubblicazione.
+- **Le ricette proprie non parlano delle fonti.** L'apertura racconta il
+  piatto e non nomina articoli, blog o siti letti per l'idea (prima poteva
+  uscire «Gustoblog lo ha rimesso al centro»). I controlli per Google non
+  chiedono più a una ricetta propria due fonti citate e due sottotitoli:
+  ha già Ingredienti e Procedimento.
+
 - **Collega il sito mostra la cartella delle ricette.** Su un sito di
   ricette collegato via GitHub la pagina diceva solo «Cartella degli
   articoli» (per esempio content/tecnica) e sembrava che le ricette

@@ -894,7 +894,10 @@ RECIPE = (
 OWN_RECIPE = (
     "This article is a recipe of the site, its own: the items are only the idea (the dish, ingredient, season or "
     "trend people look for now) and are never copied. The sections are a short opening of one to three sentences "
-    "on why this dish now, from the items and citing them; do not repeat the recipe in them. Then add to the JSON "
+    "on the dish itself (what it is, where it comes from, what makes it good, why cook it now), citing the ids of "
+    "the items it rests on; the text never names the items, their sites or authors, and never speaks of an "
+    "article, a blog, a post or a source (no 'according to the source', no 'X brought it back'): the reader "
+    "reads the site's own recipe. Do not repeat the recipe in them. Then add to the JSON "
     "\"recipe\": {\"servings\": <number of portions>, \"prep_minutes\": <minutes>, \"cook_minutes\": <minutes>, "
     "\"difficulty\": \"easy|medium|hard\", \"category\": \"<the site's section for its course (starter, first "
     "course, main course, side dish, dessert...), written exactly as listed; a new one in the same style only "
@@ -1158,7 +1161,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     first = next((c.section for c in article.claims), None)
     lead = " ".join(c.text for c in article.claims if c.section == first)
     sd.checks = seo.checks(sd, article.title, lead, list(dict.fromkeys(c.section for c in article.claims)),
-                           len({i for c in article.claims for i in c.sources}))
+                           len({i for c in article.claims for i in c.sources}),
+                           own_recipe=bool((article.recipe or {}).get("own")))
     section = site_section(profile, article.seo.get("section") if isinstance(article.seo, dict) else None)
     if (article.recipe or {}).get("own") and article.recipe.get("category"):
         # The course of the site's own recipe, or a new section the site makes for it.
@@ -1299,7 +1303,8 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
             c.flags = []
     first = next((c.section for c in claims), None)
     lead = " ".join(c.text for c in claims if c.section == first)
-    sd.checks = seo.checks(sd, title, lead, sections, len({i for c in claims for i in c.sources}))
+    sd.checks = seo.checks(sd, title, lead, sections, len({i for c in claims for i in c.sources}),
+                           own_recipe=bool((keep.get("recipe") or {}).get("own")))
     status = "needs_review" if article.flags else "draft"
     with db.tenant(tenant_id) as s:
         ids = list(s.execute(select(m.draft_claims.c.id).where(m.draft_claims.c.draft_id == draft_id)).scalars())
@@ -1364,7 +1369,8 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
     first = next((c.section for c in claims), None)
     lead = " ".join(c.text for c in claims if c.section == first)
     sd.checks = seo.checks(sd, title, lead, list(dict.fromkeys(c.section for c in claims)),
-                           len({i for c in claims for i in c.sources}))
+                           len({i for c in claims for i in c.sources}),
+                           own_recipe=bool((keep.get("recipe") or {}).get("own")))
     status = "needs_review" if article.flags else "draft"
     with db.tenant(tenant_id) as s:
         for c, new in zip(stored, claims):

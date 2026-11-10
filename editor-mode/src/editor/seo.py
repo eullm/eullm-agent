@@ -215,10 +215,13 @@ def _has(phrase: str, text: str) -> bool:
     return bool(words) and sum(w in have for w in words) >= max(1, round(len(words) * 0.6))
 
 
-def checks(seo: Seo, title: str, lead: str, headings: list[str], sources: int) -> list[dict]:
+def checks(seo: Seo, title: str, lead: str, headings: list[str], sources: int,
+           own_recipe: bool = False) -> list[dict]:
     """What a reviewer checks before publishing, each with its result.
     Neither length nor questions and answers are asked: an article is as
-    long as its sources allow, and padding it hurts more than it helps."""
+    long as its sources allow, and padding it hurts more than it helps.
+    The site's own recipe has its two headings (ingredients, steps) and no
+    sources to cite: those two checks do not apply to it."""
     k = seo.keyphrase
     out = [
         ("keyphrase", bool(k)),
@@ -227,10 +230,9 @@ def checks(seo: Seo, title: str, lead: str, headings: list[str], sources: int) -
         ("title_length", 20 <= len(seo.title) <= TITLE_MAX),
         ("description_length", DESCRIPTION[0] <= len(seo.description) <= DESCRIPTION[1]),
         ("answer_first", 15 <= len(lead.split()) <= 90),
-        ("headings", len([h for h in headings if h]) >= 2),
+        ("headings", own_recipe or len([h for h in headings if h]) >= 2),
         ("internal_links", len(seo.links) >= 1),
-        ("sources", sources >= 2),
-    ]
+    ] + ([] if own_recipe else [("sources", sources >= 2)])
     return [{"key": key, "ok": ok} for key, ok in out]
 
 
