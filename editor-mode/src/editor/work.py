@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
-from . import autopilot, delivery, drafts, evening as ev, images, models as m, picks, profile as prof, proposals, quotas, sources, translate as tr
+from . import autopilot, delivery, drafts, evening as ev, images, menus, models as m, picks, profile as prof, proposals, quotas, sources, translate as tr
 from .i18n import N_
 from .progress import step
 from .queue import Handlers, enqueue
@@ -81,7 +81,10 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             d = s.execute(select(m.drafts.c.title, m.drafts.c.status, m.drafts.c.site_id)
                           .where(m.drafts.c.id == did)).first()
         if imager is not None and not args.get("compare"):  # the cover follows, as a job of its own
-            enqueue(db, tenant, "image", f"draft {did}", {"draft_id": did, "site_id": d.site_id})
+            with db.tenant(tenant) as s:
+                recipes = menus.children(s, did)  # a menu's new recipes have their own photograph
+            for x in [did, *recipes]:
+                enqueue(db, tenant, "image", f"draft {x}", {"draft_id": x, "site_id": d.site_id})
         return {"draft_id": did, "title": d.title, "status": d.status, "site_id": d.site_id}
 
     def auto(tenant: str, subject: str, args: dict) -> dict:
@@ -260,6 +263,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         res = need(publisher, "publisher").run(db, tenant, args["publication_id"])
         if res.get("status") == "failed":
             raise RuntimeError(res.get("error") or "publication failed")
+        # The last new recipe of a menu online: the menu waiting for it goes out.
+        menus.after_publication(db, tenant, args["publication_id"], publish_job(tenant, args.get("site_id")))
         return {"url": res.get("url"), "indexnow": res.get("indexnow")}
 
     def change(tenant: str, subject: str, args: dict) -> dict:

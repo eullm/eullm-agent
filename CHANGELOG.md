@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.34.0
+
+### Added
+
+- **Menù interi per i siti di ricette** (Francesco, 10 novembre). Su un
+  tema delle feste la redazione può proporre un menù («menù» tra i
+  formati). Il modello sceglie 3-5 portate: per ognuna riusa una ricetta
+  che il sito ha già, quando va bene, e scrive una ricetta nuova solo per
+  le portate che mancano. Ogni ricetta nuova è una bozza a sé (ricetta
+  propria, con la sua foto e la sua categoria) legata al menù. Il menù è
+  un articolo (sui siti come lagrandecucina.it va in Tecnica) con
+  un'apertura e una sezione per portata con il link alla ricetta. Nella
+  bozza del menù si vedono le portate, quali ricette sono già sul sito e lo
+  stato delle nuove. «Approva e pubblica» sul menù approva e pubblica prima
+  le ricette nuove; il menù parte da solo appena l'ultima è online, con i
+  loro indirizzi veri. La redazione automatica non scrive menù: solo
+  ricette.
+
+### Changed
+
+- **Ricette da più fonti** (Francesco, 10 novembre: le proposte del giorno
+  venivano tutte da Gustoblog, il feed i cui titoli somigliano di più ai temi
+  del profilo). Una stessa testata dà al massimo un terzo delle notizie che
+  il modello legge e delle proposte del giorno (con una o due proposte nessun
+  limite). Vale per tutti i siti.
+- **Siti di ricette: ricette di stagione e delle feste in anticipo.** Un sito
+  riconosciuto come sito di ricette parte in modalità mista: metà delle
+  proposte sui temi del mese e sulle lacune del sito, metà su quello che piace
+  adesso. Ogni tema diventa una ricetta propria. I temi del mese guardano
+  avanti: a novembre il Natale, un mese prima la Pasqua. Per un sito già
+  collegato basta scegliere «Misto» in Sito e profilo › Tipo di contenuti.
+
 ## 0.33.8
 
 ### Security

@@ -238,3 +238,27 @@ def test_the_newsroom_sees_the_recipe_as_it_goes_out(db, tenant):
     with db.tenant(tenant) as s:
         checks = {x["key"]: x["ok"] for x in s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar()["checks"]}
     assert "sources" not in checks and checks["headings"]
+
+
+def test_one_outlet_does_not_give_every_proposal():
+    """Francesco 2026-11-10: the day's recipes all came from Gustoblog."""
+    from editor import picks
+
+    def cand(i, source):
+        return picks.Candidate(i, i, f"t{i}", "", source, None, False, 1, 0.9, None, None, 1.0, score=1 - i / 100)
+
+    cands = [cand(i, "Gustoblog") for i in range(20)] + [cand(20 + i, f"Altro {i}") for i in range(5)]
+    shown = picks.spread(cands, 30)[:12]
+    assert sum(c.source == "Gustoblog" for c in shown) == 10 and len({c.source for c in shown}) == 3
+    assert picks.source_cap(4) == 2 and picks.source_cap(6) == 2 and picks.source_cap(2) == 2
+
+
+def test_a_recipe_site_mixes_the_season_with_the_news(db, tenant):
+    from editor import evergreen
+
+    _pid, _cited, site_id = recipe_site(db, tenant)
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id)
+                         .order_by(m.editorial_profiles.c.id.desc()).limit(1)).scalar()
+    assert evergreen.mode_of(body) == "mixed"
+    assert "Christmas in November" in evergreen.SEASON_SYSTEM
