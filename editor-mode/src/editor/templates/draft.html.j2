@@ -20,7 +20,14 @@
   {% if d.status in ('draft', 'needs_review') and caller.can('editor') and not editing %}
   <div class="row">
     <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/decision"><input type="hidden" name="accept" value="0"><button class="btn" type="submit">{{ _('Rifiuta') }}</button></form>
+    {% if caller.can('owner') and targets and not d.translation_of %}
+    <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn" type="submit">{{ _('Approva senza pubblicare') }}</button></form>
+    <form class="inline row" method="post" action="/ui/drafts/{{ d.id }}/decision" style="gap: 6px;"><input type="hidden" name="accept" value="1">
+      {% if targets|length > 1 %}<select name="publish_to" aria-label="{{ _('Destinazione') }}">{% for x in targets %}<option value="{{ x.id }}">{{ x.name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="publish_to" value="{{ targets[0].id }}">{% endif %}
+      <button class="btn pri" type="submit">{{ _('Approva e pubblica') }}</button></form>
+    {% else %}
     <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn pri" type="submit">{{ _('Approva la bozza') }}</button></form>
+    {% endif %}
   </div>
   {% endif %}
 </header>
@@ -59,6 +66,7 @@
 {% else %}
 <div class="cols">
   <article class="card article col-wide" lang="{{ d.language or 'it' }}">
+    {% if image %}<img class="hero" src="/media/{{ image.token }}" alt="{{ image.alt }}" width="{{ image.width or 1344 }}" height="{{ image.height or 768 }}">{% endif %}
     <h1>{{ d.title }}</h1>
     {% if d.subtitle %}<p class="sub">{{ d.subtitle }}</p>{% endif %}
     {% for sec in sections %}
@@ -67,6 +75,28 @@
     {% else %}
       <p class="hint">{{ _('Questa bozza non ha frasi registrate.') }}</p>
     {% endfor %}
+    {% set rc = sd.recipe if sd.recipe and sd.recipe.own else none %}
+    {% if rc %}
+    <div class="recipe-card">
+      <ul class="recipe-facts">
+        {% if rc.category %}<li><span>{{ _('Categoria') }}</span><strong>{{ rc.category }}</strong></li>{% endif %}
+        {% if rc.difficulty %}<li><span>{{ _('Difficoltà') }}</span><strong>{{ rc.difficulty }}</strong></li>{% endif %}
+        {% if rc.servings %}<li><span>{{ _('Porzioni') }}</span><strong>{{ rc.servings }}</strong></li>{% endif %}
+        {% if rc.prep_minutes %}<li><span>{{ _('Preparazione') }}</span><strong>{{ rc.prep_minutes }} min</strong></li>{% endif %}
+        {% if rc.cook_minutes %}<li><span>{{ _('Cottura') }}</span><strong>{{ rc.cook_minutes }} min</strong></li>{% endif %}
+        {% if rc.nutrition and rc.nutrition.calories %}<li><span>{{ _('Calorie') }}</span><strong>{{ rc.nutrition.calories }}</strong></li>{% endif %}
+      </ul>
+      {% if rc.nutrition %}
+      <p class="hint">{{ _('Valori per porzione') }}{% if rc.nutrition.servingWeight %} ({{ rc.nutrition.servingWeight }} g){% endif %}:
+        {% for key, label in [('protein', _('proteine')), ('carbs', _('carboidrati')), ('sugars', _('di cui zuccheri')), ('fat', _('grassi'))] %}{% if rc.nutrition[key] %}{{ label }} {{ rc.nutrition[key] }}{{ ' · ' if not loop.last }}{% endif %}{% endfor %}</p>
+      {% endif %}
+      <h2>{{ rc.ingredients }}</h2>
+      <ul class="recipe-items">{% for x in rc['items'] %}<li>{% if x.quantity or x.unit %}<strong>{{ x.quantity }} {{ x.unit }}</strong> {% endif %}{{ x.name }}</li>{% endfor %}</ul>
+      <h2>{{ rc.steps }}</h2>
+      <ol class="recipe-steps">{% for x in rc.method %}<li>{{ x }}</li>{% endfor %}</ol>
+      {% if rc.tags %}<p class="row" style="gap: 6px; flex-wrap: wrap;">{% for x in rc.tags %}<span class="chip">{{ x }}</span>{% endfor %}</p>{% endif %}
+    </div>
+    {% endif %}
   </article>
 
   <div class="col-side">
@@ -134,15 +164,15 @@
         <form method="post" action="/ui/drafts/{{ d.id }}/publish" class="form-grid">
           <label class="field">{{ _('Destinazione') }}<select name="target_id">{% for t in targets %}<option value="{{ t.id }}">{{ t.name }} · {{ _(kinds.get(t.kind, t.kind)) }}</option>{% endfor %}</select></label>
           {{ rubric() }}
-          <label class="field">{{ _('Modo') }}<select name="mode"><option value="draft">{{ _('Come bozza nel CMS') }}</option><option value="publish">{{ _('Pubblica subito') }}</option></select></label>
-          <div><button class="btn pri" type="submit">{{ _('Chiedi la pubblicazione') }}</button></div>
+          <label class="field">{{ _('Modo') }}<select name="mode"><option value="publish">{{ _('Pubblica subito') }}</option><option value="draft">{{ _('Come bozza nel CMS') }}</option></select></label>
+          <div><button class="btn pri" type="submit">{{ _('Pubblica') if caller.can('owner') else _('Chiedi la pubblicazione') }}</button></div>
         </form>
-        <p class="hint">{{ _('Parte solo dopo il sì di un direttore.') }}</p>
+        {% if not caller.can('owner') %}<p class="hint">{{ _('Parte solo dopo il sì di un direttore.') }}</p>{% endif %}
         {% else %}
         <p class="hint">{{ _('Nessuna destinazione per questo sito: aggiungila da <a href="/publications">Pubblicazioni</a>.') }}</p>
         {% endif %}
       {% elif not pubs %}
-      <p class="hint">{{ _('Si può pubblicare dopo aver approvato la bozza.') }}</p>
+      <p class="hint">{{ _('«Approva e pubblica», in alto, la manda online con un clic.') if caller.can('owner') and targets and not d.translation_of else _('Si può pubblicare dopo aver approvato la bozza.') }}</p>
       {% endif %}
     </section>
 

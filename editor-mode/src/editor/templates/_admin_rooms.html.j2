@@ -18,7 +18,7 @@
   <div class="card kpi"><span class="label">{{ _('Ricorrente al mese') }}</span><span class="value">{{ money(n.mrr) }}</span><span class="note">{{ _('1 redazione pagante') if n.paying == 1 else _('{n} redazioni paganti', n=n.paying) }}</span></div>
   <a class="card kpi {{ 'warn' if n.soon }}" href="/admin?stato=trial"><span class="label">{{ _('In prova') }}</span><span class="value">{{ n.trial }}</span><span class="note">{% if n.soon %}{{ _('{n} finiscono entro 3 giorni', n=n.soon) }}{% else %}{{ _('nessuna finisce nei prossimi 3 giorni') }}{% endif %}</span></a>
   <a class="card kpi {{ 'bad' if n.unpaid }}" href="/admin?stato=stopped"><span class="label">{{ _('Da pagare') }}</span><span class="value">{{ n.unpaid }}</span><span class="note">{{ _('ferme o con un pagamento non riuscito') if n.unpaid else _('nessuna in attesa di pagamento') }}</span></a>
-  <a class="card kpi {{ 'bad' if n.margin < 0 }}" href="/admin/usage"><span class="label">{{ _('Margine del mese') }}</span><span class="value">{{ eur(n.margin) }}</span><span class="note">{{ _('ricorrente meno il modello ({cost})', cost=eur(n.cost)) }}</span></a>
+  <a class="card kpi {{ 'warn' if n.margin < 0 }}" href="/admin/usage"><span class="label">{{ _('Margine del mese') }}</span><span class="value">{{ eur(n.margin) }}</span><span class="note">{{ _('ricorrente meno il modello ({cost})', cost=eur(n.cost)) }}</span></a>
 </section>
 
 {% with page="console" %}{% include "_help.html.j2" %}{% endwith %}
@@ -51,7 +51,7 @@
       <td class="num" data-label="{{ _('Siti') }}">{{ (us.used or 0)|int }}{% if us.limit %} / {{ us.limit|int }}{% endif %}</td>
       <td class="num" data-label="{{ _('Articoli del mese') }}">{{ (ud.used or 0)|int }}{% if ud.limit %} / {{ ud.limit|int }}{% endif %}</td>
       {% set income = (sub.monthly_cents or 0) / 100 if sub else 0 %}{% set gain = income - (uc.used or 0) %}
-      <td class="num" data-label="{{ _('Margine nel mese') }}"><span {% if gain < 0 %}class="down"{% endif %}>{{ eur(gain) }}</span><small>{{ _('{income} − modello {cost}', income=eur(income), cost=eur(uc.used or 0)) }}</small></td>
+      <td class="num" data-label="{{ _('Margine nel mese') }}"><span {% if gain < 0 %}class="loss"{% endif %}>{{ eur(gain) }}</span><small>{{ _('{income} − modello {cost}', income=eur(income), cost=eur(uc.used or 0)) }}</small></td>
       <td class="hint num" data-label="{{ _('Dal') }}">{{ r.created_at.strftime('%d/%m/%Y') if r.created_at else '–' }}</td>
       <td class="end"><a class="btn sm ghost" href="/admin/enter/{{ r.tenant_id }}" title="{{ _('Lavori nel pannello del cliente come suo direttore') }}">{{ _('Entra come direttore') }} ↗</a></td>
     </tr>

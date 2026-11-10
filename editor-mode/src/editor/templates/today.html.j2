@@ -71,7 +71,7 @@
     {% else %}<input type="hidden" name="site_id" value="{{ request_sites[0].id }}">{% endif %}
     <label class="field">{{ _('Cosa vuoi nell\'articolo') }}<textarea name="text" rows="3" required minlength="15" maxlength="2000" placeholder="{{ _('Es.: un articolo per titolari di piccole imprese sugli incentivi per l\'intelligenza artificiale: cosa prevedono, chi può chiederli, entro quando.') }}"></textarea></label>
     <label class="field">{{ _('Link (facoltativi, uno per riga, al massimo 5)') }}<textarea name="links" rows="2" placeholder="https://"></textarea></label>
-    <div><button class="btn pri" type="submit">{{ _('Scrivi la bozza') }}</button>
+    <div class="stack-sm"><button class="btn pri" type="submit">{{ _('Scrivi la bozza') }}</button>
       <span class="hint">{{ _('Conta come un articolo del piano. La bozza arriva in Bozze: la rileggi, la approvi e la pubblichi.') }}</span></div>
   </form>
 </section>
@@ -155,7 +155,7 @@
   <div class="card kpi">
     <span class="label">{{ _('Costo modello, 30 giorni') }}</span>
     <span class="value">{{ cost_month|num(2) }}</span>
-    <span class="note" title="{{ _('ai prezzi di core.yaml') }}">{{ _('{n} chiamate', n=calls_month|tok) }}</span>
+    <span class="note" title="{{ _('ai prezzi di core.yaml') }}">{{ _('1 chiamata') if calls_month == 1 else _('{n} chiamate', n=calls_month|tok) }}</span>
   </div>
   {% endif %}
 </section>
@@ -232,7 +232,7 @@
 <section class="card" aria-labelledby="h-desk">
   <div class="card-head"><h2 id="h-desk">{{ _('Siti') }}</h2><span class="hint">{{ _('{n} siti', n=desk|length) if desk|length != 1 else _('1 sito') }}{% if caller.can('owner') %} · <a href="/settings#h-sites">{{ _('+ Aggiungi un sito') }}</a>{% endif %}</span></div>
   <div class="scroll">
-  <table class="sites">
+  <table class="sites cards">
     <thead><tr>
       <th>{{ _('Sito') }}</th><th>{{ _('Profilo') }}</th><th>{{ _('Fonti attive') }}</th><th>{{ _('Notizie 24 ore') }}</th>
       <th>{{ _('Proposte') }}</th><th>{{ _('Bozze') }}</th>{% if caller.operator %}<th>{{ _('Costo 30 giorni') }}</th>{% endif %}<th>{{ _('Prossimo passo') }}</th>{% if caller.can('editor') %}<th>{{ _('Lancia') }}</th>{% endif %}
@@ -240,16 +240,16 @@
     <tbody>
     {% for x in desk %}
     <tr>
-      <td><a href="/switch?site={{ x.id }}&amp;back=/site">{{ x.domain }}</a>{% if x.working %} <span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('al lavoro') }}</span>{% endif %}</td>
-      <td>{% if x.pending %}<a class="chip amber" href="/switch?site={{ x.id }}&amp;back=/site">{{ _('v{version} da approvare', version=x.pending) }}</a>{% elif x.approved %}<span class="chip">{{ _('v{version} in uso', version=x.approved) }}</span>{% else %}<span class="chip">{{ _('in analisi') }}</span>{% endif %}</td>
-      <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/sources">{{ x.sources }}</a>{% if x.candidates %}<small>{{ _('{n} da valutare', n=x.candidates) }}</small>{% endif %}</td>
-      <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/trends">{{ x.news }}</a></td>
-      <td class="num">{% if x.proposals %}<a class="chip amber" href="#h-decide">{{ x.proposals }}</a>{% else %}0{% endif %}</td>
-      <td class="num"><a href="/switch?site={{ x.id }}&amp;back=/drafts">{{ x.drafts }}</a></td>
-      {% if caller.operator %}<td class="num">{{ x.cost|num(2) }}<small>{{ _('1 chiamata') if x.calls == 1 else _('{n} chiamate', n=x.calls|tok) }}</small></td>{% endif %}
-      <td>{% if x.next %}<strong style="font-weight: 500;">{{ x.next.title }}</strong>{% if x.next.busy %} <span class="chip teal">{{ _('In attesa') }}</span>{% else %} <span class="chip amber">{{ _('Tocca a te') }}</span>{% endif %}{% set why = x.next.wait if x.next.busy else x.next.todo %}{% if why %}<small title="{{ why }}">{{ why|truncate(70) }}</small>{% endif %}{% else %}<span class="hint">{{ _('Tutto avviato') }}</span>{% endif %}</td>
+      <td data-label="{{ _('Sito') }}"><a href="/switch?site={{ x.id }}&amp;back=/site">{{ x.domain }}</a>{% if x.working %} <span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('al lavoro') }}</span>{% endif %}</td>
+      <td data-label="{{ _('Profilo') }}">{% if x.pending %}<a class="chip amber" href="/switch?site={{ x.id }}&amp;back=/site">{{ _('v{version} da approvare', version=x.pending) }}</a>{% elif x.approved %}<span class="chip">{{ _('v{version} in uso', version=x.approved) }}</span>{% else %}<span class="chip">{{ _('in analisi') }}</span>{% endif %}</td>
+      <td class="num" data-label="{{ _('Fonti attive') }}"><a href="/switch?site={{ x.id }}&amp;back=/sources">{{ x.sources }}</a>{% if x.candidates %}<small>{{ _('{n} da valutare', n=x.candidates) }}</small>{% endif %}</td>
+      <td class="num" data-label="{{ _('Notizie 24 ore') }}"><a href="/switch?site={{ x.id }}&amp;back=/trends">{{ x.news }}</a></td>
+      <td class="num" data-label="{{ _('Proposte') }}">{% if x.proposals %}<a class="chip amber" href="#h-decide">{{ x.proposals }}</a>{% else %}0{% endif %}</td>
+      <td class="num" data-label="{{ _('Bozze') }}"><a href="/switch?site={{ x.id }}&amp;back=/drafts">{{ x.drafts }}</a></td>
+      {% if caller.operator %}<td class="num" data-label="{{ _('Costo 30 giorni') }}">{{ x.cost|num(2) }}<small>{{ _('1 chiamata') if x.calls == 1 else _('{n} chiamate', n=x.calls|tok) }}</small></td>{% endif %}
+      <td data-label="{{ _('Prossimo passo') }}">{% if x.next %}<strong style="font-weight: 500;">{{ x.next.title }}</strong>{% if x.next.busy %} <span class="chip teal">{{ _('In attesa') }}</span>{% else %} <span class="chip amber">{{ _('Tocca a te') }}</span>{% endif %}{% set why = x.next.wait if x.next.busy else x.next.todo %}{% if why %}<small title="{{ why }}">{{ why|truncate(70) }}</small>{% endif %}{% else %}<span class="hint">{{ _('Tutto avviato') }}</span>{% endif %}</td>
       {% if caller.can('editor') %}
-      <td><div class="row" style="gap: 6px; flex-wrap: nowrap;">
+      <td data-label="{{ _('Lancia') }}"><div class="row" style="gap: 6px; flex-wrap: nowrap;">
         {% if caller.can('owner') %}
         <form class="inline" method="post" action="/ui/sites/{{ x.id }}/review?back=/"><button class="btn sm" type="submit">{{ _('Analizza') }}</button></form>
         <form class="inline" method="post" action="/ui/sites/{{ x.id }}/discover?back=/"><button class="btn sm" type="submit">{{ _('Cerca fonti') }}</button></form>
@@ -288,7 +288,7 @@
       <div class="rank-row">
         <a href="/switch?site={{ x.id }}&amp;back=/site">{{ x.domain }}</a>
         <div class="bar thin"><i class="hype" style="width: {{ (100 * x.cost / top)|round|int if top else 0 }}%"></i></div>
-        <span class="num" title="{{ _('{n} token', n=x.tokens|tok) }}">{{ x.cost|num(3) }} · {{ _('{n} chiamate', n=x.calls|tok) }}</span>
+        <span class="num" title="{{ _('{n} token', n=x.tokens|tok) }}">{{ x.cost|num(3) }} · {{ _('1 chiamata') if x.calls == 1 else _('{n} chiamate', n=x.calls|tok) }}</span>
       </div>
       {% else %}<p class="hint">{{ _('Nessuna chiamata al modello negli ultimi 30 giorni.') }}</p>{% endfor %}
     </div>

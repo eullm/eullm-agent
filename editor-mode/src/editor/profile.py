@@ -415,7 +415,11 @@ def _set_settings(s, site_id: int, **values) -> bool:
     """Settings changed in place on the line in use and on a version waiting
     for approval: a setting, not a new version."""
     p = m.editorial_profiles
-    rows = s.execute(select(p.c.id, p.c.body).where(p.c.site_id == site_id, p.c.status.in_(("approved", "draft")))).all()
+    # The rows stay locked until the end of the transaction: two writers (the
+    # owner stopping the automatic newsroom, its hourly round saving the
+    # day's count) do not overwrite each other.
+    rows = s.execute(select(p.c.id, p.c.body).where(p.c.site_id == site_id, p.c.status.in_(("approved", "draft")))
+                     .order_by(p.c.id).with_for_update()).all()
     for r in rows:
         body = dict(r.body)
         body["settings"] = {**DEFAULT_SETTINGS, **(body.get("settings") or {}), **values}
@@ -428,7 +432,8 @@ def mark_recipe_site(s, site_id: int, courses: list[str]) -> bool:
     its own recipes, no sources on its pages, and its courses are the sections
     the newsroom files them under, until the owner sets their own."""
     p = m.editorial_profiles
-    rows = s.execute(select(p.c.id, p.c.body).where(p.c.site_id == site_id, p.c.status.in_(("approved", "draft")))).all()
+    rows = s.execute(select(p.c.id, p.c.body).where(p.c.site_id == site_id, p.c.status.in_(("approved", "draft")))
+                     .order_by(p.c.id).with_for_update()).all()
     for r in rows:
         body = dict(r.body)
         st = {**DEFAULT_SETTINGS, **(body.get("settings") or {}), "site_kind": "recipes"}

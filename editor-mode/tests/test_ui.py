@@ -74,8 +74,38 @@ def test_publish_flow_from_the_pages(db, tenant, monkeypatch):
     assert "Destinazione Hook aggiunta." in r.text
     with db.tenant(tenant) as s:
         tid = s.execute(text("SELECT id FROM editor.publish_targets")).scalar()
-    r = c.post(f"/ui/drafts/{did}/publish", data={"target_id": tid, "mode": "draft"})
-    assert "Pubblicazione chiesta" in r.text and "Approva e invia" in r.text
+    # An editor asks, a director approves on Pubblicazioni.
+    r = logged_in(db, tenant, "editor").post(f"/ui/drafts/{did}/publish", data={"target_id": tid, "mode": "draft"})
+    assert "Pubblicazione chiesta" in r.text
+    assert "Approva e invia" in c.get("/publications").text
+    # A director publishes in one step: no request to approve himself.
+    with db.tenant(tenant) as s:
+        s.execute(text("DELETE FROM editor.publications"))
+    r = c.post(f"/ui/drafts/{did}/publish", data={"target_id": tid, "mode": "publish"})
+    assert "Pubblicazione partita" in r.text
+    with db.tenant(tenant) as s:
+        assert s.execute(text("SELECT status FROM editor.publications")).scalar() == "approved"
+        assert s.execute(text("SELECT count(*) FROM editor.jobs WHERE kind = 'publish'")).scalar() == 1
+
+
+def test_a_director_approves_and_publishes_in_one_click(db, tenant, monkeypatch):
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    with db.tenant(tenant) as s:
+        s.execute(text("UPDATE editor.drafts SET status = 'draft', decided_by = NULL WHERE id = :d"), {"d": did})
+    c = logged_in(db, tenant, "owner")
+    c.post("/ui/targets", data={"site_id": site_id, "kind": "webhook", "name": "Hook",
+                                "address": "https://hooks.example/in"})
+    with db.tenant(tenant) as s:
+        tid = s.execute(text("SELECT id FROM editor.publish_targets")).scalar()
+    page = c.get(f"/drafts/{did}").text
+    assert "Approva e pubblica" in page and "Approva senza pubblicare" in page
+    assert "Approva e pubblica" not in logged_in(db, tenant, "editor").get(f"/drafts/{did}").text
+    r = c.post(f"/ui/drafts/{did}/decision", data={"accept": "1", "publish_to": tid})
+    assert "Pubblicazione partita" in r.text
+    with db.tenant(tenant) as s:
+        assert s.execute(text("SELECT status FROM editor.drafts WHERE id = :d"), {"d": did}).scalar() == "approved"
+        assert s.execute(text("SELECT status FROM editor.publications")).scalar() == "approved"
 
 
 def test_site_switch_and_tokens(db, tenant):

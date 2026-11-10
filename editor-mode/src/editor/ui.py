@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import unicodedata
 from importlib import metadata
@@ -26,6 +27,8 @@ from . import connect, evergreen, opportunity as oppo, queue
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
+
+log = logging.getLogger(__name__)
 
 COOKIE = "editor_token"
 SITE_COOKIE = "editor_site"
@@ -470,7 +473,8 @@ def register(app, ctx) -> None:
                     base = (getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/")
                     mail(e, *accounts.link_text("reset", f"{base}/invite/{token}", None, ""))
             except Exception:
-                pass
+                # The page answers the same either way; the log says why no email left.
+                log.exception("password reset email not sent")
         return pages.TemplateResponse(request, "forgot.html.j2", {"sent": True, "can_reset": mail is not None})
 
     @app.get("/switch")
@@ -1987,7 +1991,8 @@ def register(app, ctx) -> None:
                                                       for x in (d.seo or {}).get("checks", []) if x.get("key") in SEO_CHECKS])
 
     @app.post("/ui/drafts/{draft_id}/decision")
-    def ui_draft_decision(draft_id: int, accept: str = Form(...), c: auth.Caller = Depends(ctx.need("editor"))):
+    def ui_draft_decision(draft_id: int, accept: str = Form(...), publish_to: int = Form(0),
+                          c: auth.Caller = Depends(ctx.need("editor"))):
         if not drafts.decide(db, c.tenant_id, draft_id, accept == "1", c.name):
             return done(f"/drafts/{draft_id}", t("Questa bozza era già stata decisa."))
         if accept != "1":
@@ -1996,6 +2001,8 @@ def register(app, ctx) -> None:
         mailed = getattr(ctx, "run_delivery", None) and ctx.run_delivery(c.tenant_id, draft_id)
         extra = (" " + t("La mandiamo anche per email ai destinatari della redazione, con il pacchetto da pubblicare.")
                  if mailed else "")
+        if publish_to and c.can("owner"):  # «Approva e pubblica»: a director's yes covers the publication too
+            return publish_now(c, draft_id, publish_to, "publish", extra)
         if todo:
             return done(f"/drafts/{draft_id}", t("Bozza approvata. Traduzioni in scrittura ({languages}): le segui nel "
                                                  "riquadro Attività, ognuna conta come un articolo.",
@@ -2051,7 +2058,8 @@ def register(app, ctx) -> None:
         img = images.by_token(db, token.rsplit(".", 1)[0])
         if img is None:
             raise HTTPException(404, "image not found")
-        return Response(bytes(img.content), media_type=img.mime,
+        # The type read from the file, not the one stored: only an image leaves this address.
+        return Response(bytes(img.content), media_type=images.mime_of(bytes(img.content)),
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.post("/ui/drafts/{draft_id}/image")
@@ -2147,6 +2155,8 @@ def register(app, ctx) -> None:
         if mode not in ("draft", "publish"):
             raise HTTPException(400, "unknown mode")
         file_under(c, draft_id, section)
+        if c.can("owner"):  # a director does not ask himself: it goes out now
+            return publish_now(c, draft_id, target_id, mode)
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
@@ -2154,6 +2164,18 @@ def register(app, ctx) -> None:
         except IntegrityError:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta."))
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
+
+    def publish_now(c: auth.Caller, draft_id: int, target_id: int, mode: str, extra: str = ""):
+        """A director's publication: asked and approved in one step, sent by the worker."""
+        try:
+            pub_id = publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
+        except publishing.PublishError as e:
+            return done(f"/drafts/{draft_id}", t("Pubblicazione non partita: {e}", e=problem(e)) + extra)
+        except IntegrityError:
+            return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta.") + extra)
+        publishing.decide(db, c.tenant_id, pub_id, True, c.name)
+        ctx.run_publication(c.tenant_id, pub_id)
+        return done(f"/drafts/{draft_id}", t("Pubblicazione partita: la segui nel riquadro Attività.") + extra)
 
     @app.post("/ui/publications/{pub_id}/update")
     def ui_pub_update(pub_id: int, draft_id: int = Form(0), section: str = Form(""),
