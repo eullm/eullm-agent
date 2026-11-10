@@ -2714,5 +2714,12 @@
  "«Approva e pubblica» sul menù approva e pubblica anche le sue ricette nuove: aprile prima per rileggerle.": "«Aprobar y publicar» en el menú también aprueba y publica sus recetas nuevas: ábrelas antes para leerlas.",
  "menù": "menú",
  "Prima vanno online le {n} ricette nuove del menù: il menù parte da solo subito dopo.": "Primero se publican las {n} recetas nuevas del menú: el menú sale solo justo después.",
- "Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.": "Se han pedido las {n} recetas nuevas del menú: el menú sale solo cuando estén en línea."
+ "Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.": "Se han pedido las {n} recetas nuevas del menú: el menú sale solo cuando estén en línea.",
+ "Scheda della ricetta": "Ficha de la receta",
+ "Preparazione (minuti)": "Preparación (minutos)",
+ "Cottura (minuti)": "Cocción (minutos)",
+ "Ingredienti, uno per riga: quantità, unità, nome (es. 320 g spaghetti, q.b. sale)": "Ingredientes, uno por línea: cantidad, unidad, nombre (p. ej. 320 g espaguetis, c.s. sal)",
+ "Procedimento, un passaggio per riga": "Preparación, un paso por línea",
+ "Etichette, separate da virgole": "Etiquetas, separadas por comas",
+ "la ricetta ha bisogno di almeno 2 ingredienti e dei passaggi.": "la receta necesita al menos 2 ingredientes y sus pasos."
 }

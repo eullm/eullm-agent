@@ -2714,5 +2714,12 @@
  "«Approva e pubblica» sul menù approva e pubblica anche le sue ricette nuove: aprile prima per rileggerle.": "“Approve and publish” on the menu also approves and publishes its new recipes: open them first to read them.",
  "menù": "menu",
  "Prima vanno online le {n} ricette nuove del menù: il menù parte da solo subito dopo.": "First the menu's {n} new recipes go online: the menu follows by itself right after.",
- "Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.": "The menu's {n} new recipes were requested: the menu goes out by itself when they are online."
+ "Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.": "The menu's {n} new recipes were requested: the menu goes out by itself when they are online.",
+ "Scheda della ricetta": "Recipe card",
+ "Preparazione (minuti)": "Preparation (minutes)",
+ "Cottura (minuti)": "Cooking (minutes)",
+ "Ingredienti, uno per riga: quantità, unità, nome (es. 320 g spaghetti, q.b. sale)": "Ingredients, one per line: quantity, unit, name (e.g. 320 g spaghetti, to taste salt)",
+ "Procedimento, un passaggio per riga": "Method, one step per line",
+ "Etichette, separate da virgole": "Labels, separated by commas",
+ "la ricetta ha bisogno di almeno 2 ingredienti e dei passaggi.": "the recipe needs at least 2 ingredients and its steps."
 }

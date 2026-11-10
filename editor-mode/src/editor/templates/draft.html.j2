@@ -50,6 +50,23 @@
   <label class="field">{{ _('Titolo') }}<input name="title" value="{{ d.title }}" required minlength="5" maxlength="160"></label>
   <label class="field">{{ _('Sottotitolo') }}<input name="subtitle" value="{{ d.subtitle or '' }}" maxlength="300"></label>
   <label class="field">{{ _('Testo') }}<textarea name="body" rows="{{ [12, (body_text.count('\n') + 4)]|max }}" required style="font: 15px/1.6 var(--mono, monospace);">{{ body_text }}</textarea></label>
+  {% set rc = sd.recipe if sd.recipe and sd.recipe.own else none %}
+  {% if rc %}
+  <h2>{{ _('Scheda della ricetta') }}</h2>
+  <div class="cols">
+    <label class="field">{{ _('Categoria') }}<input name="recipe_category" value="{{ rc.category or '' }}" maxlength="60" list="recipe-courses"></label>
+    <label class="field">{{ _('Difficoltà') }}<input name="recipe_difficulty" value="{{ rc.difficulty or '' }}" maxlength="30"></label>
+    <label class="field">{{ _('Porzioni') }}<input name="recipe_servings" type="number" min="1" max="50" value="{{ rc.servings or '' }}"></label>
+    <label class="field">{{ _('Preparazione (minuti)') }}<input name="recipe_prep_minutes" type="number" min="1" max="2880" value="{{ rc.prep_minutes or '' }}"></label>
+    <label class="field">{{ _('Cottura (minuti)') }}<input name="recipe_cook_minutes" type="number" min="1" max="2880" value="{{ rc.cook_minutes or '' }}"></label>
+  </div>
+  {% if site_sections %}<datalist id="recipe-courses">{% for x in site_sections %}<option value="{{ x }}">{% endfor %}</datalist>{% endif %}
+  <label class="field">{{ _('Ingredienti, uno per riga: quantità, unità, nome (es. 320 g spaghetti, q.b. sale)') }}<textarea name="recipe_ingredients" rows="{{ [6, rc['items']|length + 2]|max }}" required style="font: 15px/1.6 var(--mono, monospace);">{% for x in rc['items'] %}{{ [x.quantity, x.unit, x.name]|select|join(' ') }}
+{% endfor %}</textarea></label>
+  <label class="field">{{ _('Procedimento, un passaggio per riga') }}<textarea name="recipe_steps" rows="{{ [6, rc.method|length * 2 + 2]|max }}" required style="font: 15px/1.6 var(--mono, monospace);">{% for x in rc.method %}{{ x }}
+{% endfor %}</textarea></label>
+  <label class="field">{{ _('Etichette, separate da virgole') }}<input name="recipe_tags" value="{{ (rc.tags or [])|join(', ') }}"></label>
+  {% endif %}
   {% if sources %}
   <div class="dashed">
     <strong>{{ _('Fonti da citare') }}</strong>

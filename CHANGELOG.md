@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.34.1
+
+### Changed
+
+- **La ricetta si corregge da «Modifica»** (Francesco, 10 novembre: nella
+  ricetta dello sgombro non c'erano né ingredienti né procedimento da
+  modificare). Il modulo di una ricetta propria ha ora la scheda:
+  categoria, difficoltà, porzioni, tempi di preparazione e cottura,
+  ingredienti (uno per riga, «200 g farina»), passaggi (uno per riga),
+  tag. Salvando, la scheda pubblicata cambia con il testo.
+- **Ricette scritte come un ricettario** (Francesco: «cuocere finché la
+  carne non si stacca a scaglie»). La ricetta è scritta nella lingua del
+  sito con le parole di cucina di quella lingua, mai tradotte alla
+  lettera; quando un passaggio è finito lo dice da ciò che il cuoco vede,
+  tocca o misura (il pesce diventa opaco e si sfalda con la forchetta, la
+  temperatura al cuore quando conta). L'apertura è di una-tre frasi senza
+  titoli, solo sul piatto: niente consigli di salute, dieta o sport; se il
+  modello scrive un saggio attorno alla ricetta, la bozza torna indietro.
+
 ## 0.34.0
 
 ### Added

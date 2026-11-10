@@ -2745,8 +2745,11 @@ def register(app, ctx) -> None:
         search = {k: str(form.get(f"seo_{k}", "")) for k in ("keyphrase", "title", "description", "slug")}
         try:
             if "body" in form:  # the free editor
+                recipe = ({k: str(form.get(f"recipe_{k}", "")) for k in (
+                    "ingredients", "steps", "servings", "prep_minutes", "cook_minutes", "difficulty", "category", "tags")}
+                    if "recipe_ingredients" in form else None)  # the card of the site's own recipe
                 res = drafts.edit_text(db, c.tenant_id, draft_id, str(form.get("title", "")),
-                                       str(form.get("subtitle", "")), str(form.get("body", "")), search)
+                                       str(form.get("subtitle", "")), str(form.get("body", "")), search, recipe)
             else:
                 res = drafts.edit(db, c.tenant_id, draft_id, str(form.get("title", "")),
                                   str(form.get("subtitle", "")), texts, search)
@@ -2755,6 +2758,7 @@ def register(app, ctx) -> None:
         except ValueError as e:
             ref = re.search(r"\[(\d+)\]", str(e))
             msg = (t("il titolo va da 5 a 160 caratteri.") if "title" in str(e)
+                   else t("la ricetta ha bisogno di almeno 2 ingredienti e dei passaggi.") if "recipe" in str(e)
                    else t("la fonte [{n}] non è nell'elenco.", n=ref.group(1)) if ref
                    else t("il testo è vuoto.") if "empty" in str(e)
                    else t("una frase non può restare vuota."))

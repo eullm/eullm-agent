@@ -5,6 +5,8 @@ the dish and no sources on the page; on a site kept in a repository the
 recipe goes in the recipes' folder, as a JSON file shaped like the others."""
 
 import json
+
+import pytest
 import socket
 from datetime import UTC, datetime
 
@@ -262,3 +264,41 @@ def test_a_recipe_site_mixes_the_season_with_the_news(db, tenant):
                          .order_by(m.editorial_profiles.c.id.desc()).limit(1)).scalar()
     assert evergreen.mode_of(body) == "mixed"
     assert "Christmas in November" in evergreen.SEASON_SYSTEM
+
+
+def test_the_director_corrects_ingredients_and_steps(db, tenant):
+    """Francesco 2026-11-10: in Modifica there were neither ingredients nor steps."""
+    from test_ui import logged_in
+
+    pid, cited, _site = recipe_site(db, tenant)
+    did, prompt = write(db, tenant, pid, cited[0])
+    assert "flakes under a fork" in prompt
+    c = logged_in(db, tenant, "owner")
+    form = c.get(f"/drafts/{did}?edit=1").text
+    assert 'name="recipe_ingredients"' in form and "350 g spaghetti" in form and "Rosola il guanciale" in form
+    r = c.post(f"/ui/drafts/{did}/edit", data={
+        "title": "Carbonara cremosa con guanciale croccante", "subtitle": "",
+        "body": f"La carbonara è tornata tra i piatti più cercati della settimana. [1]",
+        "recipe_ingredients": "320 g spaghetti\n150 g guanciale\n4 tuorli\nq.b. pepe nero",
+        "recipe_steps": "1. Rosola il guanciale in padella.\n2. Cuoci gli spaghetti.\n3. Manteca fuori dal fuoco.",
+        "recipe_servings": "4", "recipe_prep_minutes": "10", "recipe_cook_minutes": "12", "recipe_difficulty": "Facile",
+        "recipe_category": "I Primi", "recipe_tags": "veloce, Tradizione romana"})
+    assert "Modifiche salvate" in r.text
+    with db.tenant(tenant) as s:
+        d = s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()
+    card = d.seo["recipe"]
+    assert card["items"][0] == {"quantity": "320", "unit": "g", "name": "spaghetti"}
+    assert card["method"][0] == "Rosola il guanciale in padella." and card["cook_minutes"] == 12
+    assert card["tags"] == ["veloce", "tradizione-romana"] and d.seo["section"] == "I Primi"
+    assert "- 320 g spaghetti" in d.body_md and "1. Rosola il guanciale in padella." in d.body_md
+    bad = c.post(f"/ui/drafts/{did}/edit", data={"title": d.title, "subtitle": "", "body": "Testo mio.",
+                                                  "recipe_ingredients": "sale", "recipe_steps": ""})
+    assert "almeno 2 ingredienti" in bad.text
+
+
+def test_an_essay_around_the_recipe_is_sent_back():
+    with pytest.raises(ValueError, match="opening of the recipe"):
+        drafts.parse_article({"title": "Sgombro al forno", "sections": [
+            {"heading": None, "claims": [{"text": "Lo sgombro è semplice.", "sources": [1]}]},
+            {"heading": "Perché conta", "claims": [{"text": "Fa bene a chi si allena.", "sources": [1]}]}],
+            "recipe": OWN}, {1}, "it", own=True)
