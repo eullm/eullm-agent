@@ -162,7 +162,8 @@ def searches(s, site_id: int, now: datetime, days: int = 28, limit: int = 8) -> 
 SEASON_SYSTEM = (
     "You are the editorial planner of a website. List what its readers look for in the month given, because of "
     "the season, holidays, recurring events or the calendar of its sector: themes for articles that stay useful, "
-    "not news. Reply with JSON only: "
+    "not news. Count also what readers start preparing now for the holidays of the next weeks: a site of "
+    "recipes or gifts plans Christmas in November, Easter a month before. Reply with JSON only: "
     '{"themes": [{"name": "<the theme, in the site\'s language, max 80 chars>", "keywords": ["<3-6 lowercase '
     "keywords in the site's language, then the same in English>\"]}]}. At most " + str(MAX_SEASON) + " themes, "
     "only ones close to the site's subjects; none when the month means nothing special for this site."
@@ -327,6 +328,7 @@ def _validator(allowed: set[int]):
 def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, now: datetime | None = None,
          full: list[str] | None = None) -> list[int]:
     """Up to `limit` evergreen proposals for the site; their ids."""
+    from .autopilot import recipe_site
     from .proposals import full_line, lessons, mix
 
     now = now or datetime.now(UTC)
@@ -361,6 +363,8 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, 
         if value is None:
             value = {"title": th.label, "angle": "", "why_now": "", "format": "guide", "country": "", "section": "",
                      "citations": [it.id for it in items[:4]]}
+        if recipe_site(body):  # a site of recipes writes its own recipe on every theme
+            value["format"] = "recipe"
         with db.tenant(tenant_id) as s:
             topic = _topic(s, tenant_id)
             pid = s.execute(insert(m.proposals).values(

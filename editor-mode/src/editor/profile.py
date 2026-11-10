@@ -439,6 +439,9 @@ def mark_recipe_site(s, site_id: int, courses: list[str]) -> bool:
         st = {**DEFAULT_SETTINGS, **(body.get("settings") or {}), "site_kind": "recipes"}
         if st.get("sources_style") != "list":
             st["sources_style"] = "none"
+        if st.get("content_mode", "news") == "news":
+            # Recipes do not age: half on the season's themes and the site's gaps, half on what is liked now.
+            st["content_mode"] = "mixed"
         auto = dict(st.get("auto") or {})
         if courses and not auto.get("sections"):
             auto["sections"] = list(courses)[:30]

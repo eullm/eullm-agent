@@ -15,6 +15,18 @@
 
 ### Changed
 
+- **Ricette da più fonti** (Francesco, 10 novembre: le proposte del giorno
+  venivano tutte da Gustoblog, il feed i cui titoli somigliano di più ai temi
+  del profilo). Una stessa testata dà al massimo un terzo delle notizie che
+  il modello legge e delle proposte del giorno (con una o due proposte nessun
+  limite). Vale per tutti i siti.
+- **Siti di ricette: ricette di stagione e delle feste in anticipo.** Un sito
+  riconosciuto come sito di ricette parte in modalità mista: metà delle
+  proposte sui temi del mese e sulle lacune del sito, metà su quello che piace
+  adesso. Ogni tema diventa una ricetta propria. I temi del mese guardano
+  avanti: a novembre il Natale, un mese prima la Pasqua. Per un sito già
+  collegato basta scegliere «Misto» in Sito e profilo › Tipo di contenuti.
+
 - **Il pannello ha i suoi caratteri.** IBM Plex Sans per il testo, IBM
   Plex Mono per i numeri e Source Serif 4 per gli articoli nella bozza
   ora vengono serviti dal pannello (168 KB, in cache per un anno). Prima

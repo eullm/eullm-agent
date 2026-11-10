@@ -39,6 +39,10 @@ log = logging.getLogger(__name__)
 WINDOW = timedelta(hours=72)
 NOT_AGAIN = timedelta(days=14)  # a story proposed to the site is not proposed again for this long
 SHOWN = 30  # candidates the model reads
+# One outlet may give at most this share of the news the model reads and of the
+# day's proposals (Francesco 2026-11-10: the recipes all came from Gustoblog, the
+# feed whose titles share the most words with the profile).
+SOURCE_SHARE = 1 / 3
 WEIGHTS = {"relevance": 0.40, "followed": 0.15, "source": 0.10, "freshness": 0.15, "sources": 0.10, "novelty": 0.10}
 
 SYSTEM = (
@@ -70,6 +74,23 @@ class Candidate:
     source_score: float | None
     age_hours: float
     score: float = 0.0
+
+
+def spread(cands: list[Candidate], room: int) -> list[Candidate]:
+    """The candidates in their order, but no outlet takes more than its
+    share of the first `room`: the rest of an outlet's news follow."""
+    cap = max(2, math.ceil(room * SOURCE_SHARE))
+    seen: dict[str, int] = {}
+    first, later = [], []
+    for c in cands:
+        seen[c.source] = seen.get(c.source, 0) + 1
+        (first if seen[c.source] <= cap else later).append(c)
+    return first + later
+
+
+def source_cap(n: int) -> int:
+    """The proposals one outlet may give out of `n` (no limit on one or two)."""
+    return n if n < 3 else math.ceil(n * SOURCE_SHARE)
 
 
 def roots(words) -> set[str]:
@@ -227,17 +248,19 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
         learned = lessons(s, site_id)
     if not cands:
         return []
-    shown = cands[:SHOWN]
+    shown = spread(cands, SHOWN)[:SHOWN]
     by_id = {c.item_id: c for c in shown}
     chosen: list[tuple[Candidate, dict, str]] = []
     if core is not None:
         try:
             with usage.tagged(db, tenant_id, "proposal", site_id=site_id, ref=f"pick:{site_id}"):
-                options, _ = core.chat_json(SYSTEM.format(n=n), _prompt(prof.body, shown, learned + full_line(full)),
+                options, _ = core.chat_json(SYSTEM.format(n=n), _prompt(prof.body, shown, learned + full_line(full) + [
+                    f"At most {source_cap(n)} of the {n} from the same outlet: vary where the ideas come from."]),
                                             _options_validator(set(by_id), n))
             for o in options:
                 c = by_id[o["citations"][0]]
-                if all(c.topic_id != x.topic_id for x, _, _ in chosen):
+                if all(c.topic_id != x.topic_id for x, _, _ in chosen) and \
+                        sum(x.source == c.source for x, _, _ in chosen) < source_cap(n):
                     chosen.append((c, o, "model"))
         except CoreError as e:
             log.warning("picking news for site %s failed: %s", site_id, e)
@@ -246,7 +269,8 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
             break
         # Without the model a news item far from every subtopic is not proposed:
         # only the model can tell that it still matters to the site's readers.
-        if c.relevance > 0 and all(c.topic_id != x.topic_id for x, _, _ in chosen):
+        if c.relevance > 0 and all(c.topic_id != x.topic_id for x, _, _ in chosen) and \
+                sum(x.source == c.source for x, _, _ in chosen) < source_cap(n):
             chosen.append((c, {"title": c.title[:160], "angle": "", "why_now": "", "format": "news",
                                "citations": [c.item_id]}, "formula"))
     created = []
