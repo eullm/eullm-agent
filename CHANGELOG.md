@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.33.8
+
+### Security
+
+- **Nessuno ti tiene più fuori dal pannello sbagliando la tua password.**
+  Prima, dopo 5 password sbagliate, si bloccava l'account: chi conosceva
+  la tua email poteva lasciarti fuori ripetendo tentativi. Ora i tentativi
+  si contano per connessione: dopo 5 password sbagliate per la stessa
+  email, o 20 in tutto, da quella connessione si riprova dopo 15 minuti,
+  mentre tu dalla tua entri. L'account si blocca solo dopo 50 errori da
+  connessioni diverse. Vale anche per «Password dimenticata» (punto B1
+  dell'audit di ottobre, ripreso nell'audit del 10 novembre).
+
+### Changed
+
+- **Il pannello ha i suoi caratteri.** IBM Plex Sans per il testo, IBM
+  Plex Mono per i numeri e Source Serif 4 per gli articoli nella bozza
+  ora vengono serviti dal pannello (168 KB, in cache per un anno). Prima
+  ognuno vedeva il carattere del suo sistema: Segoe su Windows, San
+  Francisco su Mac. Licenza SIL Open Font in
+  `editor-mode/src/editor/static/FONTS-OFL.txt`.
+
 ## 0.33.7
 
 ### Security

@@ -2706,5 +2706,6 @@
  "Pubblica": "Publicar",
  "Pubblicazione partita: la segui nel riquadro Attività.": "Publicación iniciada: la sigues en el panel Actividad.",
  "Pubblicazione non partita: {e}": "Publicación no iniciada: {e}",
- "«Approva e pubblica», in alto, la manda online con un clic.": "«Aprobar y publicar», arriba, lo pone en línea con un clic."
+ "«Approva e pubblica», in alto, la manda online con un clic.": "«Aprobar y publicar», arriba, lo pone en línea con un clic.",
+ "Troppi tentativi sbagliati da questa connessione: riprova fra qualche minuto.": "Demasiados intentos fallidos desde esta conexión: vuelve a intentarlo en unos minutos."
 }

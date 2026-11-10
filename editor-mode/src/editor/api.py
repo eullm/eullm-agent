@@ -30,6 +30,12 @@ _STATIC_DIR = Path(__file__).parent / "static"
 _STATIC = {name: (kind, (_STATIC_DIR / name).read_bytes())
            for name, kind in (("redazia-logo.webp", "image/webp"), ("redazia-icon.png", "image/png"),
                                        ("redazia-mail.png", "image/png"))}
+# The dashboard's typefaces, served from here so that every computer and phone
+# sees the same letters (SIL Open Font License, static/FONTS-OFL.txt).
+FONTS = ("ibm-plex-sans-latin-400-normal", "ibm-plex-sans-latin-500-normal", "ibm-plex-sans-latin-600-normal",
+         "ibm-plex-mono-latin-400-normal", "ibm-plex-mono-latin-500-normal", "source-serif-4-latin-400-normal",
+         "source-serif-4-latin-400-italic", "source-serif-4-latin-600-normal")
+_STATIC |= {f"{name}.woff2": ("font/woff2", (_STATIC_DIR / f"{name}.woff2").read_bytes()) for name in FONTS}
 
 DOMAIN = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 COOKIE = "editor_token"
@@ -116,8 +122,10 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
         # Only the files shipped with the package, never a path.
         if name not in _STATIC:
             raise HTTPException(404)
+        # The fonts never change under the same name: a year in the browser's cache.
+        age = 31536000 if name.endswith(".woff2") else 86400
         return Response(_STATIC[name][1], media_type=_STATIC[name][0],
-                        headers={"Cache-Control": "public, max-age=86400"})
+                        headers={"Cache-Control": f"public, max-age={age}"})
     pages = Jinja2Templates(env=_BRIEF_TEMPLATES)
     i18n.install(pages.env)
 
