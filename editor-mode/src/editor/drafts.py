@@ -120,6 +120,7 @@ class Article:
     faq: list[str] = field(default_factory=list)  # sections that are a reader's question and its answer
     seo: dict = field(default_factory=dict)  # the model's search fields, see seo.parse
     recipe: dict | None = None  # a recipe's headings, servings and times (RECIPE): its lines are claims
+    menu: list[dict] | None = None  # a whole menu's courses (menus.py): not claims, links to recipes
 
     @property
     def flags(self) -> list[dict]:
@@ -435,7 +436,10 @@ def ingredient_line(x: dict) -> str:
     return " ".join(p for p in (x.get("quantity"), x.get("unit"), x.get("name")) if p)
 
 
-def parse_article(value, allowed: set[int], language: str | None = None, own: bool = False) -> Article:
+def parse_article(value, allowed: set[int], language: str | None = None, own: bool = False,
+                  brief: bool = False) -> Article:
+    """The model's article, checked. `own`: the site's own recipe; `brief`: an
+    opening only (a menu, whose courses are not claims)."""
     if not isinstance(value, dict):
         raise ValueError("expected an object")
     title = value.get("title")
@@ -473,7 +477,7 @@ def parse_article(value, allowed: set[int], language: str | None = None, own: bo
             claims += [Claim(t, ids, ih) for t, ids in ingredients] + [Claim(t, ids, sh) for t, ids in steps]
             recipe = {"ingredients": ih, "steps": sh, "yield": " ".join(str(r.get("yield") or "").split())[:60] or None,
                       "prep_minutes": _minutes(r.get("prep_minutes")), "cook_minutes": _minutes(r.get("cook_minutes"))}
-    if len(claims) < (1 if own else 3):
+    if len(claims) < (1 if own or brief else 3):
         raise ValueError("an article needs at least 3 claims")
     # Questions readers ask, each answered with sourced claims like the rest.
     faq = []
@@ -556,6 +560,10 @@ def render(article: Article, sources: dict[int, Source], language: str | None, l
         lines += [f"- {kept_links(ingredient_line(x), set())}" for x in own["items"]]
         lines.append(f"\n## {own['steps']}\n")
         lines += [f"{n}. {kept_links(x, set())}" for n, x in enumerate(own["method"], 1)]
+    if article.menu:
+        from .menus import lines as menu_lines
+
+        lines += menu_lines(article.menu)
     if links:
         lines.append(f"\n## {READ_MORE.get((language or '')[:2], 'Read more')}\n")
         lines += [f"- [{x['title']}]({x['url']})" for x in links]
@@ -1129,6 +1137,14 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
     allowed = set(sources)
     roles = {**{i: "CONTEXT" for i in context}, **{i: "MAIN" for i in cited}, **{i: "ORIGINAL" for i in documents}}
     prompt = _prompt(profile, prop, sources, roles, posts)
+    from . import menus
+
+    menu = menus.is_menu(profile, prop)
+    recipes: list[dict] = []
+    if menu:  # a whole menu: the site's recipes to choose from, new ones only where none fits
+        with db.tenant(tenant_id) as s:
+            recipes = menus.site_recipes(s, prop.site_id)
+        prompt += "\n\n" + menus.instructions(recipes)
     # The automatic newsroom publishes only articles citing this many outlets: asked
     # from the first writing, not found missing after it was paid for.
     told_by = {sources[i].name for i in sources if roles.get(i) not in ("CONTEXT", "ORIGINAL")}
@@ -1150,8 +1166,11 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
         with usage.tagged(db, tenant_id, purpose, site_id=prop.site_id, ref=f"proposal:{proposal_id}"):
             res = core.chat(messages)
         try:
-            article = check(parse_article(extract_json(res.content), allowed, profile.get("language"),
-                                          own=own_recipe(profile, prop)), sources)
+            value = extract_json(res.content)
+            article = check(parse_article(value, allowed, profile.get("language"),
+                                          own=own_recipe(profile, prop), brief=menu), sources)
+            if menu:
+                article.menu = menus.parse(value, recipes)
         except ValueError as e:
             problem = str(e)
         else:
@@ -1194,7 +1213,8 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             # Filed under one of the site's sections from the start: a draft published by hand
             # went to WordPress without a category (wp.aitoday.it, 2026-11-05).
             seo={**sd.as_dict(), **({"section": section} if section else {}),
-                 **({"recipe": article.recipe} if article.recipe else {})},
+                 **({"recipe": article.recipe} if article.recipe else {}),
+                 **({"menu": article.menu} if article.menu else {})},
         ).returning(m.drafts.c.id)).scalar_one()
         if over:  # beyond the plan's articles of the month: paid with credits
             credits.spend(s, "article", f"draft:{did}")
@@ -1205,6 +1225,14 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             s.execute(insert(m.draft_claim_sources).values(
                 [{"tenant_id": tenant_id, "claim_id": cid, "item_id": i} for i in c.sources]))
         s.execute(update(m.proposals).where(m.proposals.c.id == proposal_id).values(status="drafted"))
+    if menu:  # the new recipes of the menu, each a draft of its own, then their links in the menu
+        article.menu = menus.write_courses(db, tenant_id, did, prop, article.menu, lambda pid: write_draft(
+            db, tenant_id, pid, core, client, pay=pay, purpose=purpose))
+        with db.tenant(tenant_id) as s:
+            sd_now = s.execute(select(m.drafts.c.seo).where(m.drafts.c.id == did)).scalar() or {}
+            s.execute(update(m.drafts).where(m.drafts.c.id == did).values(
+                seo={**sd_now, "menu": article.menu},
+                body_md=render(article, sources, profile.get("language"), sd.links)))
     if any(COPIED in c.flags or style.stock(c.text, profile.get("language")) for c in article.claims):
         reword(db, tenant_id, did, core, purpose)  # still copied, or stock phrases: reworded where they stand
     return did
@@ -1307,7 +1335,7 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
     claims = parse_text(text, order)
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
-    keep = {k: old[k] for k in ("section", "replaces", "recipe") if k in old}
+    keep = {k: old[k] for k in ("section", "replaces", "recipe", "menu") if k in old}
     sd.links = old.get("links") or []
     sections = list(dict.fromkeys(c.section for c in claims))
     sd.faq = [q for q in old.get("faq") or [] if q in sections]
@@ -1339,9 +1367,11 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
 
 
 def _with_own(article: Article, old: dict) -> Article:
-    """The article with the site's own recipe it had, whose lines are not claims."""
+    """The article with the site's own recipe or the menu it had, whose lines are not claims."""
     if (old.get("recipe") or {}).get("own"):
         article.recipe = old["recipe"]
+    if old.get("menu"):
+        article.menu = old["menu"]
     return article
 
 
@@ -1377,7 +1407,7 @@ def edit(db, tenant_id: str, draft_id: int, title: str, subtitle: str, texts: di
         claims.append(Claim(text, c["sources"], c["section"]))
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
-    keep = {k: old[k] for k in ("section", "replaces", "recipe") if k in old}
+    keep = {k: old[k] for k in ("section", "replaces", "recipe", "menu") if k in old}
     sd.faq, sd.links = old.get("faq") or [], old.get("links") or []
     article = check(Article(title, " ".join((subtitle or "").split())[:300], claims, sd.faq, {}), sources)
     first = next((c.section for c in claims), None)

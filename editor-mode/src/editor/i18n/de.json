@@ -2707,5 +2707,12 @@
  "Pubblicazione partita: la segui nel riquadro Attività.": "Veröffentlichung gestartet: Sie verfolgen sie im Bereich Aktivität.",
  "Pubblicazione non partita: {e}": "Veröffentlichung nicht gestartet: {e}",
  "«Approva e pubblica», in alto, la manda online con un clic.": "„Freigeben und veröffentlichen“ oben stellt ihn mit einem Klick online.",
- "Troppi tentativi sbagliati da questa connessione: riprova fra qualche minuto.": "Zu viele Fehlversuche von dieser Verbindung: Versuchen Sie es in einigen Minuten erneut."
+ "Troppi tentativi sbagliati da questa connessione: riprova fra qualche minuto.": "Zu viele Fehlversuche von dieser Verbindung: Versuchen Sie es in einigen Minuten erneut.",
+ "Il menù parte da solo appena le sue ricette nuove sono online.": "Das Menü geht von selbst online, sobald seine neuen Rezepte online sind.",
+ "ricetta già sul sito": "Rezept bereits auf der Website",
+ "ricetta nuova": "neues Rezept",
+ "«Approva e pubblica» sul menù approva e pubblica anche le sue ricette nuove: aprile prima per rileggerle.": "„Freigeben und veröffentlichen“ beim Menü gibt auch seine neuen Rezepte frei und veröffentlicht sie: Öffnen Sie sie vorher zum Lesen.",
+ "menù": "Menü",
+ "Prima vanno online le {n} ricette nuove del menù: il menù parte da solo subito dopo.": "Zuerst gehen die {n} neuen Rezepte des Menüs online: das Menü folgt gleich danach von selbst.",
+ "Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.": "Die {n} neuen Rezepte des Menüs wurden angefragt: das Menü geht von selbst online, wenn sie online sind."
 }

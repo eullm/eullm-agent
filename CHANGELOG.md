@@ -1,17 +1,22 @@
 # Changelog
 
-## 0.33.8
+## 0.34.0
 
-### Security
+### Added
 
-- **Nessuno ti tiene più fuori dal pannello sbagliando la tua password.**
-  Prima, dopo 5 password sbagliate, si bloccava l'account: chi conosceva
-  la tua email poteva lasciarti fuori ripetendo tentativi. Ora i tentativi
-  si contano per connessione: dopo 5 password sbagliate per la stessa
-  email, o 20 in tutto, da quella connessione si riprova dopo 15 minuti,
-  mentre tu dalla tua entri. L'account si blocca solo dopo 50 errori da
-  connessioni diverse. Vale anche per «Password dimenticata» (punto B1
-  dell'audit di ottobre, ripreso nell'audit del 10 novembre).
+- **Menù interi per i siti di ricette** (Francesco, 10 novembre). Su un
+  tema delle feste la redazione può proporre un menù («menù» tra i
+  formati). Il modello sceglie 3-5 portate: per ognuna riusa una ricetta
+  che il sito ha già, quando va bene, e scrive una ricetta nuova solo per
+  le portate che mancano. Ogni ricetta nuova è una bozza a sé (ricetta
+  propria, con la sua foto e la sua categoria) legata al menù. Il menù è
+  un articolo (sui siti come lagrandecucina.it va in Tecnica) con
+  un'apertura e una sezione per portata con il link alla ricetta. Nella
+  bozza del menù si vedono le portate, quali ricette sono già sul sito e lo
+  stato delle nuove. «Approva e pubblica» sul menù approva e pubblica prima
+  le ricette nuove; il menù parte da solo appena l'ultima è online, con i
+  loro indirizzi veri. La redazione automatica non scrive menù: solo
+  ricette.
 
 ### Changed
 
@@ -26,6 +31,21 @@
   adesso. Ogni tema diventa una ricetta propria. I temi del mese guardano
   avanti: a novembre il Natale, un mese prima la Pasqua. Per un sito già
   collegato basta scegliere «Misto» in Sito e profilo › Tipo di contenuti.
+
+## 0.33.8
+
+### Security
+
+- **Nessuno ti tiene più fuori dal pannello sbagliando la tua password.**
+  Prima, dopo 5 password sbagliate, si bloccava l'account: chi conosceva
+  la tua email poteva lasciarti fuori ripetendo tentativi. Ora i tentativi
+  si contano per connessione: dopo 5 password sbagliate per la stessa
+  email, o 20 in tutto, da quella connessione si riprova dopo 15 minuti,
+  mentre tu dalla tua entri. L'account si blocca solo dopo 50 errori da
+  connessioni diverse. Vale anche per «Password dimenticata» (punto B1
+  dell'audit di ottobre, ripreso nell'audit del 10 novembre).
+
+### Changed
 
 - **Il pannello ha i suoi caratteri.** IBM Plex Sans per il testo, IBM
   Plex Mono per i numeri e Source Serif 4 per gli articoli nella bozza

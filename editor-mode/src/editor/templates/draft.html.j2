@@ -75,6 +75,22 @@
     {% else %}
       <p class="hint">{{ _('Questa bozza non ha frasi registrate.') }}</p>
     {% endfor %}
+    {% if sd.menu %}
+    <div class="recipe-card">
+      {% if sd.publish_after %}<p class="notice">{{ _('Il menù parte da solo appena le sue ricette nuove sono online.') }}</p>{% endif %}
+      {% for x in sd.menu %}
+      <h2>{{ x.course }}</h2>
+      <p class="hint">
+        {% if x.url %}<a href="{{ x.url }}" target="_blank" rel="noopener">{{ x.title }}</a> · {{ _('ricetta già sul sito') }}
+        {% elif x.draft_id %}{% set k = courses.get(x.draft_id) %}<a href="/drafts/{{ x.draft_id }}">{{ x.title }}</a> ·
+          {% if k and k.online %}<span class="chip green">{{ _('online') }}</span>{% elif k %}{% set st = {'draft': ('blue', _('Pronta da leggere')), 'needs_review': ('amber', _('Da rivedere a mano')), 'approved': ('green', _('Approvata')), 'discarded': ('', _('Scartata dalla redazione automatica')), 'rejected': ('', _('Rifiutata'))}.get(draft_state(k.status, k.decided_by), ('', k.status)) %}<span class="chip {{ st[0] }}">{{ st[1] }}</span> {{ _('ricetta nuova') }}{% endif %}
+        {% else %}{{ x.title }}{% endif %}
+      </p>
+      {% if x.why %}<p>{{ x.why }}</p>{% endif %}
+      {% endfor %}
+      {% if sd.menu|selectattr('draft_id')|list %}<p class="hint">{{ _('«Approva e pubblica» sul menù approva e pubblica anche le sue ricette nuove: aprile prima per rileggerle.') }}</p>{% endif %}
+    </div>
+    {% endif %}
     {% set rc = sd.recipe if sd.recipe and sd.recipe.own else none %}
     {% if rc %}
     <div class="recipe-card">

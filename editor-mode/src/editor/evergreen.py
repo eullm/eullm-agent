@@ -226,7 +226,8 @@ SYSTEM = (
     '{"title": "<headline, max 120 chars, no date and no \'today\'>", "angle": "<what the article explains and '
     'for whom, 1-3 sentences>", "why_now": "<why this theme is worth an article on this site, 1 sentence>", '
     '"format": "<one of: guide, tutorial, comparison, analysis, data, review, recipe (only when an item gives a '
-    'whole recipe: its ingredients and its steps)>", '
+    'whole recipe: its ingredients and its steps; on a site of recipes, its own recipe on the theme), menu (only on '
+    'a site of recipes, for a holiday or an occasion: a whole menu of several courses)>", '
     '"country": "<the ISO 3166-1 alpha-2 code of the country the theme is about, empty when it is not about one>", '
     '"section": "<the one of the site\'s sections it belongs to, written exactly as listed; empty when none are '
     'listed>", "citations": [<ids of the items the article relies on>]}. '
@@ -328,7 +329,7 @@ def _validator(allowed: set[int]):
 def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, now: datetime | None = None,
          full: list[str] | None = None) -> list[int]:
     """Up to `limit` evergreen proposals for the site; their ids."""
-    from .autopilot import recipe_site
+    from .autopilot import recipe_site, settings_of
     from .proposals import full_line, lessons, mix
 
     now = now or datetime.now(UTC)
@@ -363,8 +364,11 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, 
         if value is None:
             value = {"title": th.label, "angle": "", "why_now": "", "format": "guide", "country": "", "section": "",
                      "citations": [it.id for it in items[:4]]}
-        if recipe_site(body):  # a site of recipes writes its own recipe on every theme
-            value["format"] = "recipe"
+        if recipe_site(body):
+            # A site of recipes writes its own recipe on every theme, or a whole menu for an occasion
+            # (menus.py) when a person reads it first: the automatic newsroom writes recipes only.
+            menu = value["format"] == "menu" and not settings_of(body)["enabled"]
+            value["format"] = "menu" if menu else "guide" if value["format"] == "guide" else "recipe"
         with db.tenant(tenant_id) as s:
             topic = _topic(s, tenant_id)
             pid = s.execute(insert(m.proposals).values(

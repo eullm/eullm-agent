@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, bindparam, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import connect, evergreen, opportunity as oppo, queue, ratelimit
+from . import connect, evergreen, menus, opportunity as oppo, queue, ratelimit
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
@@ -48,7 +48,7 @@ ORIGINS = {
 FORMATS = {
     "analysis": N_("analisi"), "news": N_("notizia"), "opinion": N_("opinione"), "guide": N_("guida"),
     "how-to": N_("guida"), "tutorial": N_("guida"), "interview": N_("intervista"), "review": N_("recensione"),
-    "explainer": N_("spiegazione"), "recipe": N_("ricetta"), "comparison": N_("confronto"), "data": N_("dati"),
+    "explainer": N_("spiegazione"), "recipe": N_("ricetta"), "menu": N_("menù"), "comparison": N_("confronto"), "data": N_("dati"),
 }
 KINDS = {"rss": "RSS", "hackernews": "HN", "github": "GitHub", "huggingface": "Hugging Face", "arxiv": "arXiv"}
 TARGET_KINDS = {"wordpress": "WordPress", "github": N_("GitHub (repo del sito)"), "webhook": "Webhook",
@@ -1986,10 +1986,15 @@ def register(app, ctx) -> None:
                 m.drafts.c.proposal_id == d.proposal_id, m.drafts.c.version > d.version,
                 m.drafts.c.translation_of.is_(None)).order_by(m.drafts.c.version)).first() \
                 if auto_note and d.proposal_id and not d.translation_of else None
+            # A menu: its new recipes, each a draft of its own, and whether they are online.
+            course_ids = [x["draft_id"] for x in (d.seo or {}).get("menu") or [] if x.get("draft_id")]
+            courses = {r.id: {"status": r.status, "decided_by": r.decided_by, "online": menus.online(s, r.id)}
+                       for r in s.execute(select(m.drafts.c.id, m.drafts.c.status, m.drafts.c.decided_by)
+                                          .where(m.drafts.c.id.in_(course_ids or [0]))).all()}
             site_sections = autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar())["sections"]
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
-                          site_sections=site_sections,
+                          site_sections=site_sections, courses=courses,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
                           image=image, img_busy=img_busy, images_on=getattr(ctx, "imager", None) is not None,
@@ -2169,6 +2174,8 @@ def register(app, ctx) -> None:
         file_under(c, draft_id, section)
         if c.can("owner"):  # a director does not ask himself: it goes out now
             return publish_now(c, draft_id, target_id, mode)
+        if waiting := menu_first(c, draft_id, target_id, mode, approve=False):
+            return waiting
         try:
             publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:
@@ -2177,8 +2184,27 @@ def register(app, ctx) -> None:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta."))
         return done("/publications", t("Pubblicazione chiesta: aspetta l'approvazione di un direttore."))
 
+    def menu_first(c: auth.Caller, draft_id: int, target_id: int, mode: str, approve: bool, extra: str = ""):
+        """A menu whose new recipes are not online: they go first, the menu
+        follows by itself (menus.publish_first). None for any other draft."""
+        with db.tenant(c.tenant_id) as s:
+            todo = menus.missing(s, draft_id)
+        if not todo:
+            return None
+        try:
+            sent = menus.publish_first(db, c.tenant_id, draft_id, target_id, mode, c.name, approve,
+                                       lambda pid: ctx.run_publication(c.tenant_id, pid))
+        except publishing.PublishError as e:
+            return done(f"/drafts/{draft_id}", t("Pubblicazione non partita: {e}", e=problem(e)) + extra)
+        msg = (t("Prima vanno online le {n} ricette nuove del menù: il menù parte da solo subito dopo.", n=len(todo))
+               if approve else t("Chieste le {n} ricette nuove del menù: il menù parte da solo quando sono online.",
+                                 n=sent))
+        return done(f"/drafts/{draft_id}", msg + extra)
+
     def publish_now(c: auth.Caller, draft_id: int, target_id: int, mode: str, extra: str = ""):
         """A director's publication: asked and approved in one step, sent by the worker."""
+        if waiting := menu_first(c, draft_id, target_id, mode, approve=True, extra=extra):
+            return waiting
         try:
             pub_id = publishing.request(db, c.tenant_id, draft_id, target_id, mode, c.name)
         except publishing.PublishError as e:

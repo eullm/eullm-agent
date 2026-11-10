@@ -345,6 +345,13 @@ def build_payload(s, d) -> dict:
         body = drafts.without_sources(body)
     elif style == "list":
         body = drafts.discreet_sources(body)
+    if (d.seo or {}).get("menu"):  # a menu links its new recipes by their address on the site
+        from . import menus
+
+        try:
+            body = menus.resolve(s, body)
+        except ValueError as e:
+            raise PublishError(str(e)) from None
     return {"title": d.title, "subtitle": d.subtitle, "markdown": body, "html": to_html(body),
             "language": d.language, **search_fields(s, d)}
 
