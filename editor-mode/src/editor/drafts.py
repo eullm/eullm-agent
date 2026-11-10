@@ -432,6 +432,37 @@ def parse_own_recipe(r, language: str | None) -> dict:
             "nutrition": nutrition or None}
 
 
+def edited_recipe(old: dict, fields: dict) -> dict:
+    """The site's own recipe as the director corrected it in the draft:
+    ingredients one per line ("320 g spaghetti"), steps one per line, the
+    card's other fields. ValueError when it is no longer a recipe."""
+    from .sitegit import split_ingredient
+
+    items = [split_ingredient(x) for x in str(fields.get("ingredients") or "").splitlines() if x.strip()]
+    method = [humanize(" ".join(re.sub(r"^\s*\d+[.)]\s*", "", x).split()))[:800]
+              for x in str(fields.get("steps") or "").splitlines() if x.strip()]
+    method = [x for x in method if x]
+    if len(items) < 2 or not method:
+        raise ValueError("the recipe needs at least 2 ingredients and its steps")
+    r = {**old, "items": items[:60], "method": method[:40]}
+    try:
+        servings = int(str(fields.get("servings") or "").strip())
+    except ValueError:
+        servings = None
+    r["servings"] = servings if servings and 0 < servings <= 50 else None
+    r["yield"] = str(r["servings"]) if r["servings"] else None
+    r["prep_minutes"], r["cook_minutes"] = _minutes(fields.get("prep_minutes")), _minutes(fields.get("cook_minutes"))
+    r["difficulty"] = _short(fields.get("difficulty") or "", 30) or None
+    r["category"] = _short(fields.get("category") or "", 60) or None
+    tags = []
+    for x in str(fields.get("tags") or "").split(","):
+        tag = seo.slugify(x, 30)
+        if tag and tag not in tags:
+            tags.append(tag)
+    r["tags"] = tags[:6]
+    return r
+
+
 def ingredient_line(x: dict) -> str:
     return " ".join(p for p in (x.get("quantity"), x.get("unit"), x.get("name")) if p)
 
@@ -468,6 +499,10 @@ def parse_article(value, allowed: set[int], language: str | None = None, own: bo
             claims.append(Claim(humanize(c["text"].strip()), list(dict.fromkeys(ids)), heading))
     recipe = None
     if own:
+        # The site's recipe opens with a few sentences on the dish, then the card: no essay
+        # with headings around it (the mackerel of 2026-11-10 had a «Perché conta» on sport).
+        if len(claims) > 3 or any(c.section for c in claims):
+            raise ValueError("the opening of the recipe is one to three sentences in one section without a heading")
         recipe = parse_own_recipe(value.get("recipe"), language)
     elif isinstance(value.get("recipe"), dict):
         r = value["recipe"]
@@ -931,7 +966,10 @@ OWN_RECIPE = (
     "{\"calories\": \"<kcal per portion, e.g. 520 kcal>\", \"protein\": \"<e.g. 25g>\", \"carbs\": \"...\", "
     "\"fat\": \"...\", \"sugars\": \"...\", \"servingWeight\": <grams of one portion>}}. Write it as a careful "
     "cook would: real quantities for the portions, steps a person can follow, times and temperatures that work, "
-    "nutrition estimated from the quantities. Write the recipe in the site's language."
+    "nutrition estimated from the quantities. Write the recipe in the site's language as a cookbook of that "
+    "language writes it, with its usual kitchen words, never phrases translated word for word; tell when a step "
+    "is done by what the cook sees, feels or measures (for fish: the flesh turns opaque and flakes under a fork; "
+    "a core temperature when it matters). Keep to the dish: no nutrition, health or sport advice in the opening."
 )
 
 
@@ -1317,7 +1355,7 @@ def parse_text(text: str, order: list[int]) -> list[Claim]:
 
 
 def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text: str,
-              search: dict | None = None) -> dict:
+              search: dict | None = None, recipe: dict | None = None) -> dict:
     """The director's free edit of the whole article: sentences added,
     removed or rewritten, headings changed. A sentence without sources is
     the director's own and is published as written; a cited sentence is
@@ -1336,6 +1374,10 @@ def edit_text(db, tenant_id: str, draft_id: int, title: str, subtitle: str, text
     old = d.seo or {}
     sd = seo.parse({**{k: old.get(k) for k in ("keyphrase", "title", "description", "slug")}, **(search or {})}, title)
     keep = {k: old[k] for k in ("section", "replaces", "recipe", "menu") if k in old}
+    if recipe is not None and (old.get("recipe") or {}).get("own"):  # the director's corrections to the card
+        keep["recipe"] = old["recipe"] = edited_recipe(old["recipe"], recipe)
+        if keep["recipe"].get("category"):
+            keep["section"] = keep["recipe"]["category"]
     sd.links = old.get("links") or []
     sections = list(dict.fromkeys(c.section for c in claims))
     sd.faq = [q for q in old.get("faq") or [] if q in sections]
