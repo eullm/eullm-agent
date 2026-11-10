@@ -31,13 +31,17 @@ def test_the_renewals_follow_the_billing_data_and_old_ones_are_brought_to_the_va
     assert fake.subscriptions[msub]["amount"] == G(149000) and sub["renewal_cents"] == G(149000)
     page = c.get("/account").text
     assert "IVA al 22%" in page
+    # The law wants consumers to see the price with VAT (Codice del Consumo art. 49): Pro, 149 € a month.
+    assert "181,78 € IVA inclusa" in page and "+ IVA al mese" in page
+    assert c.get("/api/public/plans").json()["vat_percent"] == 22
     # A German company with its VAT number: the renewals go on without VAT.
     de = CUSTOMER | {"country": "DE", "vat_number": "DE123456789", "tax_code": "", "province": "", "sdi_code": "",
                      "postal_code": "10115", "city": "Berlin"}
     r = c.post(f"/account/{tid}/customer", data=de, follow_redirects=False)
     assert r.status_code == 303
     assert fake.subscriptions[msub]["amount"] == 149000 and billing.subscription(admin, tid)["renewal_cents"] == 149000
-    assert "inversione contabile" in c.get("/account").text
+    page = c.get("/account").text
+    assert "inversione contabile" in page and "IVA inclusa" not in page
     # A subscription made before the VAT (no amount known): the hourly round fixes it, once.
     with admin.engine.begin() as conn:
         conn.execute(update(m.subscriptions).where(m.subscriptions.c.tenant_id == tid).values(renewal_cents=None))

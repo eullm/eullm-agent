@@ -51,7 +51,7 @@
   {% if online and room.customer %}
   <div class="row">
     {% for k in packs %}
-    <form class="inline" method="post" action="/account/{{ room.tenant_id }}/credits"><input type="hidden" name="pack" value="{{ k.code }}"><input type="hidden" name="back" value="plan"><button class="btn" type="submit">{{ k.name }} · {{ money(k.price_cents, k.currency) }}</button></form>
+    <form class="inline" method="post" action="/account/{{ room.tenant_id }}/credits"><input type="hidden" name="pack" value="{{ k.code }}"><input type="hidden" name="back" value="plan"><button class="btn" type="submit">{{ k.name }} · {{ money(k.price_cents, k.currency) }}{% set incl = with_vat(k.price_cents, k.currency, room.customer) %}{% if incl %} + {{ _('IVA') }} ({{ incl }}){% endif %}</button></form>
     {% endfor %}
   </div>
   <p class="hint">{{ _('Pagamento unico, IVA esclusa. I crediti arrivano appena il pagamento è confermato.') }} {{ vat_note(room.customer) }}</p>

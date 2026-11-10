@@ -41,8 +41,9 @@
           {% for p in plans|selectattr('price_month_cents')|list %}
             <label class="card pad" style="cursor: pointer; display: block;">
               <span class="row"><input type="radio" name="plan" value="{{ p.code }}" {% if (changing and sub.plan_code == p.code) or (not changing and sub and sub.desired_plan == p.code) or (not changing and not (sub and sub.desired_plan in plans|selectattr('price_month_cents')|map(attribute='code')) and loop.first) %}checked{% endif %}> <strong>{{ p.name }}</strong></span>
-              <div style="font-size: 22px; font-weight: 600; margin-top: 8px;">{{ money(p.price_month_cents, p.currency) }} <span class="hint">{{ _('al mese') }}</span></div>
-              <div class="hint">{{ _("oppure {price} all'anno", price=money(p.price_year_cents, p.currency)) }}</div>
+              <div style="font-size: 22px; font-weight: 600; margin-top: 8px;">{{ money(p.price_month_cents, p.currency) }} <span class="hint">{{ _('+ IVA al mese') if with_vat(p.price_month_cents, p.currency, r.customer) else _('al mese') }}</span></div>
+              {% set incl_m = with_vat(p.price_month_cents, p.currency, r.customer) %}{% if incl_m %}<div class="hint">{{ incl_m }}</div>{% endif %}
+              <div class="hint">{{ _("oppure {price} all'anno", price=money(p.price_year_cents, p.currency)) }}{% set incl_y = with_vat(p.price_year_cents, p.currency, r.customer) %}{% if incl_y %} ({{ incl_y }}){% endif %}</div>
               <p class="hint">{{ p.description }}<br>
                 {{ _('{n} sito', n=p.max_sites) if p.max_sites == 1 else _('{n} siti', n=p.max_sites) }}{% if p.max_drafts_month %} · {{ _('{n} articoli al mese', n=p.max_drafts_month) }}{% endif %}{% if p.max_active_sources %} · {{ _('{n} fonti attive', n=p.max_active_sources) }}{% endif %}</p>
             </label>

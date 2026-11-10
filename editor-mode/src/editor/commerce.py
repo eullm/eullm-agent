@@ -191,7 +191,9 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                   for x in billing.addons(admin)]
         return JSONResponse({"plans": out, "trial_days": trial["trial_days"] if trial else 0,
                              "credits": {"prices": prices, "free_redraws": credits.FREE_REDRAWS, "packs": packs},
-                             "addons": addons},
+                             "addons": addons,
+                             # Prices are before VAT; a consumer must see them with it (0.34.4).
+                             "vat_percent": billing.VAT_PERCENT},
                             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300"})
 
     # --- operator and resellers (API) --------------------------------------------------
