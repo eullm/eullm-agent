@@ -1,5 +1,6 @@
 -- Alembic revision 0045: extra languages bought one at a time (addons,
--- tenants.extra_languages by site, payments.kind 'addon').
+-- tenants.extra_languages by site, payments.kind 'addon'), and the VAT of
+-- online payments (payments.vat_cents, subscriptions.renewal_cents).
 CREATE TABLE editor.addons (
     code text PRIMARY KEY,
     name text NOT NULL,
@@ -27,3 +28,5 @@ INSERT INTO editor.payments_new SELECT id, tenant_id, subscription_id, provider,
     currency, status, note, created_at, paid_at FROM editor.payments;
 DROP TABLE editor.payments;
 ALTER TABLE editor.payments_new RENAME TO payments;
+ALTER TABLE editor.payments ADD COLUMN vat_cents integer;
+ALTER TABLE editor.subscriptions ADD COLUMN renewal_cents integer;

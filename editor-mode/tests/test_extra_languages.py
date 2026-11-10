@@ -13,6 +13,11 @@ from editor.db import Database
 from test_billing import FakeGateway, client, key, signup, unique
 
 
+
+def G(net: int) -> int:
+    """What an Italian customer pays: the price and 22% VAT."""
+    return round(net * 1.22)
+
 class Gateway(FakeGateway):
     def __init__(self):
         super().__init__()
@@ -67,7 +72,7 @@ def test_a_language_more_is_bought_for_a_site_and_renews_with_the_plan(db, admin
     activate(c, fake, tid)
     sub = billing.subscription(admin, tid)
     msub = sub["provider_subscription_id"]
-    assert fake.subscriptions[msub]["amount"] == 149000
+    assert fake.subscriptions[msub]["amount"] == G(149000)
     with db.tenant(tid) as s:
         assert tr.allowed(s, site_id) == 2  # Pro: two languages per site, its own included
     with pytest.raises(tr.LanguageError):
@@ -78,7 +83,7 @@ def test_a_language_more_is_bought_for_a_site_and_renews_with_the_plan(db, admin
     # A year just started: today almost the whole year's price, then with the plan.
     r = c.post(f"/account/{tid}/language", data={"site_id": site_id, "back": "site"}, follow_redirects=False)
     pid = r.headers["location"].rsplit("/", 1)[1]
-    assert r.status_code == 303 and 12400 <= fake.payments[pid]["amount_cents"] <= 12500
+    assert r.status_code == 303 and G(12400) <= fake.payments[pid]["amount_cents"] <= G(12500)
     assert fake.last["redirect"] == f"https://editor.example.com/account/{tid}/language-paid?back=site"
     c.post("/api/billing/mollie/webhook", data={"id": pid})  # not paid yet: nothing
     assert billing.extra_languages(admin, tid) == {}
@@ -86,7 +91,7 @@ def test_a_language_more_is_bought_for_a_site_and_renews_with_the_plan(db, admin
     c.post("/api/billing/mollie/webhook", data={"id": pid})
     c.post("/api/billing/mollie/webhook", data={"id": pid})  # the same notice twice: one language
     assert billing.extra_languages(admin, tid) == {site_id: 1}
-    assert fake.subscriptions[msub]["amount"] == 149000 + 12500
+    assert fake.subscriptions[msub]["amount"] == G(149000 + 12500)
     with db.tenant(tid) as s:
         assert tr.allowed(s, site_id) == 3 and tr.allowed(s) == 2
     assert tr.set_languages(db, tid, site_id, ["en", "de"]) == ["en", "de"]
@@ -97,7 +102,7 @@ def test_a_language_more_is_bought_for_a_site_and_renews_with_the_plan(db, admin
     tr.set_languages(db, tid, site_id, ["en"])
     c.post(f"/account/{tid}/language/remove", data={"site_id": site_id, "back": "site"})
     assert billing.extra_languages(admin, tid) == {}
-    assert fake.subscriptions[msub]["amount"] == 149000
+    assert fake.subscriptions[msub]["amount"] == G(149000)
 
 
 def test_a_plan_paid_again_keeps_its_extra_languages_in_the_amount(db, admin):
@@ -106,15 +111,15 @@ def test_a_plan_paid_again_keeps_its_extra_languages_in_the_amount(db, admin):
     activate(c, fake, tid, "pro", "month")
     billing.set_extra_languages(admin, tid, site_id, 2, fake)
     msub = billing.subscription(admin, tid)["provider_subscription_id"]
-    assert fake.subscriptions[msub]["amount"] == 14900 + 2 * 1250
+    assert fake.subscriptions[msub]["amount"] == G(14900 + 2 * 1250)
     # A change of plan: the first payment and the renewals carry the languages.
     c.post(f"/account/{tid}/checkout", data={"plan": "business", "interval": "month"}, follow_redirects=False)
     pid = f"tr_{fake.run}{fake.n}"
-    assert fake.payments[pid]["amount_cents"] == 39900 + 2 * 1250
+    assert fake.payments[pid]["amount_cents"] == G(39900 + 2 * 1250)
     fake.payments[pid]["status"] = "paid"
     c.post("/api/billing/mollie/webhook", data={"id": pid})
     new = billing.subscription(admin, tid)["provider_subscription_id"]
-    assert new != msub and fake.subscriptions[new]["amount"] == 39900 + 2 * 1250
+    assert new != msub and fake.subscriptions[new]["amount"] == G(39900 + 2 * 1250)
 
 
 def test_the_price_is_prorated_on_what_is_left_of_the_period():

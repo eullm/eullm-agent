@@ -43,7 +43,7 @@
       <td data-label="{{ _('Cliente') }}">{% if p.customer_id %}<a href="/admin/customers/{{ p.customer_id }}">{{ p.customer_name }}</a>{% if p.customer_vat %}<small class="num">{{ p.customer_vat }}</small>{% endif %}{% else %}<span class="hint">–</span>{% endif %}</td>
       <td data-label="{{ _('Tipo') }}">{{ pay_kind(p.kind) }}{% if p.note %}<small>{{ p.note }}</small>{% endif %}</td>
       <td data-label="{{ _('Metodo') }}">{% if p.provider == 'mollie' %}Mollie{% if p.provider_payment_id %}<small class="num">{{ p.provider_payment_id }}</small>{% endif %}{% elif p.provider == 'manual' %}{{ _('bonifico') }}{% else %}{{ p.provider or '–' }}{% endif %}</td>
-      <td class="num" data-label="{{ _('Importo') }}"><span {% if p.kind == 'refund' %}class="down"{% endif %}>{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</span></td>
+      <td class="num" data-label="{{ _('Importo') }}"><span {% if p.kind == 'refund' %}class="down"{% endif %}>{% if p.kind == 'refund' %}−{% endif %}{{ money(p.amount_cents, p.currency) }}</span>{% if p.vat_cents %}<br><small class="hint">{{ _('di cui IVA {amount}', amount=money(p.vat_cents, p.currency)) }}</small>{% elif p.vat_cents == 0 and p.kind != 'refund' %}<br><small class="hint">{{ _('senza IVA, inversione contabile') }}</small>{% endif %}</td>
       <td data-label="{{ _('Stato') }}">{{ pay_status(p) }}</td>
     </tr>
     {% endfor %}

@@ -5,6 +5,11 @@ than its plan allows by buying them one at a time, 12,50 € a month or
 - tenants.extra_languages: the languages bought, by site ({"<site id>": n});
 - payments.kind 'addon': the first payment of an add-on (the renewals go
   with the plan's, whose amount grows by the add-on's price).
+VAT on online payments (Francesco 2026-11-10, 22% except EU businesses
+with a VAT number, reverse charge):
+- payments.vat_cents: the VAT inside a payment by card;
+- subscriptions.renewal_cents: what the gateway charges each renewal, VAT
+  included (NULL until the hourly round brings it there).
 
 Revision ID: 0045
 Revises: 0044
@@ -37,6 +42,8 @@ def upgrade() -> None:
         ALTER TABLE editor.payments DROP CONSTRAINT payments_kind_check;
         ALTER TABLE editor.payments ADD CONSTRAINT payments_kind_check
             CHECK (kind IN ('first', 'recurring', 'manual', 'refund', 'credits', 'addon'));
+        ALTER TABLE editor.payments ADD COLUMN vat_cents integer;
+        ALTER TABLE editor.subscriptions ADD COLUMN renewal_cents integer;
         """
     )
 
@@ -44,6 +51,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(
         """
+        ALTER TABLE editor.subscriptions DROP COLUMN renewal_cents;
+        ALTER TABLE editor.payments DROP COLUMN vat_cents;
         DELETE FROM editor.payments WHERE kind = 'addon';
         ALTER TABLE editor.payments DROP CONSTRAINT payments_kind_check;
         ALTER TABLE editor.payments ADD CONSTRAINT payments_kind_check

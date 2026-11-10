@@ -2746,5 +2746,10 @@
  "Togli prima una lingua dal sito: dopo ne resterebbero {n}, compresa la sua.": "Entfernen Sie zuerst eine Sprache von der Website: Danach blieben {n}, einschließlich ihrer eigenen.",
  "Lingua non tolta: {error}.": "Sprache nicht entfernt: {error}.",
  "Prezzi non salvati: {error}.": "Preise nicht gespeichert: {error}.",
- "Questo sito può avere {n} lingue, compresa la sua: togline qualcuna, aggiungi una lingua extra o passa a un piano più grande.": "Diese Website kann {n} Sprachen haben, einschließlich ihrer eigenen: Entfernen Sie einige, fügen Sie eine zusätzliche Sprache hinzu oder wechseln Sie zu einem größeren Tarif."
+ "Questo sito può avere {n} lingue, compresa la sua: togline qualcuna, aggiungi una lingua extra o passa a un piano più grande.": "Diese Website kann {n} Sprachen haben, einschließlich ihrer eigenen: Entfernen Sie einige, fügen Sie eine zusätzliche Sprache hinzu oder wechseln Sie zu einem größeren Tarif.",
+ "di cui IVA {amount}": "davon MwSt. {amount}",
+ "senza IVA, inversione contabile": "ohne MwSt., Reverse-Charge",
+ "Oggi paghi {amount}, IVA compresa, per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.": "Heute zahlen Sie {amount} inkl. MwSt. für den Rest des bereits bezahlten Zeitraums, danach verlängert sich die Sprache mit dem Tarif über dieselbe Karte.",
+ "Per un'azienda con partita IVA in un altro paese dell'UE non si aggiunge l'IVA: la versa il cliente (inversione contabile).": "Für ein Unternehmen mit USt-IdNr. in einem anderen EU-Land wird keine MwSt. berechnet: Der Kunde führt sie ab (Reverse-Charge).",
+ "Al pagamento si aggiunge l'IVA al {rate}%.": "Bei der Zahlung kommt die MwSt. von {rate} % hinzu."
 }

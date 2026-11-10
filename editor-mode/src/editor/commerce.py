@@ -431,6 +431,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                 "province": province, "country": country, "sdi_code": sdi_code, "pec": pec}
         try:
             billing.set_tenant_customer(admin, tenant_id, spec)
+            billing._renewal_follows(admin, ctx.gateway, tenant_id, force=False)  # the VAT can change with them
         except (billing.BillingError, accounts.AccountError) as e:
             return to_account(t("Dati non salvati: {error}.", error=e), tenant_id, back)
         except LookupError:
@@ -656,6 +657,7 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
                 "province": province, "country": country, "sdi_code": sdi_code, "pec": pec}
         try:
             billing.set_tenant_customer(admin, tenant_id, spec)
+            billing._renewal_follows(admin, ctx.gateway, tenant_id, force=False)  # the VAT can change with them
         except LookupError:
             return back(t("Redazione non trovata."), error=True)
         except (billing.BillingError, accounts.AccountError) as e:
