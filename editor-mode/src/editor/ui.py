@@ -648,6 +648,9 @@ def register(app, ctx) -> None:
                 "hype": hype_text,
                 "opp": opp, "hype_n": hype,
             }
+        for r in rows:  # every outlet a proposal draws on, not only the newest news
+            if r.id in out:
+                out[r.id]["outlets"] = list(dict.fromkeys(n.source for n in news.get(r.id, [])))[:3]
         return out
 
     def themed_details(r, basis: dict, cited: list, model: bool) -> dict:

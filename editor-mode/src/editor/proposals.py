@@ -22,6 +22,15 @@ from .core_client import CoreClient, CoreError
 from .opportunity import Opportunity
 
 PER_DAY = 6  # profile.DEFAULT_SETTINGS, for a profile saved without it
+# The assisted newsroom (Francesco 2026-11-10): after the morning, new
+# proposals every ROUND_EVERY hours until LAST_ROUND, for the places of the
+# day still free; a proposal waiting more than FRESH_HOURS leaves its place
+# to new ones (it stays to be decided). Once the day's articles are written,
+# nothing more until the next morning.
+ROUND_EVERY = 3
+LAST_ROUND = 20
+FRESH_HOURS = 6
+ROUNDS_FLOOD = 3  # at most this many times the day's number, made in a day
 
 log = logging.getLogger(__name__)
 
@@ -284,8 +293,12 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None = None, limit
         return ids
     found = propose(db, tenant_id, site_id, opportunity.score_site(db, tenant_id, site_id, now=now), core, limit=news,
                     outlets=outlets, full=full)
+    # One outlet's share counts over the whole day, not only this round.
+    with db.tenant(tenant_id) as s:
+        used = outlets_used(s, site_id, (now or datetime.now(UTC)) - timedelta(hours=24))
+    day_n = max(limit, (body.get("settings") or {}).get("proposals_per_day", PER_DAY))
     return ids + found + picks.fill(db, tenant_id, site_id, news - len(found), core, now=now, outlets=outlets,
-                                    full=full)
+                                    full=full, used=used, day_n=day_n)
 
 
 TITLES_SYSTEM = (
@@ -397,6 +410,82 @@ def record_feedback(s, tenant_id: str, target: str, target_id: int, verdict: str
     s.execute(insert(m.feedback).values(
         tenant_id=tenant_id, site_id=site_id, target=target, target_id=target_id, verdict=verdict,
         note=note, given_by=by, given_at=datetime.now(UTC)))
+
+
+def round_due(local: datetime, briefing_hour: int, last: str | None) -> str | None:
+    """The key of the round of proposals due at this local time (after the
+    morning's, every ROUND_EVERY hours up to LAST_ROUND), or None."""
+    h = local.hour
+    if h <= briefing_hour or h > LAST_ROUND or (h - briefing_hour) % ROUND_EVERY:
+        return None
+    key = local.strftime("%Y-%m-%dT%H")
+    return None if last == key else key
+
+
+def written_since(s, site_id: int, since: datetime) -> int:
+    """The site's articles of the day: proposals accepted since `since` (a
+    draft written or on its way), translations aside."""
+    pr = m.proposals.c
+    accepted = s.execute(select(func.count()).select_from(m.proposals).where(
+        pr.site_id == site_id, pr.status == "accepted", pr.created_at >= since - timedelta(days=2),
+        pr.id.in_(select(m.drafts.c.proposal_id).where(m.drafts.c.created_at >= since,
+                                                       m.drafts.c.translation_of.is_(None))))).scalar() or 0
+    writing = s.execute(select(func.count()).select_from(m.proposals).where(
+        pr.site_id == site_id, pr.status == "accepted", pr.created_at >= since,
+        ~pr.id.in_(select(m.drafts.c.proposal_id).where(m.drafts.c.proposal_id.is_not(None))))).scalar() or 0
+    return int(accepted) + int(writing)
+
+
+def waiting_fresh(s, site_id: int, now: datetime) -> int:
+    """Proposals still to decide, made in the last FRESH_HOURS."""
+    pr = m.proposals.c
+    return s.execute(select(func.count()).select_from(m.proposals).where(
+        pr.site_id == site_id, pr.status == "proposed",
+        pr.created_at >= now - timedelta(hours=FRESH_HOURS))).scalar() or 0
+
+
+def assisted_round(db, tenant_id: str, site_id: int, since: datetime, core: CoreClient | None = None,
+                   now: datetime | None = None) -> list[int]:
+    """A round of the day for a site the director runs: as many new
+    proposals as the day's places still free (the day's number, less the
+    articles written today and the fresh proposals waiting); none once the
+    day's articles are written, the plan's month is used up or the paid
+    period is over."""
+    now = now or datetime.now(UTC)
+    with db.tenant(tenant_id) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(
+            m.editorial_profiles.c.site_id == site_id, m.editorial_profiles.c.status == "approved")).scalar()
+        if body is None or quotas.proposals_only(s):
+            return []
+        left_month = quotas.remaining(s, "drafts")
+        if left_month is not None and left_month <= 0:
+            return []
+        per_day = (body.get("settings") or {}).get("proposals_per_day", PER_DAY)
+        written = written_since(s, site_id, since)
+        if per_day <= 0 or written >= per_day:
+            return []
+        room = per_day - written - waiting_fresh(s, site_id, now)
+        room = min(room, per_day * ROUNDS_FLOOD - made_today(s, site_id, since))
+        if left_month is not None:
+            room = min(room, int(left_month))
+    if room <= 0:
+        return []
+    return plan(db, tenant_id, site_id, core, limit=room, now=now)
+
+
+def outlets_used(s, site_id: int, since: datetime) -> dict[str, int]:
+    """How many of the site's proposals since `since` cite each outlet: the
+    day's share of an outlet counts across rounds (Francesco 2026-11-10:
+    four recipes, all from the same blog)."""
+    pc, si = m.proposal_citations.c, m.source_items.c
+    rows = s.execute(select(pc.proposal_id, m.sources.c.name).distinct()
+                     .join(m.source_items, si.id == pc.item_id).join(m.sources, m.sources.c.id == si.source_id)
+                     .join(m.proposals, m.proposals.c.id == pc.proposal_id)
+                     .where(m.proposals.c.site_id == site_id, m.proposals.c.created_at >= since)).all()
+    out: dict[str, int] = {}
+    for _, name in rows:
+        out[name] = out.get(name, 0) + 1
+    return out
 
 
 def top_up(db, tenant_id: str, site_id: int, since: datetime, core: CoreClient | None = None,
