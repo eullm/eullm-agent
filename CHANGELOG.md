@@ -2,6 +2,38 @@
 
 ## 0.33.7
 
+### Security
+
+Correzioni dell'audit del 10 novembre (sicurezza, pipeline e stile del
+pannello).
+
+- **Niente link inventati negli articoli.** Il modello poteva mettere un
+  link suo dentro una frase (anche chiesto da una pagina letta tra le
+  fonti) e con la redazione automatica usciva sul sito. Ora nelle frasi,
+  nel titolo e nel sommario restano solo i link alle fonti citate; gli
+  altri diventano testo. I link agli altri articoli del sito restano in
+  «Leggi anche». I prompt dicono che il testo delle fonti è materiale, non
+  istruzioni.
+- **Cambi di redazione o di sito solo dal pannello.** «Entra come
+  direttore», il cambio di redazione e il cambio di sito aperti da un link
+  di un altro sito portano alla home invece di cambiare la sessione.
+- L'API rifiuta PUT e DELETE con il cookie da un'altra origine, come già
+  faceva per POST.
+- Le copertine escono sempre con il tipo letto dall'immagine, non con
+  quello dichiarato dal servizio che le disegna.
+- Una sitemap che dichiara un DOCTYPE o delle entità si salta invece di
+  leggerla.
+- «Password dimenticata» scrive nel log perché l'email non è partita.
+
+### Fixed
+
+- **Punto della Sera:** cercava l'articolo del sito anche tra le copie
+  dell'archivio comune (una ricerca senza collegamento alle fonti), e in
+  quel caso non lo registrava tra le notizie della redazione.
+- **Impostazioni del sito:** fermare la redazione automatica nello stesso
+  istante in cui il giro orario salva il conteggio del giorno poteva far
+  perdere una delle due scritture; ora la seconda aspetta la prima.
+
 ### Changed
 
 - **La ricetta si rilegge com'è sul sito** (Francesco, 10 novembre: nella
@@ -21,7 +53,12 @@
   uscire «Gustoblog lo ha rimesso al centro»). I controlli per Google non
   chiedono più a una ricetta propria due fonti citate e due sottotitoli:
   ha già Ingredienti e Procedimento.
-
+- Desk: in «Chiedi un articolo» la spiegazione sta sotto il pulsante; la
+  tabella Siti al telefono diventa a schede (prima si vedevano 4 colonne
+  su 9); «1 chiamata» invece di «1 chiamate».
+- Console: il margine negativo è ambra, non rosso (rosso solo per gli
+  errori).
+- Tolti dal foglio di stile blocchi mai usati.
 - **Collega il sito mostra la cartella delle ricette.** Su un sito di
   ricette collegato via GitHub la pagina diceva solo «Cartella degli
   articoli» (per esempio content/tecnica) e sembrava che le ricette

@@ -176,7 +176,9 @@ def _items(s, tenant_id: str, site_id: int, domain: str, rows: list) -> list[int
             continue
         url = r.external_url or f"{ARTICLES}{site_id}/draft/{r.id}"
         key = sha256_hex(canonical_url(url))
-        found = s.execute(select(m.source_items.c.id).where(m.source_items.c.url_hash == key, repo.own())).scalar()
+        found = s.execute(select(m.source_items.c.id)
+                          .join(m.sources, m.sources.c.id == m.source_items.c.source_id)
+                          .where(m.source_items.c.url_hash == key, repo.own())).scalar()
         text = _article_text(s, r.id)
         if found is None:
             found = s.execute(insert(m.source_items).values(

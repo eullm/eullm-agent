@@ -351,6 +351,11 @@ class SiteCrawler:
                 if data is None:
                     snap.problems.append(f"sitemap {url}: unreadable or oversized gzip, skipped")
                     continue
+            if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+                # A sitemap declares no entities: one that does is skipped,
+                # not expanded (an XML bomb from a site being analysed).
+                snap.problems.append(f"sitemap {url}: declares a DOCTYPE, skipped")
+                continue
             try:
                 root = ET.fromstring(data)
             except ET.ParseError:

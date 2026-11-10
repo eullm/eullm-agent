@@ -33,6 +33,8 @@ _STATIC = {name: (kind, (_STATIC_DIR / name).read_bytes())
 
 DOMAIN = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 COOKIE = "editor_token"
+# Addresses that change the session on a plain GET (api.same_site_switches).
+SWITCHES = ("/admin/enter/", "/newsroom", "/switch")
 
 
 class SiteIn(BaseModel):
@@ -136,6 +138,16 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
             h.setdefault("Strict-Transport-Security", "max-age=31536000")
         return resp
 
+    @app.middleware("http")
+    async def same_site_switches(request: Request, call_next):
+        # These addresses change the session with a plain link (another
+        # newsroom, another site): opened from another site they go to the
+        # home page instead, so a page elsewhere cannot move you around.
+        if (request.method == "GET" and request.headers.get("sec-fetch-site") == "cross-site"
+                and request.url.path.startswith(SWITCHES)):
+            return RedirectResponse("/", status_code=303)
+        return await call_next(request)
+
     slowlog.watch(db.engine)
     slowlog.watch(admin.engine)
 
@@ -170,7 +182,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
         c = auth.resolve(db, token, admin)
         if c is None:
             raise HTTPException(401, "missing or invalid token")
-        if request.method == "POST" and not header and request.headers.get("origin") not in (None, str(request.base_url).rstrip("/")):
+        if request.method not in ("GET", "HEAD") and not header and request.headers.get("origin") not in (None, str(request.base_url).rstrip("/")):
             raise HTTPException(403, "cross-site request refused")
         return c
 

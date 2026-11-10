@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import unicodedata
 from importlib import metadata
@@ -26,6 +27,8 @@ from . import connect, evergreen, opportunity as oppo, queue
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
+
+log = logging.getLogger(__name__)
 
 COOKIE = "editor_token"
 SITE_COOKIE = "editor_site"
@@ -470,7 +473,8 @@ def register(app, ctx) -> None:
                     base = (getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/")
                     mail(e, *accounts.link_text("reset", f"{base}/invite/{token}", None, ""))
             except Exception:
-                pass
+                # The page answers the same either way; the log says why no email left.
+                log.exception("password reset email not sent")
         return pages.TemplateResponse(request, "forgot.html.j2", {"sent": True, "can_reset": mail is not None})
 
     @app.get("/switch")
@@ -2054,7 +2058,8 @@ def register(app, ctx) -> None:
         img = images.by_token(db, token.rsplit(".", 1)[0])
         if img is None:
             raise HTTPException(404, "image not found")
-        return Response(bytes(img.content), media_type=img.mime,
+        # The type read from the file, not the one stored: only an image leaves this address.
+        return Response(bytes(img.content), media_type=images.mime_of(bytes(img.content)),
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.post("/ui/drafts/{draft_id}/image")

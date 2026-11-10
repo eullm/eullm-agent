@@ -83,7 +83,7 @@ class Imager:
             time.sleep(self.poll)
         img = self.http.get(res["result"]["sample"])
         img.raise_for_status()
-        return img.content, img.headers.get("content-type", "image/jpeg").split(";")[0], cost
+        return img.content, _mime(img.content), cost
 
 
 class OpenRouterImager:
@@ -123,7 +123,7 @@ class OpenRouterImager:
         except ValueError as e:
             raise ImageError("image service returned a broken image") from e
         cost = (body.get("usage") or {}).get("cost")
-        return content, data.get("media_type") or _mime(content), float(cost) if isinstance(cost, (int, float)) else None
+        return content, _mime(content), float(cost) if isinstance(cost, (int, float)) else None
 
 
 OPENROUTER = "https://openrouter.ai/api/v1"
@@ -149,6 +149,11 @@ def from_settings(st):
 
 def _mime(content: bytes) -> str:
     return "image/png" if content.startswith(b"\x89PNG") else "image/webp" if content[8:12] == b"WEBP" else "image/jpeg"
+
+
+def mime_of(content: bytes) -> str:
+    """An image type read from the file's first bytes; never anything else."""
+    return _mime(content)
 
 
 def size_of(content: bytes) -> tuple[int, int]:
