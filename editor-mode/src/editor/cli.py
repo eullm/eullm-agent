@@ -303,6 +303,7 @@ def cmd_worker(a):
         billing.lifecycle(admin_database(), mail=mail, public_url=st.public_url)
         credits.alerts(admin_database(), mail=mail, public_url=st.public_url)
         billing.sync_refunds(admin_database(), gateway.from_settings(st))
+        billing.sync_renewals(admin_database(), gateway.from_settings(st))
         weekly.run(db, admin_database(), st)
         from importlib import metadata
         updates.check(updates.folder(st.updates_dir), installed=metadata.version("eullm-editor-mode"),

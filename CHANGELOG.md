@@ -16,6 +16,17 @@
   extra. Le redazioni in prova, con bonifico o di un rivenditore non la
   comprano online. L'API `/api/public/plans` restituisce anche `addons`,
   per la pagina prezzi del sito. Migrazione 0045 (SQLite 0034).
+- **IVA sui pagamenti con la carta** (Francesco, 10 novembre). Finora Mollie
+  incassava il prezzo di listino, che è IVA esclusa. Ora a piani, rinnovi,
+  pacchetti di crediti e lingue extra si aggiunge l'IVA al 22%; niente IVA
+  per un'azienda con partita IVA in un altro paese dell'UE (inversione
+  contabile). Ogni pagamento tiene la sua IVA (`payments.vat_cents`), che
+  la console mostra in Pagamenti («di cui IVA»). I rinnovi seguono il
+  cliente: se cambiano i dati di fatturazione l'importo a Mollie cambia
+  subito, e ogni ora il worker porta all'importo giusto gli abbonamenti
+  fatti prima (anche quelli già attivi, `subscriptions.renewal_cents`).
+  Le pagine del piano dicono quanta IVA si aggiunge. I bonifici registrati a
+  mano restano come li scrive la console.
 
 ### Fixed
 

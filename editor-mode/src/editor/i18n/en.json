@@ -2746,5 +2746,10 @@
  "Togli prima una lingua dal sito: dopo ne resterebbero {n}, compresa la sua.": "Remove a language from the site first: afterwards it would have {n}, its own included.",
  "Lingua non tolta: {error}.": "Language not removed: {error}.",
  "Prezzi non salvati: {error}.": "Prices not saved: {error}.",
- "Questo sito può avere {n} lingue, compresa la sua: togline qualcuna, aggiungi una lingua extra o passa a un piano più grande.": "This site can have {n} languages, its own included: remove some, add an extra language or move to a bigger plan."
+ "Questo sito può avere {n} lingue, compresa la sua: togline qualcuna, aggiungi una lingua extra o passa a un piano più grande.": "This site can have {n} languages, its own included: remove some, add an extra language or move to a bigger plan.",
+ "di cui IVA {amount}": "of which VAT {amount}",
+ "senza IVA, inversione contabile": "no VAT, reverse charge",
+ "Oggi paghi {amount}, IVA compresa, per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.": "Today you pay {amount}, VAT included, for the rest of the period already paid, then the language renews with the plan on the same card.",
+ "Per un'azienda con partita IVA in un altro paese dell'UE non si aggiunge l'IVA: la versa il cliente (inversione contabile).": "For a business with a VAT number in another EU country no VAT is added: the customer accounts for it (reverse charge).",
+ "Al pagamento si aggiunge l'IVA al {rate}%.": "VAT at {rate}% is added at payment."
 }

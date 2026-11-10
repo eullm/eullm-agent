@@ -39,6 +39,11 @@ REMIND_DAYS = 2  # before the trial ends
 PROPOSALS_ONLY_DAYS = 30  # after the trial or a paid period, before the hold
 INTERVALS = ("month", "year")
 PROVIDERS = ("manual", "mollie", "reseller")
+# VAT on what the gateway charges (Francesco 2026-11-10): Italian VAT on the
+# list price, none for a business with a VAT number in another EU country
+# (reverse charge, art. 7-ter DPR 633/72: the customer accounts for it).
+VAT_PERCENT = 22
+EU = frozenset("AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO SE SI SK".split())
 STATUS_LABELS = {
     "trialing": N_("In prova"),
     "active": N_("Attivo"),
@@ -67,6 +72,27 @@ def add_interval(when: datetime, interval: str) -> datetime:
     year, month = when.year + y, mo + 1
     return when.replace(year=year, month=month, day=min(when.day, calendar.monthrange(year, month)[1]))
 
+
+
+def vat_rate(customer: dict | None) -> int:
+    """The VAT percent on this customer's online payments."""
+    c = customer or {}
+    country = (c.get("country") or "IT").upper()
+    if country != "IT" and country in EU and c.get("vat_number"):
+        return 0
+    return VAT_PERCENT
+
+
+def with_vat(net_cents: int, customer: dict | None) -> tuple[int, int]:
+    """(what the customer pays, of which VAT) for a price before VAT."""
+    vat = round(net_cents * vat_rate(customer) / 100)
+    return net_cents + vat, vat
+
+
+def vat_in(gross_cents: int, customer: dict | None) -> int:
+    """The VAT inside an amount already charged (a renewal Mollie made)."""
+    r = vat_rate(customer)
+    return gross_cents - round(gross_cents * 100 / (100 + r)) if r else 0
 
 def money(cents: int | None, currency: str = "EUR") -> str:
     if cents is None:
@@ -831,13 +857,14 @@ def checkout(admin, gateway, tenant_id: str, plan_code: str, interval: str, redi
             conn.execute(update(m.customers).where(m.customers.c.id == c["id"]).values(provider_customer_id=cust_id))
     meta = {"tenant_id": tenant_id, "plan": plan.code, "interval": interval}
     period = t("anno") if interval == "year" else t("mese")
+    amount, vat = with_vat(amount, c)
     pay_id, url = gateway.first_payment(cust_id, amount, plan.currency, f"Redazia {plan.name} ({period})",
                                         redirect_url, webhook_url, meta)
     with admin.engine.begin() as conn:
         conn.execute(insert(m.payments).values(tenant_id=tenant_id, subscription_id=sub["id"] if sub else None,
                                                provider=gateway.name, provider_payment_id=pay_id, kind="first",
-                                               amount_cents=amount, currency=plan.currency, status="open",
-                                               note=f"{plan.code}/{interval}", created_at=_now(now)))
+                                               amount_cents=amount, vat_cents=vat, currency=plan.currency,
+                                               status="open", note=f"{plan.code}/{interval}", created_at=_now(now)))
     return url
 
 
@@ -860,13 +887,14 @@ def buy_credits(admin, gateway, tenant_id: str, pack_code: str, redirect_url: st
         with admin.engine.begin() as conn:
             conn.execute(update(m.customers).where(m.customers.c.id == c["id"]).values(provider_customer_id=cust_id))
     sub = subscription(admin, tenant_id)
-    pay_id, url = gateway.one_off_payment(cust_id, pack.price_cents, pack.currency, f"Redazia {pack.name}",
+    gross, vat = with_vat(pack.price_cents, c)
+    pay_id, url = gateway.one_off_payment(cust_id, gross, pack.currency, f"Redazia {pack.name}",
                                           redirect_url, webhook_url,
                                           {"tenant_id": tenant_id, "pack": pack.code, "credits": pack.credits})
     with admin.engine.begin() as conn:
         conn.execute(insert(m.payments).values(tenant_id=tenant_id, subscription_id=sub["id"] if sub else None,
                                                provider=gateway.name, provider_payment_id=pay_id, kind="credits",
-                                               amount_cents=pack.price_cents, currency=pack.currency, status="open",
+                                               amount_cents=gross, vat_cents=vat, currency=pack.currency, status="open",
                                                note=f"{pack.code}:{pack.credits}", created_at=_now(now)))
     return url
 
@@ -908,6 +936,7 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
             conn.execute(insert(p).values(tenant_id=sub_row.tenant_id, subscription_id=sub_row.id, provider=gateway.name,
                                           provider_payment_id=payment_id, kind="recurring",
                                           amount_cents=pay["amount_cents"], currency=pay["currency"], status="open",
+                                          vat_cents=vat_in(pay["amount_cents"], customer_of(admin, sub_row.tenant_id)),
                                           created_at=now))
             ours = conn.execute(select(p).where(p.c.provider_payment_id == payment_id)).first()
     status = pay["status"]
@@ -941,14 +970,14 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
                 log.exception("old subscription of %s not cancelled", tenant_id)
         with accounts._read(admin) as conn:
             plan = get_plan(conn, plan_code)
-        amount = price(plan, interval) + addons_amount(admin, tenant_id, interval)
+        amount, _ = with_vat(price(plan, interval) + addons_amount(admin, tenant_id, interval), c)
         sub_id = gateway.create_subscription(c["provider_customer_id"], amount, plan.currency, interval,
                                              until.date(), f"Redazia {plan.name}", webhook_url,
                                              pay.get("mandate_id"), {"tenant_id": tenant_id})
         with admin.engine.begin() as conn:
             conn.execute(update(s).where(s.c.tenant_id == tenant_id).values(
                 plan_code=plan.code, billing_interval=interval, status="active", provider="mollie",
-                provider_subscription_id=sub_id, trial_ends_at=None, current_period_end=until, updated_at=now))
+                provider_subscription_id=sub_id, renewal_cents=amount, trial_ends_at=None, current_period_end=until, updated_at=now))
             _release(conn, tenant_id)
         apply_plan(admin, tenant_id, plan, core)
         return "activated"
@@ -1073,13 +1102,14 @@ def buy_language(admin, gateway, tenant_id: str, site_id: int, site_name: str, r
     if c is None or not c["provider_customer_id"]:
         raise BillingError(t("prima servono i dati di fatturazione"))
     sub = subscription(admin, tenant_id)
+    gross, vat = with_vat(offer["now"], c)
     pay_id, url = gateway.one_off_payment(
-        c["provider_customer_id"], offer["now"], offer["currency"], f"Redazia {t('lingua extra')}: {site_name}"[:255],
+        c["provider_customer_id"], gross, offer["currency"], f"Redazia {t('lingua extra')}: {site_name}"[:255],
         redirect_url, webhook_url, {"tenant_id": tenant_id, "addon": LANGUAGE_ADDON, "site_id": str(site_id)})
     with admin.engine.begin() as conn:
         conn.execute(insert(m.payments).values(tenant_id=tenant_id, subscription_id=sub["id"], provider=gateway.name,
-                                               provider_payment_id=pay_id, kind="addon", amount_cents=offer["now"],
-                                               currency=offer["currency"], status="open",
+                                               provider_payment_id=pay_id, kind="addon", amount_cents=gross,
+                                               vat_cents=vat, currency=offer["currency"], status="open",
                                                note=f"{LANGUAGE_ADDON}:{site_id}", created_at=_now(now)))
     return url
 
@@ -1100,22 +1130,57 @@ def _add_language(admin, gateway, tenant_id: str, site_id: int, delta: int) -> i
     return n
 
 
-def _renewal_follows(admin, gateway, tenant_id: str) -> None:
-    """The amount of the plan's automatic renewals: the plan and its extra
-    languages."""
+def renewal_amount(admin, tenant_id: str) -> tuple[int, str] | None:
+    """What each automatic renewal should charge now: the plan and its extra
+    languages, VAT included (None without a renewal by card)."""
     sub = subscription(admin, tenant_id)
-    if gateway is None or not sub or sub["provider"] != "mollie" or not sub.get("provider_subscription_id"):
-        return
+    if not sub or sub["provider"] != "mollie" or not sub.get("provider_subscription_id"):
+        return None
     with accounts._read(admin) as conn:
         plan = get_plan(conn, sub["plan_code"])
-    amount = (price(plan, sub["billing_interval"]) or 0) + addons_amount(admin, tenant_id, sub["billing_interval"])
+    net = (price(plan, sub["billing_interval"]) or 0) + addons_amount(admin, tenant_id, sub["billing_interval"])
+    return with_vat(net, customer_of(admin, tenant_id))[0], plan.currency
+
+
+def _renewal_follows(admin, gateway, tenant_id: str, force: bool = True) -> bool:
+    """Bring the amount of the plan's automatic renewals at the gateway to
+    what they should charge (a language added or removed, the VAT, billing
+    data that change it). Returns whether the gateway was changed."""
+    if gateway is None:
+        return False
+    want = renewal_amount(admin, tenant_id)
+    if want is None:
+        return False
+    amount, currency = want
+    sub = subscription(admin, tenant_id)
+    if not force and sub.get("renewal_cents") == amount:
+        return False
     c = customer_of(admin, tenant_id)
     try:
-        gateway.update_subscription(c["provider_customer_id"], sub["provider_subscription_id"], amount, plan.currency)
+        gateway.update_subscription(c["provider_customer_id"], sub["provider_subscription_id"], amount, currency)
     except Exception:
-        # The language is paid and stays: the console sees the amount to fix
-        # at Mollie in the log (the notice is not retried, the payment is done).
+        # What is paid stays: the next hourly round tries again, and the
+        # log says which renewals still charge the old amount.
         log.exception("the renewals of %s at the gateway were not changed to %s", tenant_id, amount)
+        return False
+    with admin.engine.begin() as conn:
+        conn.execute(update(m.subscriptions).where(m.subscriptions.c.tenant_id == tenant_id)
+                     .values(renewal_cents=amount))
+    return True
+
+
+def sync_renewals(admin, gateway) -> list[str]:
+    """Every hour: the renewals by card whose amount at the gateway is not
+    the one they should charge (subscriptions made before the VAT, billing
+    data changed) are brought to it. Returns the newsrooms changed."""
+    if gateway is None:
+        return []
+    s = m.subscriptions
+    with accounts._read(admin) as conn:
+        rooms = conn.execute(select(s.c.tenant_id).where(
+            s.c.provider == "mollie", s.c.provider_subscription_id.is_not(None),
+            s.c.status == "active")).scalars().all()
+    return [tid for tid in rooms if _renewal_follows(admin, gateway, tid, force=False)]
 
 
 def remove_language(admin, gateway, tenant_id: str, site_id: int) -> int:

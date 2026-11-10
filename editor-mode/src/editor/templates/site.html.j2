@@ -469,7 +469,7 @@
   <div class="row" style="gap: 10px; align-items: center;">
     {% if lang_offer.ok %}
     <form class="inline" method="post" action="/account/{{ lang_offer.tenant_id }}/language"><input type="hidden" name="site_id" value="{{ site.id }}"><input type="hidden" name="back" value="site"><button class="btn" type="submit">+ {{ _('Aggiungi una lingua') }}</button></form>
-    <span class="hint">{{ _('Oggi paghi {amount} per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.', amount=lang_offer.now_s) }}</span>
+    <span class="hint">{{ _('Oggi paghi {amount}, IVA compresa, per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.', amount=lang_offer.now_s) if lang_offer.vat else _('Oggi paghi {amount} per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.', amount=lang_offer.now_s) }}</span>
     {% else %}
     <span class="hint">{{ _('Per ora non si può comprare online: {why}.', why=lang_offer.why) }}</span>
     {% endif %}

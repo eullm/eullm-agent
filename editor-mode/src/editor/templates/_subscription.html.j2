@@ -53,7 +53,7 @@
             {% if online %}<button class="btn pri" type="submit" {% if not r.customer %}disabled{% endif %}>{{ _('Vai al pagamento') }}</button>
             {% else %}<span class="hint">{{ _("Il pagamento online non è ancora attivo: per attivare il piano contatta l'assistenza, lo registriamo noi.") }}</span>{% endif %}
           </div>
-          <p class="hint">{{ _('Prezzi IVA esclusa. Il primo pagamento autorizza i rinnovi automatici, che puoi disdire quando vuoi da questa pagina.') }}</p>
+          <p class="hint">{{ _('Prezzi IVA esclusa. Il primo pagamento autorizza i rinnovi automatici, che puoi disdire quando vuoi da questa pagina.') }} {{ vat_note(r.customer) }}</p>
         </form>
         {% if changing %}</details>{% endif %}
       {% endif %}

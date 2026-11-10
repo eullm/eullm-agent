@@ -727,6 +727,7 @@ subscriptions = Table(
     Column("status", Text, nullable=False),
     Column("provider", Text, nullable=False),
     Column("provider_subscription_id", Text),
+    Column("renewal_cents", Integer),  # what the gateway charges each renewal, VAT included (0.34.2)
     Column("trial_ends_at", _ts()),
     Column("current_period_end", _ts()),
     Column("reminded_at", _ts()),
@@ -746,6 +747,7 @@ payments = Table(
     Column("provider_payment_id", Text),
     Column("kind", Text, nullable=False),
     Column("amount_cents", Integer, nullable=False),
+    Column("vat_cents", Integer),  # the VAT inside amount_cents, for payments by card (0.34.2)
     Column("currency", Text, nullable=False),
     Column("status", Text, nullable=False),
     Column("note", Text, nullable=False),

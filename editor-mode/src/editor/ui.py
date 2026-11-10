@@ -226,6 +226,13 @@ def register(app, ctx) -> None:
     env.filters["num"] = number
     env.filters["tok"] = usage.tokens
     env.globals["version"] = VERSION
+
+    def vat_note(customer) -> str:
+        """What the VAT adds to a price shown before it, for this customer."""
+        if billing.vat_rate(customer):
+            return t("Al pagamento si aggiunge l'IVA al {rate}%.", rate=billing.VAT_PERCENT)
+        return t("Per un'azienda con partita IVA in un altro paese dell'UE non si aggiunge l'IVA: la versa il cliente (inversione contabile).")
+    env.globals["vat_note"] = vat_note
     env.filters["problem"] = problem
     env.filters["s100"] = score100
     env.filters["plural"] = plural
@@ -1196,8 +1203,11 @@ def register(app, ctx) -> None:
         offer["extra"] = billing.extra_languages(admin, c.tenant_id).get(site.id, 0)
         offer["tenant_id"] = c.tenant_id
         cur = offer["currency"]
+        customer = billing.customer_of(admin, c.tenant_id)
+        offer["vat"] = billing.vat_rate(customer)
+        now_gross = billing.with_vat(offer["now"], customer)[0] if offer["now"] is not None else None
         offer |= {"month_s": billing.money(offer["month"], cur), "year_s": billing.money(offer["year"], cur),
-                  "now_s": billing.money(offer["now"], cur) if offer["now"] is not None else None}
+                  "now_s": billing.money(now_gross, cur) if now_gross is not None else None}
         if ctx.gateway is None and offer["ok"]:
             offer |= {"ok": False, "why": t("pagamenti online non configurati: contatta chi ti ha venduto il servizio")}
         return offer

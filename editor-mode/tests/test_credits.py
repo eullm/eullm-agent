@@ -135,7 +135,7 @@ def test_a_pack_is_bought_online_and_added_once(db, admin):
     assert f'action="/account/{tid}/credits"' in page and "500 crediti · 5 €" in page
     r = c.post(f"/account/{tid}/credits", data={"pack": "small", "back": "plan"}, follow_redirects=False)
     pid = f"tr_{fake.run}1"
-    assert r.headers["location"] == f"https://pay.example/{pid}" and fake.payments[pid]["amount_cents"] == 500
+    assert r.headers["location"] == f"https://pay.example/{pid}" and fake.payments[pid]["amount_cents"] == 610  # 5 € and 22% VAT
     assert fake.last["redirect"] == f"https://editor.example.com/account/{tid}/credits-paid?back=plan"
     c.post("/api/billing/mollie/webhook", data={"id": pid})  # still open
     with admin.tenant(tid) as s:

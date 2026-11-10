@@ -221,7 +221,9 @@ def test_online_payment_and_renewals_through_the_gateway(db, admin):
     r = c.post(f"/account/{tid}/checkout", data={"plan": "pro", "interval": "year"}, follow_redirects=False)
     first = f"tr_{fake.run}1"
     assert r.status_code == 303 and r.headers["location"] == f"https://pay.example/{first}"
-    assert fake.payments[first]["amount_cents"] == 149000
+    # Italian VAT on the list price (22%), told to the gateway with the payment row.
+    assert fake.payments[first]["amount_cents"] == 181780
+    assert billing.payment_by_provider_id(admin, first)["vat_cents"] == 32780
     assert fake.last == {"redirect": f"https://editor.example.com/account/{tid}/paid",
                          "webhook": "https://editor.example.com/api/billing/mollie/webhook"}
     # Mollie's notice before the payment is done changes nothing; unknown ids get 200 too.
@@ -233,7 +235,7 @@ def test_online_payment_and_renewals_through_the_gateway(db, admin):
     sub = billing.subscription(admin, tid)
     assert sub["status"] == "active" and sub["plan_code"] == "pro" and sub["provider"] == "mollie"
     # The payment is told to the customer and to the console.
-    assert any("Pagamento ricevuto" in subject and "1.490" in body and "/account" in body for _, subject, body in sent)
+    assert any("Pagamento ricevuto" in subject and "1.817,80" in body and "/account" in body for _, subject, body in sent)
     assert any(to == op and "Pagamento ricevuto" in subject for to, subject, _ in c.told)
     msub = f"sub_{fake.run}1"
     assert sub["billing_interval"] == "year" and sub["provider_subscription_id"] == msub
@@ -662,7 +664,7 @@ def test_the_console_refunds_an_online_payment(db, admin):
     assert len(fake.refunds) == 1
     # The rest, and the newsroom stops now with its renewals.
     c.post(f"/admin/payments/{pid}/refund", data={"amount": "", "then": "now", "confirm": "1"})
-    assert fake.refunds[-1] == (first, 14900 - 500)
+    assert fake.refunds[-1] == (first, 18178 - 500)
     sub = billing.subscription(admin, tid)
     assert sub["status"] == "expired" and billing.on_hold(admin, tid) and fake.cancelled == [f"sub_{fake.run}1"]
     assert billing.payments_by_tenant(admin)[tid][0]["kind"] == "refund"
