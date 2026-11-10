@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.34.3
+
+### Changed
+
+- **Proposte durante il giorno anche senza redazione automatica**
+  (Francesco, 10 novembre: lagrandecucina.it ferma tutto il giorno sulle
+  proposte del mattino). Dopo il briefing, ogni tre ore fino alle 20 (con
+  il briefing alle 7: 10, 13, 16, 19) arriva un giro di proposte per i posti
+  del giorno ancora liberi: «Proposte al giorno» del sito, meno gli
+  articoli già scritti oggi, meno le proposte in attesa da meno di 6 ore.
+  Quelle più vecchie restano da decidere ma lasciano il posto alle nuove.
+  Quando gli articoli scritti arrivano al numero del giorno, i giri si
+  fermano fino alla mattina dopo; si fermano anche a piano del mese finito
+  o dopo la prova. Con la redazione automatica accesa non cambia niente.
+- **Una testata non riempie più la giornata** (le quattro ricette tutte da
+  Gustoblog). La quota di una testata (un terzo) vale su tutte le proposte
+  delle ultime 24 ore, non solo su quelle dello stesso giro. Le proposte su
+  un tema ricevono al massimo un terzo di notizie dalla stessa testata e
+  devono citarne almeno due diverse. Desk e Trend e piano mostrano tutte le
+  testate di una proposta, non solo quella della notizia più recente.
+
 ## 0.34.2
 
 ### Added

@@ -231,7 +231,7 @@ SYSTEM = (
     '"country": "<the ISO 3166-1 alpha-2 code of the country the theme is about, empty when it is not about one>", '
     '"section": "<the one of the site\'s sections it belongs to, written exactly as listed; empty when none are '
     'listed>", "citations": [<ids of the items the article relies on>]}. '
-    "Cite at least two ids; cite only ids from the list."
+    "Cite at least two ids, from at least two different outlets when the list has them; cite only ids from the list."
 )
 
 REASONS = {
@@ -312,15 +312,32 @@ def _prompt(body: dict, th: Theme, items, learned: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _validator(allowed: set[int]):
+def spread_items(items: list) -> list:
+    """The items of a theme with no outlet over a third of them (two at
+    least), the closest first: one blog that publishes a lot does not write
+    every theme (Francesco 2026-11-10)."""
+    cap = max(2, -(-len(items) // 3))
+    seen: dict[int, int] = {}
+    out = []
+    for it in items:
+        seen[it.source_id] = seen.get(it.source_id, 0) + 1
+        if seen[it.source_id] <= cap:
+            out.append(it)
+    return out
+
+
+def _validator(allowed: set[int], outlet: dict[int, int] | None = None):
     from .proposals import _validator as base
 
     check = base(allowed)
+    outlets = set((outlet or {}).values())
 
     def validate(v) -> dict:
         out = check(v)
         if len(out["citations"]) < 2 and len(allowed) >= 2:
             raise ValueError("cite at least two ids")
+        if len(outlets) >= 2 and len({outlet[i] for i in out["citations"] if i in outlet}) < 2:
+            raise ValueError("cite items of at least two different outlets")
         return out
 
     return validate
@@ -350,13 +367,14 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, 
             learned = lessons(s, site_id)
         if len(items) < MIN_ITEMS or len({it.source_id for it in items}) < MIN_SOURCES:
             continue  # nothing to write it from
+        items = spread_items(items)
         allowed = {it.id for it in items}
         value, by = None, "heuristic"
         if core is not None:
             try:
                 with usage.tagged(db, tenant_id, "proposal", site_id=site_id, ref=f"evergreen:{th.reason}"):
                     value, _ = core.chat_json(SYSTEM, _prompt(body, th, items, learned + full_line(full)),
-                                              _validator(allowed))
+                                              _validator(allowed, {it.id: it.source_id for it in items}))
                 by = "model"
             except CoreError as e:
                 log.warning("evergreen proposal on %r failed: %s", th.label, e)

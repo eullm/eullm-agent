@@ -116,7 +116,7 @@
     {% if p.status == 'proposed' %}<span class="chip">{{ _('Proposta') }}</span>{% elif p.status == 'accepted' and writing.get(p.id, {}).get('status') in ('queued', 'running') %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Bozza in scrittura') }}</span>{% elif p.status == 'accepted' and writing.get(p.id, {}).get('status') == 'failed' %}<span class="chip red">{{ _('Bozza non riuscita') }}</span>{% elif p.status == 'accepted' %}<span class="chip blue">{{ _('Accettata') }}</span>{% else %}<span class="chip green">{{ _('Bozza pronta') }}</span>{% endif %}
     <details class="plan-what">
       <summary><strong>{{ d.title if d else p.title }}</strong>
-        <span class="one">{% if d %}{{ d.format }}{% if d.news %} · {{ d.news[0].source }}{% endif %} · {{ _('Opportunità {n}', n=d.opp) }}{% if d.hype_n is not none %} · {{ _('Hype {n}', n=d.hype_n) }}{% endif %}{% endif %} · <span class="more">{{ _('dettagli') }}</span></span></summary>
+        <span class="one">{% if d %}{{ d.format }}{% if d.outlets %} · {{ d.outlets|join(', ') }}{% endif %} · {{ _('Opportunità {n}', n=d.opp) }}{% if d.hype_n is not none %} · {{ _('Hype {n}', n=d.hype_n) }}{% endif %}{% endif %} · <span class="more">{{ _('dettagli') }}</span></span></summary>
       <div class="detail">{% with no_title=true %}{% include "_proposal.html.j2" %}{% endwith %}</div>
       {% if writing.get(p.id, {}).get('status') == 'failed' %}<span class="note warn">{{ _('La bozza non è stata scritta: {error}', error=writing[p.id].error) }}</span>{% endif %}
     </details>

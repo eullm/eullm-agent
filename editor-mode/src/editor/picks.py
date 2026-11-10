@@ -224,9 +224,12 @@ def _prompt(profile: dict, cands: list[Candidate], learned: list[str] | None = N
 
 
 def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = None,
-         now: datetime | None = None, outlets: int = 0, full: list[str] | None = None) -> list[int]:
+         now: datetime | None = None, outlets: int = 0, full: list[str] | None = None,
+         used: dict[str, int] | None = None, day_n: int = 0) -> list[int]:
     """Up to `n` proposals from single news items; returns their ids. With
-    `outlets`, news told by at least that many outlets come first."""
+    `outlets`, news told by at least that many outlets come first. `used`
+    counts the day's proposals already citing each outlet and `day_n` is
+    the day's number: an outlet's share is held over the whole day."""
     if n <= 0:
         return []
     now = now or datetime.now(UTC)
@@ -248,7 +251,15 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
         learned = lessons(s, site_id)
     if not cands:
         return []
-    shown = spread(cands, SHOWN)[:SHOWN]
+    used = used or {}
+    day_cap = source_cap(max(n, day_n))
+
+    def room_for(c: Candidate, chosen) -> bool:
+        mine = sum(x.source == c.source for x, _, _ in chosen)
+        return mine < source_cap(n) and used.get(c.source, 0) + mine < day_cap
+
+    # The outlets the day already has go last, so the others get the first places.
+    shown = spread(sorted(cands, key=lambda c: used.get(c.source, 0) >= day_cap), SHOWN)[:SHOWN]
     by_id = {c.item_id: c for c in shown}
     chosen: list[tuple[Candidate, dict, str]] = []
     if core is not None:
@@ -259,8 +270,7 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
                                             _options_validator(set(by_id), n))
             for o in options:
                 c = by_id[o["citations"][0]]
-                if all(c.topic_id != x.topic_id for x, _, _ in chosen) and \
-                        sum(x.source == c.source for x, _, _ in chosen) < source_cap(n):
+                if all(c.topic_id != x.topic_id for x, _, _ in chosen) and room_for(c, chosen):
                     chosen.append((c, o, "model"))
         except CoreError as e:
             log.warning("picking news for site %s failed: %s", site_id, e)
@@ -269,8 +279,7 @@ def fill(db, tenant_id: str, site_id: int, n: int, core: CoreClient | None = Non
             break
         # Without the model a news item far from every subtopic is not proposed:
         # only the model can tell that it still matters to the site's readers.
-        if c.relevance > 0 and all(c.topic_id != x.topic_id for x, _, _ in chosen) and \
-                sum(x.source == c.source for x, _, _ in chosen) < source_cap(n):
+        if c.relevance > 0 and all(c.topic_id != x.topic_id for x, _, _ in chosen) and room_for(c, chosen):
             chosen.append((c, {"title": c.title[:160], "angle": "", "why_now": "", "format": "news",
                                "citations": [c.item_id]}, "formula"))
     created = []

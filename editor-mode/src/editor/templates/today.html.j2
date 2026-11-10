@@ -185,7 +185,7 @@
     <details class="item line prop-line">
       <summary>
         <span class="chip">{{ p.domain }}</span>
-        <span class="what"><strong>{{ d.title if d else p.title }}</strong><span class="one">{% if p.site_id in auto_sites %}<span class="chip teal" title="{{ _('La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.') }}">{{ _('la sceglie la redazione automatica') }}</span> {% endif %}{% if d and d.single %}{{ _('notizia singola') }}{% elif d %}{{ d.format }}{% endif %}{% if d and d.news %} · {{ d.news[0].source }}{% endif %}</span></span>
+        <span class="what"><strong>{{ d.title if d else p.title }}</strong><span class="one">{% if p.site_id in auto_sites %}<span class="chip teal" title="{{ _('La redazione automatica sceglie da sola fra queste proposte: puoi comunque accettarne una tu.') }}">{{ _('la sceglie la redazione automatica') }}</span> {% endif %}{% if d and d.single %}{{ _('notizia singola') }}{% elif d %}{{ d.format }}{% endif %}{% if d and d.outlets %} · {{ d.outlets|join(', ') }}{% endif %}</span></span>
         <span class="hint more">{{ _('dettagli') }}</span>
       </summary>
       <div class="detail">{% include "_proposal.html.j2" %}

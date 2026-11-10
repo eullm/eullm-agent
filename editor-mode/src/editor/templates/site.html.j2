@@ -329,7 +329,7 @@
       <li>{{ _('<strong>cerca le fonti</strong> che scrivono di {topics}, in tre modi: le testate che gli articoli del sito già citano, ricerche con le parole chiave dei temi (Hacker News, GitHub, Hugging Face, arXiv) e le testate che il modello indica per questi temi. Ogni fonte è letta e valutata prima di essere usata; in Fonti vedi da dove arriva ciascuna;', topics=subs|map(attribute='name')|join(', ') if subs else _('questi temi')) }}</li>
       <li>{{ _('<strong>raccoglie le notizie</strong> ogni ora e tiene quelle vicine ai temi (pertinenza almeno {pct}%)', pct=((st.get('min_relevance', 0.15)) * 100)|round|int) }}{% if st.get('exclude') %}{{ _(', scartando {terms}', terms=st.get('exclude')|join(', ')) }}{% endif %};</li>
       <li>{{ _("<strong>misura i trend</strong> con due punteggi separati: Hype, quanto se ne parla in giro, e Opportunità, quanto il tema è vicino al sito e quanto non l'avete già coperto;") }}</li>
-      <li>{{ _('<strong>propone {n} articoli al giorno</strong> nel piano, con le fonti; decidi tu quali scrivere;', n=st.get('proposals_per_day', 6)) }}</li>
+      <li>{{ _('<strong>propone {n} articoli al giorno</strong> nel piano, con le fonti: la mattina e poi ogni tre ore fino alle 20, per i posti ancora liberi, finché non ne hai scritti {n}; decidi tu quali scrivere;', n=st.get('proposals_per_day', 6)) }}</li>
       <li>{{ _('<strong>scrive le bozze</strong> in {language}', language=(b.get('language')|langname) or _('lingua del sito')) }}{% if sty.get('tone') %}{{ _(', tono {tone}', tone=sty.get('tone')) }}{% endif %}{% if sty.get('typical_words') %}{{ _(', circa {n} parole', n=sty.get('typical_words')) }}{% endif %}{{ _(', con le fonti citate. Nulla si pubblica senza il tuo sì.') }}</li>
     </ul>
     {% endif %}

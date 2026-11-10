@@ -164,6 +164,7 @@ class Runner:
                               lambda: searchconsole.sync(self.db, tenant, gsc, today=local.date()))
             self.retry_profiles(tenant, now)
             self.autopilot(tenant, now, tz, done, failed)
+            self.rounds(tenant, now, tz, conf["briefing_hour"], done, failed)
             self.evening(tenant, now, tz, done, failed)
             if review_due(local, last_review):
                 self.step(tenant, "review", done, failed, lambda: self.review(tenant, client))
@@ -301,6 +302,31 @@ class Runner:
                                                                     {"proposal_id": pid, "site_id": site_id, "paid": paid}))
                 autopilot.remember(self.db, tenant, site_id, res, now)
             self.step(tenant, "autopilot", done, failed, go)
+
+    def rounds(self, tenant: str, now: datetime, tz: str, briefing_hour: int, done: list[str],
+               failed: list[str]) -> None:
+        """The rounds of proposals of the day for the sites a person runs
+        (the automatic newsroom off): after the morning, every few hours,
+        the places of the day still free (proposals.assisted_round)."""
+        from . import autopilot
+        from .profile import _set_settings
+
+        local = now.astimezone(ZoneInfo(tz))
+        since = local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+        p = m.editorial_profiles.c
+        due = []
+        with self.db.tenant(tenant) as s:
+            for r in s.execute(select(p.site_id, p.body).where(p.status == "approved")).all():
+                if autopilot.settings_of(r.body)["enabled"]:
+                    continue
+                key = proposals.round_due(local, briefing_hour, ((r.body or {}).get("settings") or {}).get("round_last"))
+                if key is not None:
+                    _set_settings(s, r.site_id, round_last=key)
+                    due.append(r.site_id)
+        core = self.core_for(tenant)
+        for site_id in due:
+            self.step(tenant, "proposals", done, failed,
+                      lambda site_id=site_id: proposals.assisted_round(self.db, tenant, site_id, since, core, now=now))
 
     def evening(self, tenant: str, now: datetime, tz: str, done: list[str], failed: list[str]) -> None:
         """Il Punto della Sera of each site that has it on, once a day past
