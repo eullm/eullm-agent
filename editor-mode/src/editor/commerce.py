@@ -22,8 +22,10 @@ from urllib.parse import quote, unquote
 from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from . import accounts, billing, credits, i18n, newsrooms
+from . import models as m
 from .gateway import GatewayError
 from .i18n import t
 
@@ -185,8 +187,11 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             prices = credits.prices(conn)
         packs = [{k: x[k] for k in ("code", "name", "credits", "price_cents", "currency")}
                  for x in credits.packs(admin, active_only=True)]
+        addons = [{k: x[k] for k in ("code", "name", "price_month_cents", "price_year_cents", "currency")}
+                  for x in billing.addons(admin)]
         return JSONResponse({"plans": out, "trial_days": trial["trial_days"] if trial else 0,
-                             "credits": {"prices": prices, "free_redraws": credits.FREE_REDRAWS, "packs": packs}},
+                             "credits": {"prices": prices, "free_redraws": credits.FREE_REDRAWS, "packs": packs},
+                             "addons": addons},
                             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=300"})
 
     # --- operator and resellers (API) --------------------------------------------------
@@ -384,7 +389,8 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
 
     def to_account(notice: str | None = None, tenant_id: str | None = None, back: str = "") -> RedirectResponse:
         """Back to /account, or to the newsroom's Piano page when the form came from there."""
-        to = "/plan" if back == "plan" else f"/account#t-{tenant_id}" if tenant_id else "/account"
+        to = ("/plan" if back == "plan" else "/site?tab=publish#h-languages" if back == "site"
+              else f"/account#t-{tenant_id}" if tenant_id else "/account")
         resp = RedirectResponse(to, status_code=303)
         if notice:
             resp.set_cookie(NOTICE_COOKIE, quote(notice), max_age=60, httponly=True, samesite="strict")
@@ -467,6 +473,58 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
             return to_account(t("Pagamento non avviato: errore interno, riprova tra poco."), tenant_id, back)
         return RedirectResponse(url, status_code=303)
 
+    def site_of(tenant_id: str, site_id: int):
+        with db.tenant(tenant_id) as ts:
+            row = ts.execute(select(m.sites.c.id, m.sites.c.name, m.sites.c.domain).where(m.sites.c.id == site_id)).first()
+        if row is None:
+            raise HTTPException(404, "site not found")
+        return row
+
+    @app.post("/account/{tenant_id}/language")
+    def account_language(tenant_id: str, request: Request, site_id: int = Form(...), back: str = Form("site"),
+                         s=Depends(person)):
+        """A language more for a site (Francesco 2026-11-10): what is left of
+        the paid period now, then with the plan's renewals."""
+        owned(s, tenant_id)
+        site = site_of(tenant_id, site_id)
+        paid = f"{base(request)}/account/{tenant_id}/language-paid" + ("?back=site" if back == "site" else "")
+        try:
+            url = billing.buy_language(admin, gateway, tenant_id, site.id, site.domain or site.name, paid,
+                                       webhook_url(request))
+        except (GatewayError, billing.BillingError) as e:
+            return to_account(t("Pagamento non avviato: {error}.", error=e), tenant_id, back)
+        except Exception:
+            log.exception("language checkout of %s failed", tenant_id)
+            return to_account(t("Pagamento non avviato: errore interno, riprova tra poco."), tenant_id, back)
+        return RedirectResponse(url, status_code=303)
+
+    @app.get("/account/{tenant_id}/language-paid")
+    def account_language_paid(tenant_id: str, request: Request, back: str = ""):
+        return to_account(t("Grazie. La lingua si aggiunge appena il circuito conferma il pagamento, di solito entro un "
+                            "minuto: poi la scegli qui sotto."), tenant_id, back)
+
+    @app.post("/account/{tenant_id}/language/remove")
+    def account_language_remove(tenant_id: str, request: Request, site_id: int = Form(...), back: str = Form("site"),
+                                s=Depends(person)):
+        """One extra language less for the site, from the next renewal; the
+        site must first have no more languages chosen than it keeps."""
+        owned(s, tenant_id)
+        site = site_of(tenant_id, site_id)
+        from . import translate as tr
+
+        with db.tenant(tenant_id) as ts:
+            limit = tr.allowed(ts, site.id)
+            used = 1 + len(tr.site_languages(ts, site.id))
+        if limit is not None and used > limit - 1:
+            return to_account(t("Togli prima una lingua dal sito: dopo ne resterebbero {n}, compresa la sua.",
+                                n=limit - 1), tenant_id, back)
+        try:
+            n = billing.remove_language(admin, gateway, tenant_id, site.id)
+        except billing.BillingError as e:
+            return to_account(t("Lingua non tolta: {error}.", error=e), tenant_id, back)
+        return to_account(t("Lingua extra tolta: dal prossimo rinnovo non si paga più. Lingue extra del sito: {n}.", n=n),
+                          tenant_id, back)
+
     @app.get("/account/{tenant_id}/credits-paid")
     def account_credits_paid(tenant_id: str, request: Request, back: str = ""):
         return to_account(t("Grazie. I crediti arrivano appena il circuito conferma il pagamento, di solito entro un "
@@ -533,6 +591,17 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
         return back(t("Piano {name} eliminato.", name=name), "piani")
 
     # --- credits: price list, packs, credits of a newsroom ----------------------------
+
+    @app.post("/admin/addons/{code}")
+    def ui_addon(code: str, price_month: str = Form(""), price_year: str = Form(""), s=Depends(need_console)):
+        try:
+            billing.save_addon(admin, code, _cents(price_month), _cents(price_year))
+        except ValueError as e:
+            return back(t("Prezzi non salvati: {error}.",
+                          error=e if isinstance(e, billing.BillingError) else t("numeri di zero o più")), "componenti",
+                        error=True)
+        return back(t("Prezzi delle lingue extra salvati: valgono per i nuovi acquisti e i rinnovi che cambiano."),
+                    "componenti")
 
     @app.post("/admin/credits/prices")
     def ui_credit_prices(article: str = Form(""), translation: str = Form(""), image: str = Form(""),

@@ -342,6 +342,7 @@ def register(app, ctx) -> None:
             "work": room_work(room) if room and view == "redazione" else None,
             "room_customer": billing.customer_of(admin, room) if room else None,
             "credits": credits.balances(admin), "credit_prices": credit_prices(), "packs": credits.packs(admin),
+            "addons": billing.addons(admin),
             "reseller_names": {r["id"]: r["name"] for r in billing.resellers(admin)},
             "statuses": billing.STATUS_LABELS, "money": billing.money, "online": ctx.gateway is not None,
             "refusals": refusals(), "trial_kinds": trials.LABELS,

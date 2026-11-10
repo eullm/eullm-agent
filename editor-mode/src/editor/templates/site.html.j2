@@ -452,7 +452,7 @@
 {% if tab == 'publish' %}
 <section class="card pad" id="h-languages">
   <h2>{{ _('Lingue degli articoli') }}</h2>
-  <p class="hint">{{ _("Gli articoli si scrivono nella lingua del sito ({language}). Scegli in quali altre lingue tradurli: quando approvi un articolo, l'agente scrive una traduzione per ogni lingua, con le stesse fonti e gli stessi controlli, da approvare a parte. Ogni traduzione conta come un articolo del piano.", language=langs.get(own_language, own_language or '?')) }}{% if max_languages %} {{ _('Il tuo piano permette {n} lingue per sito, compresa la sua.', n=max_languages) }}{% endif %}</p>
+  <p class="hint">{{ _("Gli articoli si scrivono nella lingua del sito ({language}). Scegli in quali altre lingue tradurli: quando approvi un articolo, l'agente scrive una traduzione per ogni lingua, con le stesse fonti e gli stessi controlli, da approvare a parte. Le traduzioni nelle lingue scelte qui sono comprese: l'articolo conta uno solo nel piano, in tutte le lingue.", language=langs.get(own_language, own_language or '?')) }}{% if max_languages %} {{ _('Il tuo piano permette {n} lingue per sito, compresa la sua.', n=max_languages) }}{% endif %}</p>
   {% if caller.can('owner') %}
   <form method="post" action="/ui/sites/{{ site.id }}/languages" class="row" style="gap: 14px; align-items: center;">
     {% for code, name in langs.items() if code != own_language %}
@@ -462,6 +462,21 @@
   </form>
   {% else %}
   <p>{{ site_langs|map('extract', langs)|join(', ') or _('Solo la lingua del sito.') }}</p>
+  {% endif %}
+  {% if lang_offer %}
+  <h3 style="margin-top: 18px;">{{ _('Lingue extra') }}</h3>
+  <p class="hint">{{ _("Il piano dà {n} lingue per sito, compresa la sua. Ogni lingua in più per questo sito costa {month} al mese o {year} all'anno, IVA esclusa, e si rinnova con il piano.", n=plan_languages, month=lang_offer.month_s, year=lang_offer.year_s) }}{% if lang_offer.extra %} {{ _('Questo sito ne ha {n} in più: può avere {total} lingue.', n=lang_offer.extra, total=max_languages) }}{% endif %}</p>
+  <div class="row" style="gap: 10px; align-items: center;">
+    {% if lang_offer.ok %}
+    <form class="inline" method="post" action="/account/{{ lang_offer.tenant_id }}/language"><input type="hidden" name="site_id" value="{{ site.id }}"><input type="hidden" name="back" value="site"><button class="btn" type="submit">+ {{ _('Aggiungi una lingua') }}</button></form>
+    <span class="hint">{{ _('Oggi paghi {amount} per il resto del periodo già pagato, poi la lingua si rinnova con il piano sulla stessa carta.', amount=lang_offer.now_s) }}</span>
+    {% else %}
+    <span class="hint">{{ _('Per ora non si può comprare online: {why}.', why=lang_offer.why) }}</span>
+    {% endif %}
+    {% if lang_offer.extra %}
+    <form class="inline" method="post" action="/account/{{ lang_offer.tenant_id }}/language/remove"><input type="hidden" name="site_id" value="{{ site.id }}"><input type="hidden" name="back" value="site"><button class="btn ghost sm" type="submit">{{ _('Togli una lingua extra') }}</button></form>
+    {% endif %}
+  </div>
   {% endif %}
 </section>
 

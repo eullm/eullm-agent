@@ -1173,11 +1173,34 @@ def register(app, ctx) -> None:
                       jobs=[j for j in jobs.recent(s, 10) if j["status"] != "done"][:5],
                       domain_free=manage.can_change_domain(s, site.id) if site else False,
                       langs=tr.LANGUAGES, own_language=tr.main_language(s, site.id) if site else None,
-                      site_langs=tr.site_languages(s, site.id) if site else [], max_languages=tr.allowed(s),
+                      site_langs=tr.site_languages(s, site.id) if site else [],
+                      max_languages=tr.allowed(s, site.id if site else None), plan_languages=tr.allowed(s),
+                      lang_offer=language_offer(c, s, site),
                       feed_token=delivery.current_token(s, site.id) if site else None,
                       feed_base=(getattr(ctx, "public_url", "") or str(request.base_url)).rstrip("/"),
                       body_json=json.dumps(shown.body, ensure_ascii=False, indent=2) if shown is not None else "",
                       gsc=search_panel(s, site) if site else None)
+
+    def language_offer(c: auth.Caller, s, site) -> dict | None:
+        """A language more for the site (Francesco 2026-11-10): what it costs
+        and whether it can be bought online now; for the owner of a plan
+        that limits the languages."""
+        if site is None or not c.can("owner"):
+            return None
+        if tr.allowed(s) is None:
+            return None
+        try:
+            offer = billing.language_offer(admin, c.tenant_id)
+        except billing.BillingError:
+            return None
+        offer["extra"] = billing.extra_languages(admin, c.tenant_id).get(site.id, 0)
+        offer["tenant_id"] = c.tenant_id
+        cur = offer["currency"]
+        offer |= {"month_s": billing.money(offer["month"], cur), "year_s": billing.money(offer["year"], cur),
+                  "now_s": billing.money(offer["now"], cur) if offer["now"] is not None else None}
+        if ctx.gateway is None and offer["ok"]:
+            offer |= {"ok": False, "why": t("pagamenti online non configurati: contatta chi ti ha venduto il servizio")}
+        return offer
 
     def profile_prep(s, site) -> dict:
         """Where the first profile of a site is: the newest analysis or brief
@@ -2131,9 +2154,10 @@ def register(app, ctx) -> None:
             raise HTTPException(404, "site not found") from None
         except tr.LanguageError:
             with db.tenant(c.tenant_id) as s:
-                limit = tr.allowed(s)
-            return done("/site?tab=publish", t("Il piano permette {n} lingue per sito, compresa la sua: togline qualcuna "
-                                               "o passa a un piano più grande.", n=limit))
+                limit = tr.allowed(s, site_id)
+            return done("/site?tab=publish#h-languages", t("Questo sito può avere {n} lingue, compresa la sua: togline "
+                                                           "qualcuna, aggiungi una lingua extra o passa a un piano più "
+                                                           "grande.", n=limit))
         if not chosen:
             return done("/site?tab=publish", t("Gli articoli restano solo nella lingua del sito."))
         return done("/site?tab=publish", t("Ogni articolo approvato sarà tradotto in: {languages}.",

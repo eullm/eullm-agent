@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.34.2
+
+### Added
+
+- **Lingua extra per sito** (Francesco, 10 novembre: eullm.eu ha 8 lingue,
+  il piano più grande ne dà 5). Il direttore la compra da Sito e profilo ›
+  Lingue › «Aggiungi una lingua»: paga subito con Mollie la parte del
+  periodo che resta, poi la lingua si rinnova con il piano, sulla stessa
+  carta (l'importo dell'abbonamento Mollie diventa piano + lingue extra, anche
+  quando si cambia piano). Ogni lingua extra vale per un solo sito. «Togli una
+  lingua extra» smette di farla pagare dal rinnovo dopo, senza rimborso, e
+  solo se il sito non la sta usando. Prezzo di partenza 12,50 € al mese o
+  125 € all'anno, IVA esclusa, modificabile in /admin › Piani › Lingue
+  extra. Le redazioni in prova, con bonifico o di un rivenditore non la
+  comprano online. L'API `/api/public/plans` restituisce anche `addons`,
+  per la pagina prezzi del sito. Migrazione 0045 (SQLite 0034).
+
+### Fixed
+
+- **Sito e profilo › Lingue diceva ancora che ogni traduzione conta come
+  un articolo del piano.** Dalla 0.33.0 non è così: un articolo uscito conta
+  uno solo, in tutte le lingue scelte per il sito. Il testo ora lo dice,
+  in tutte e 5 le lingue del pannello.
+
 ## 0.34.1
 
 ### Changed

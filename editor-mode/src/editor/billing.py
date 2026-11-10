@@ -823,6 +823,7 @@ def checkout(admin, gateway, tenant_id: str, plan_code: str, interval: str, redi
     amount = price(plan, interval)
     if not amount:
         raise BillingError(t("questo piano non si paga online"))
+    amount += addons_amount(admin, tenant_id, interval)  # the extra languages already bought go on with the plan
     cust_id = c["provider_customer_id"]
     if not cust_id:
         cust_id = gateway.create_customer(c["name"], c["email"], {"customer_id": c["id"]})
@@ -915,6 +916,12 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
     with admin.engine.begin() as conn:
         conn.execute(update(p).where(p.c.id == ours.id).values(status=status, paid_at=now if status == "paid" else None))
     tenant_id = ours.tenant_id
+    if ours.kind == "addon":
+        if status != "paid" or tenant_id is None:
+            return status
+        site_id = int((pay.get("metadata") or {}).get("site_id") or (ours.note or "0").rpartition(":")[2] or 0)
+        _add_language(admin, gateway, tenant_id, site_id, +1)
+        return "addon"
     if ours.kind == "credits":
         if status != "paid" or tenant_id is None:
             return status
@@ -934,7 +941,8 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
                 log.exception("old subscription of %s not cancelled", tenant_id)
         with accounts._read(admin) as conn:
             plan = get_plan(conn, plan_code)
-        sub_id = gateway.create_subscription(c["provider_customer_id"], price(plan, interval), plan.currency, interval,
+        amount = price(plan, interval) + addons_amount(admin, tenant_id, interval)
+        sub_id = gateway.create_subscription(c["provider_customer_id"], amount, plan.currency, interval,
                                              until.date(), f"Redazia {plan.name}", webhook_url,
                                              pay.get("mandate_id"), {"tenant_id": tenant_id})
         with admin.engine.begin() as conn:
@@ -957,6 +965,174 @@ def gateway_event(admin, gateway, payment_id: str, webhook_url: str, core=None, 
                          .values(status="past_due", updated_at=now))
         return "past_due"
     return status
+
+
+# --- add-ons: a language more for a site ------------------------------------------
+
+LANGUAGE_ADDON = "language"
+
+
+def addon(conn, code: str = LANGUAGE_ADDON):
+    row = conn.execute(select(m.addons).where(m.addons.c.code == code)).first()
+    if row is None:
+        raise BillingError(t("componente aggiuntivo sconosciuto: {code}", code=code))
+    return row
+
+
+def addons(admin) -> list[dict]:
+    with accounts._read(admin) as conn:
+        return [dict(r._mapping) for r in conn.execute(select(m.addons).order_by(m.addons.c.code)).all()]
+
+
+def save_addon(admin, code: str, price_month_cents: int | None, price_year_cents: int | None) -> None:
+    for v in (price_month_cents, price_year_cents):
+        if v is not None and v < 0:
+            raise BillingError(t("i prezzi sono numeri di zero o più"))
+    with admin.engine.begin() as conn:
+        if not conn.execute(update(m.addons).where(m.addons.c.code == code).values(
+                price_month_cents=price_month_cents, price_year_cents=price_year_cents)).rowcount:
+            raise BillingError(t("componente aggiuntivo sconosciuto: {code}", code=code))
+
+
+def _extras(conn, tenant_id: str) -> dict[int, int]:
+    raw = conn.execute(select(m.tenants.c.extra_languages)
+                       .where(m.tenants.c.tenant_id == tenant_id)).scalar() or {}
+    return {int(k): int(v) for k, v in raw.items() if int(v or 0) > 0}
+
+
+def extra_languages(admin, tenant_id: str) -> dict[int, int]:
+    """The languages a newsroom bought beyond its plan, by site."""
+    with accounts._read(admin) as conn:
+        return _extras(conn, tenant_id)
+
+
+def addons_amount(admin, tenant_id: str, interval: str) -> int:
+    """What the extra languages add to each renewal of the plan."""
+    with accounts._read(admin) as conn:
+        n = sum(_extras(conn, tenant_id).values())
+        if not n:
+            return 0
+        a = addon(conn)
+    each = a.price_year_cents if interval == "year" else a.price_month_cents
+    return n * (each or 0)
+
+
+def prorated(full_cents: int, period_end: datetime, interval: str, now: datetime) -> int:
+    """The part of a period's price still to come: a language bought in the
+    middle of a paid period pays only what is left of it, then renews with
+    the plan."""
+    months = 12 if interval == "year" else 1
+    y, mo = divmod(period_end.month - 1 - months, 12)
+    year, month = period_end.year + y, mo + 1
+    start = period_end.replace(year=year, month=month,
+                               day=min(period_end.day, calendar.monthrange(year, month)[1]))
+    whole = (period_end - start).total_seconds()
+    left = max(0.0, (period_end - now).total_seconds())
+    return max(1, round(full_cents * min(1.0, left / whole))) if whole > 0 else full_cents
+
+
+def language_offer(admin, tenant_id: str, now: datetime | None = None) -> dict:
+    """Whether the newsroom can buy a language online now, and at what price:
+    {"ok": bool, "why": str, "price": cents per period, "interval",
+    "now": cents to pay today, "currency"}."""
+    now = _now(now)
+    sub = subscription(admin, tenant_id)
+    with accounts._read(admin) as conn:
+        a = addon(conn)
+    interval = (sub or {}).get("billing_interval") or "month"
+    each = a.price_year_cents if interval == "year" else a.price_month_cents
+    out = {"ok": False, "why": "", "price": each, "interval": interval, "now": None, "currency": a.currency,
+           "month": a.price_month_cents, "year": a.price_year_cents}
+    if not each:
+        out["why"] = t("le lingue extra non sono in vendita")
+    elif sub is None or sub["status"] in ("trialing", "expired") or sub["plan_code"] == TRIAL_PLAN:
+        out["why"] = t("scegli prima un piano in Il mio piano")
+    elif sub["provider"] == "reseller":
+        out["why"] = t("questa redazione è fatturata dal tuo rivenditore")
+    elif sub["provider"] != "mollie" or not sub.get("provider_subscription_id") or sub["status"] != "active":
+        out["why"] = t("il piano non si rinnova con la carta: chiedi la lingua a chi ti fattura")
+    elif not sub.get("current_period_end") or sub["current_period_end"] <= now:
+        out["why"] = t("il periodo pagato è finito: rinnova prima il piano")
+    else:
+        out["ok"] = True
+        out["now"] = prorated(each, sub["current_period_end"], interval, now)
+    return out
+
+
+def buy_language(admin, gateway, tenant_id: str, site_id: int, site_name: str, redirect_url: str, webhook_url: str,
+                 now: datetime | None = None) -> str:
+    """Start paying a language more for a site: the gateway's page. The
+    first payment is what is left of the current period; from the next
+    renewal the language is in the plan's amount."""
+    if gateway is None:
+        raise BillingError(t("pagamenti online non configurati: contatta chi ti ha venduto il servizio"))
+    offer = language_offer(admin, tenant_id, now)
+    if not offer["ok"]:
+        raise BillingError(offer["why"])
+    c = customer_of(admin, tenant_id)
+    if c is None or not c["provider_customer_id"]:
+        raise BillingError(t("prima servono i dati di fatturazione"))
+    sub = subscription(admin, tenant_id)
+    pay_id, url = gateway.one_off_payment(
+        c["provider_customer_id"], offer["now"], offer["currency"], f"Redazia {t('lingua extra')}: {site_name}"[:255],
+        redirect_url, webhook_url, {"tenant_id": tenant_id, "addon": LANGUAGE_ADDON, "site_id": str(site_id)})
+    with admin.engine.begin() as conn:
+        conn.execute(insert(m.payments).values(tenant_id=tenant_id, subscription_id=sub["id"], provider=gateway.name,
+                                               provider_payment_id=pay_id, kind="addon", amount_cents=offer["now"],
+                                               currency=offer["currency"], status="open",
+                                               note=f"{LANGUAGE_ADDON}:{site_id}", created_at=_now(now)))
+    return url
+
+
+def _add_language(admin, gateway, tenant_id: str, site_id: int, delta: int) -> int:
+    """One language more (or less) for the site; the plan's renewals at
+    the gateway follow. Returns the site's extra languages now."""
+    with admin.engine.begin() as conn:
+        raw = conn.execute(select(m.tenants.c.extra_languages).where(m.tenants.c.tenant_id == tenant_id)).scalar() or {}
+        raw = {str(k): int(v) for k, v in raw.items()}
+        n = max(0, raw.get(str(site_id), 0) + delta)
+        if n:
+            raw[str(site_id)] = n
+        else:
+            raw.pop(str(site_id), None)
+        conn.execute(update(m.tenants).where(m.tenants.c.tenant_id == tenant_id).values(extra_languages=raw or None))
+    _renewal_follows(admin, gateway, tenant_id)
+    return n
+
+
+def _renewal_follows(admin, gateway, tenant_id: str) -> None:
+    """The amount of the plan's automatic renewals: the plan and its extra
+    languages."""
+    sub = subscription(admin, tenant_id)
+    if gateway is None or not sub or sub["provider"] != "mollie" or not sub.get("provider_subscription_id"):
+        return
+    with accounts._read(admin) as conn:
+        plan = get_plan(conn, sub["plan_code"])
+    amount = (price(plan, sub["billing_interval"]) or 0) + addons_amount(admin, tenant_id, sub["billing_interval"])
+    c = customer_of(admin, tenant_id)
+    try:
+        gateway.update_subscription(c["provider_customer_id"], sub["provider_subscription_id"], amount, plan.currency)
+    except Exception:
+        # The language is paid and stays: the console sees the amount to fix
+        # at Mollie in the log (the notice is not retried, the payment is done).
+        log.exception("the renewals of %s at the gateway were not changed to %s", tenant_id, amount)
+
+
+def remove_language(admin, gateway, tenant_id: str, site_id: int) -> int:
+    """One extra language less for the site, from the next renewal (what is
+    paid is not refunded). Returns the site's extra languages now."""
+    if extra_languages(admin, tenant_id).get(site_id, 0) <= 0:
+        raise BillingError(t("questo sito non ha lingue extra"))
+    return _add_language(admin, gateway, tenant_id, site_id, -1)
+
+
+def set_extra_languages(admin, tenant_id: str, site_id: int, n: int, gateway=None) -> int:
+    """The console sets a site's extra languages by hand (a bank transfer,
+    a gift); the renewals at the gateway follow."""
+    if n < 0:
+        raise BillingError(t("un numero di zero o più"))
+    have = extra_languages(admin, tenant_id).get(site_id, 0)
+    return _add_language(admin, gateway, tenant_id, site_id, n - have)
 
 
 REFUND_THEN = ("none", "renewals", "now")
