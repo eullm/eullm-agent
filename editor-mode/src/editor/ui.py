@@ -233,6 +233,15 @@ def register(app, ctx) -> None:
             return t("Al pagamento si aggiunge l'IVA al {rate}%.", rate=billing.VAT_PERCENT)
         return t("Per un'azienda con partita IVA in un altro paese dell'UE non si aggiunge l'IVA: la versa il cliente (inversione contabile).")
     env.globals["vat_note"] = vat_note
+
+    def with_vat_s(cents, currency: str = "EUR", customer=None) -> str:
+        """A price before VAT as the customer pays it, VAT included (the law
+        wants it for consumers, Codice del Consumo art. 49): empty when no
+        VAT is added (reverse charge) or there is no price."""
+        if not cents or not billing.vat_rate(customer):
+            return ""
+        return t("{price} IVA inclusa", price=billing.money(billing.with_vat(int(cents), customer)[0], currency))
+    env.globals["with_vat"] = with_vat_s
     env.filters["problem"] = problem
     env.filters["s100"] = score100
     env.filters["plural"] = plural
@@ -1210,6 +1219,8 @@ def register(app, ctx) -> None:
         offer["vat"] = billing.vat_rate(customer)
         now_gross = billing.with_vat(offer["now"], customer)[0] if offer["now"] is not None else None
         offer |= {"month_s": billing.money(offer["month"], cur), "year_s": billing.money(offer["year"], cur),
+                  "month_vat_s": billing.money(billing.with_vat(offer["month"] or 0, customer)[0], cur),
+                  "year_vat_s": billing.money(billing.with_vat(offer["year"] or 0, customer)[0], cur),
                   "now_s": billing.money(now_gross, cur) if now_gross is not None else None}
         if ctx.gateway is None and offer["ok"]:
             offer |= {"ok": False, "why": t("pagamenti online non configurati: contatta chi ti ha venduto il servizio")}

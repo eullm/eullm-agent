@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.34.4
+
+### Changed
+
+- **Prezzi anche IVA inclusa** (Francesco, 10 novembre; Codice del Consumo
+  art. 49 c. 1 lett. e: a un consumatore va dato il prezzo comprensivo
+  delle imposte). In Il mio piano ogni piano mostra «149 € + IVA al mese»
+  con sotto «181,78 € IVA inclusa», anche per l'anno; i pacchetti di
+  crediti e la lingua extra hanno lo stesso doppio prezzo. Un'azienda UE
+  con partita IVA, che non paga l'IVA, vede solo il prezzo e l'inversione
+  contabile. `/api/public/plans` restituisce `vat_percent`, che
+  redazia.com usa per la stessa riga.
+
 ## 0.34.3
 
 ### Changed
