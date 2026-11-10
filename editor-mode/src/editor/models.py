@@ -90,6 +90,7 @@ tenants = Table(
     Column("credits_month", Integer),  # credits the plan gives every month (credits.py)
     Column("max_users", Integer),  # people with access to the newsroom, the director included
     Column("credits_alert", Text),  # last alert sent: "YYYY-MM:80" or "YYYY-MM:100"
+    Column("extra_languages", JSONB),  # languages bought beyond the plan, by site: {"<site id>": n}
 )
 
 sites = Table(
@@ -750,6 +751,18 @@ payments = Table(
     Column("note", Text, nullable=False),
     Column("created_at", _ts()),
     Column("paid_at", _ts()),
+)
+
+# Add-ons sold with the plan (billing.py): only "language", a language more
+# for one site, for now.
+addons = Table(
+    "addons",
+    metadata,
+    Column("code", Text, primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("price_month_cents", Integer),
+    Column("price_year_cents", Integer),
+    Column("currency", Text, nullable=False),
 )
 
 # Credits (credits.py): the price list and the packs, from the console;

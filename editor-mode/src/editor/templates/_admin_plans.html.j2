@@ -36,6 +36,20 @@
   <p class="hint foot-note">{{ _('Il sito pubblico legge i piani da <code>/api/public/plans</code>. Il piano "Prova" è quello di chi si iscrive.') }}</p>
 </section>
 
+<section class="card" id="componenti" aria-labelledby="h-addons">
+  <div class="card-head"><h2 id="h-addons">{{ _('Lingue extra') }}</h2><span class="hint">{{ _('una lingua in più per un sito, oltre il piano') }}</span></div>
+  <div class="pad">
+    <p class="lead">{{ _("Il direttore la compra da Sito e profilo › Lingue: paga subito la parte del periodo che resta, poi la lingua si rinnova con il piano, sulla stessa carta. Prezzi IVA esclusa, come quelli dei piani.") }}</p>
+    {% for a in addons %}
+    <form method="post" action="/admin/addons/{{ a.code }}" class="form-grid" id="a-{{ a.code }}">
+      <label class="field">{{ _('Al mese (€)') }}<input name="price_month" inputmode="decimal" value="{{ '%.2f'|format(a.price_month_cents / 100) if a.price_month_cents is not none else '' }}"></label>
+      <label class="field">{{ _("All'anno (€)") }}<input name="price_year" inputmode="decimal" value="{{ '%.2f'|format(a.price_year_cents / 100) if a.price_year_cents is not none else '' }}"></label>
+      <div><button class="btn" type="submit">{{ _('Salva i prezzi') }}</button></div>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="card" id="crediti" aria-labelledby="h-credits">
   <div class="card-head"><h2 id="h-credits">{{ _('Crediti') }}</h2><span class="hint">{{ _('quello che va oltre il piano') }}</span></div>
   <div class="pad">

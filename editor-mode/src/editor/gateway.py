@@ -112,6 +112,11 @@ class Mollie:
             body["mandateId"] = mandate_id
         return self._call("POST", f"/customers/{customer_id}/subscriptions", body)["id"]
 
+    def update_subscription(self, customer_id: str, subscription_id: str, amount_cents: int, currency: str) -> None:
+        """The amount of the next renewals (a language added or removed)."""
+        self._call("PATCH", f"/customers/{customer_id}/subscriptions/{subscription_id}",
+                   {"amount": _amount(amount_cents, currency)})
+
     def cancel_subscription(self, customer_id: str, subscription_id: str) -> None:
         """Stop the renewals. Already stopped (cancelled earlier, for example
         by a refund, or completed) counts as done: Mollie refuses a second

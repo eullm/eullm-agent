@@ -58,16 +58,20 @@ def site_languages(s, site_id: int) -> list[str]:
             m.publish_targets.c.site_id == site_id, m.publish_targets.c.enabled.is_not(False))).scalars():
         lang = ((cfg or {}).get("language") or "").strip().lower()[:2]
         if lang in LANGUAGES and lang != own and lang not in chosen:
-            limit = allowed(s)
+            limit = allowed(s, site_id)
             if limit is None or len(chosen) + 1 < limit:
                 chosen.append(lang)
     return chosen
 
 
-def allowed(s) -> int | None:
-    """How many languages each site may have, its own included (None: no limit)."""
+def allowed(s, site_id: int | None = None) -> int | None:
+    """How many languages each site may have, its own included (None: no
+    limit): the plan's, and for a site the extra languages bought for it."""
     u = quotas.usage(s)
-    return None if u is None else u.plan.get("max_languages")
+    if u is None or u.plan.get("max_languages") is None:
+        return None
+    extra = (u.plan.get("extra_languages") or {}).get(str(site_id), 0) if site_id is not None else 0
+    return u.plan["max_languages"] + int(extra or 0)
 
 
 def set_languages(db, tenant_id: str, site_id: int, languages: list[str]) -> list[str]:
@@ -80,7 +84,7 @@ def set_languages(db, tenant_id: str, site_id: int, languages: list[str]) -> lis
         unknown = [x for x in wanted if x not in LANGUAGES]
         if unknown:
             raise LanguageError(f"unknown language: {', '.join(unknown)}")
-        limit = allowed(s)
+        limit = allowed(s, site_id)
         if limit is not None and 1 + len(wanted) > limit:
             raise LanguageError(f"the plan allows {limit} languages per site, the site's own included")
         s.execute(update(m.sites).where(m.sites.c.id == site_id).values(languages=wanted))
