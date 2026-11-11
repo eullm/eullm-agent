@@ -48,9 +48,13 @@ jobs:
         # The sandbox tests run programs through bwrap. Ubuntu runners
         # restrict unprivileged user namespaces through AppArmor.
         timeout-minutes: 3
+        # bwrap comes with the runner image: apt only when it is missing, so
+        # an Ubuntu mirror that does not answer (2026-11-11) does not stop CI.
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q bubblewrap
+          if ! command -v bwrap >/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q bubblewrap
+          fi
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: fmt

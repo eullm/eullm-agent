@@ -12,6 +12,9 @@
   ricerche passano da due funzioni del database che guardano redazione per
   redazione (migrazione 0047). Provato con un proprietario non superutente,
   come sul server.
+- **CI**: bubblewrap si installa solo se manca dall'immagine del runner
+  (c'è già): l'11 novembre i mirror Ubuntu non rispondevano e il passo
+  andava in timeout prima dei test, su main e su dev.
 
 ## 0.35.0
 
