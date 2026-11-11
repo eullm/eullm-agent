@@ -20,10 +20,10 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import and_, bindparam, func, or_, select, text, update
+from sqlalchemy import and_, bindparam, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import connect, evergreen, menus, opportunity as oppo, queue, ratelimit
+from . import connect, evergreen, menus, opportunity as oppo, queue, ratelimit, readers
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
 from .i18n import N_, t
 from .markdown import to_html
@@ -327,6 +327,7 @@ def register(app, ctx) -> None:
             "all_sites": whole(request), "starting": starting,
             "plan_state": billing.subscription(admin, c.tenant_id) if c.can("owner") else None,
             "plan_name": plan_name(s),
+            "feedback_new": readers.unread(s, site.id if site else None),
             # The newsroom sees its plan's units; the model's euros only the operators.
             "credit_state": None if c.operator else credits.state(s),
             "activity": data.pop("activity", None) or act.recent(s, tz, problem, site=scoped(request, sites, site)),
@@ -2375,6 +2376,46 @@ def register(app, ctx) -> None:
                                    for r in rows if r.status != "pending_approval"],
                           targets=targets, kinds=TARGET_KINDS, stored=vault.stored(s), langs=tr.LANGUAGES,
                           secret_var=lambda name: _secret_var(c.tenant_id, name))
+
+    # --- feedback from readers (readers.py), in trial -------------------------
+
+    @app.get("/feedback", response_class=HTMLResponse)
+    def feedback_view(request: Request, show: str = "open", c: auth.Caller = Depends(viewer)):
+        with db.tenant(c.tenant_id) as s:
+            sites, site = current_site(s, request)
+            r = m.reader_messages
+            rows = []
+            if site:
+                q = (select(r).where(r.c.site_id == site.id, r.c.status != "pending")
+                     .order_by(r.c.confirmed_at.desc().nulls_last(), r.c.id.desc()).limit(200))
+                if show != "all":
+                    q = q.where(r.c.status.in_(("new", "read")))
+                rows = s.execute(q).all()
+            base = (ctx.public_url or str(request.base_url)).rstrip("/")
+            return render(request, "feedback.html.j2", c, s, "feedback", _sites=(sites, site), rows=rows, show=show,
+                          snippet=f'<script src="{base}/static/feedback.js" defer></script>',
+                          can_mail=ctx.mail is not None, turnstile=bool(all(readers.turnstile_keys())),
+                          kinds={"error": N_("Errore segnalato"), "comment": N_("Commento"), "other": N_("Altro")})
+
+    @app.post("/ui/sites/{site_id}/feedback")
+    def ui_feedback_switch(site_id: int, on: str = Form("0"), c: auth.Caller = Depends(ctx.need("owner"))):
+        with db.tenant(c.tenant_id) as s:
+            if s.execute(update(m.sites).where(m.sites.c.id == site_id).values(feedback=on == "1")).rowcount != 1:
+                raise HTTPException(404, "site not found")
+        return done("/feedback", t("Feedback dei lettori attivo: aggiungi la riga di codice al sito.") if on == "1"
+                    else t("Feedback dei lettori spento: il modulo sparisce dal sito."))
+
+    @app.post("/ui/feedback/{message_id}")
+    def ui_feedback_status(message_id: int, status: str = Form(...), c: auth.Caller = Depends(ctx.need("editor"))):
+        r = m.reader_messages
+        with db.tenant(c.tenant_id) as s:
+            if status == "delete":
+                s.execute(delete(r).where(r.c.id == message_id, r.c.status != "pending"))
+            elif status in ("new", "read", "closed"):
+                s.execute(update(r).where(r.c.id == message_id, r.c.status != "pending").values(status=status))
+            else:
+                raise HTTPException(400, "unknown status")
+        return done(f"/feedback#m-{message_id}" if status != "delete" else "/feedback")
 
     @app.post("/ui/publications/{pub_id}/decision")
     def ui_pub_decision(pub_id: int, accept: str = Form(...),

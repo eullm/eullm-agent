@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 
-from . import briefing, jobs, models as m, news_base, opportunity, proposals, repo, searchconsole, sources, tenant_data, trends
+from . import briefing, jobs, models as m, news_base, opportunity, proposals, readers, repo, searchconsole, sources, tenant_data, trends
 from .i18n import N_
 from .ingest import collect_archive
 from .progress import step as progress
@@ -157,6 +157,8 @@ class Runner:
                 def maintain():
                     sources.maintain(self.db, tenant, client, now=now, archive=own_archive)
                     tenant_data.prune(self.db, tenant, now=now)
+                    with self.db.tenant(tenant) as s:
+                        readers.prune(s, now)
                 self.step(tenant, "maintain", done, failed, maintain)
                 # Google Search Console: the last days of clicks and searches of every connected site.
                 if (gsc := self.search_console()) is not None and self.has_search_console(tenant):

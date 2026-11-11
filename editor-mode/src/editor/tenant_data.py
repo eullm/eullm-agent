@@ -32,7 +32,7 @@ DELETE_ORDER = [
     "publications", "publish_targets", "feeds",
     "draft_images", "draft_claim_sources", "draft_claims", "drafts",
     "proposal_citations", "proposals", "opportunity_scores",
-    "feedback", "profile_reviews", "editorial_profiles", "site_analyses", "site_posts",
+    "reader_messages", "feedback", "profile_reviews", "editorial_profiles", "site_analyses", "site_posts",
     "briefings", "weekly_reports", "recipients", "search_stats",
     "trend_snapshots", "trend_scores", "topic_items", "topics",
     "observations", "source_items", "sources", "sites",
@@ -46,7 +46,7 @@ DELETE_ORDER = [
 ACCOUNT_TABLES = ("memberships", "sessions", "invites", "subscriptions", "payments")
 
 # Never exported: what would let someone act as the tenant.
-WITHHELD = {"access_tokens": {"token_sha256"}, "feeds": {"token"}, "secrets": {"ciphertext", "key_id"}}
+WITHHELD = {"access_tokens": {"token_sha256"}, "reader_messages": {"token_sha256", "address_hash"}, "feeds": {"token"}, "secrets": {"ciphertext", "key_id"}}
 
 DEFAULT_RETENTION_DAYS = 30
 
