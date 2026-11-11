@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.1
+
+### Added
+
+- **Il modello del Punto della Sera si sceglie** in /admin › Consumi ›
+  «Modello per passo», come gli altri passi (prima usava sempre il
+  predefinito). Era rimasto fuori dalla 0.36.0.
+
 ## 0.36.0
 
 ### Added
@@ -14,7 +22,6 @@
   sue ricette nuove. Le notizie di cucina su cui si appoggia l'apertura si
   cercano nell'ultimo mese invece che nelle ultime due settimane. Sugli
   altri siti la scelta non c'è.
-
 ## 0.35.1
 
 ### Fixed

@@ -45,11 +45,12 @@ PURPOSES = {
     "editor_check": N_("Caporedattore AI"),
     "primary_source": N_("Ricerca delle fonti primarie"),
     "auto_fix": N_("Correzione degli articoli scartati (modello più forte)"),
+    "evening": N_("Punto della Sera"),
 }
 
 # Steps whose model the console can choose (images use their own service).
 ROUTABLE = ("site_profile", "profile", "source_discovery", "topic_label", "proposal", "draft", "translate",
-            "editor_check", "auto_fix", "primary_source")
+            "editor_check", "auto_fix", "primary_source", "evening")
 ROUTES_TTL = 60.0
 _routes_cache: dict = {"at": 0.0, "routes": {}}
 
