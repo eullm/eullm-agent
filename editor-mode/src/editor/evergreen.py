@@ -231,7 +231,8 @@ SYSTEM = (
     '"country": "<the ISO 3166-1 alpha-2 code of the country the theme is about, empty when it is not about one>", '
     '"section": "<the one of the site\'s sections it belongs to, written exactly as listed; empty when none are '
     'listed>", "citations": [<ids of the items the article relies on>]}. '
-    "Cite at least two ids, from at least two different outlets when the list has them; cite only ids from the list."
+    "Cite at least two ids, from at least two different outlets when the list has them; cite only ids from the list. "
+    "Call the dish by its traditional name exactly as it is known (Cotoletta alla milanese, Saltimbocca alla romana, Pasta e patate), never a made-up or descriptive name for it; but never copy an item's headline: the words around the dish's name are the site's own."
 )
 
 REASONS = {
@@ -326,14 +327,18 @@ def spread_items(items: list) -> list:
     return out
 
 
-def _validator(allowed: set[int], outlet: dict[int, int] | None = None):
+def _validator(allowed: set[int], outlet: dict[int, int] | None = None, headlines: list[str] | None = None):
     from .proposals import _validator as base
+    from .text import copied_title
 
     check = base(allowed)
     outlets = set((outlet or {}).values())
 
     def validate(v) -> dict:
         out = check(v)
+        if (copy := copied_title(out["title"], headlines or [])) is not None:
+            raise ValueError(f"the title copies the headline «{copy}»: keep the dish's traditional name as it is "
+                             "and write the rest of the title in the site's own words")
         if len(out["citations"]) < 2 and len(allowed) >= 2:
             raise ValueError("cite at least two ids")
         if len(outlets) >= 2 and len({outlet[i] for i in out["citations"] if i in outlet}) < 2:
@@ -374,7 +379,7 @@ def plan(db, tenant_id: str, site_id: int, core: CoreClient | None, limit: int, 
             try:
                 with usage.tagged(db, tenant_id, "proposal", site_id=site_id, ref=f"evergreen:{th.reason}"):
                     value, _ = core.chat_json(SYSTEM, _prompt(body, th, items, learned + full_line(full)),
-                                              _validator(allowed, {it.id: it.source_id for it in items}))
+                                              _validator(allowed, {it.id: it.source_id for it in items}, [it.title for it in items]))
                 by = "model"
             except CoreError as e:
                 log.warning("evergreen proposal on %r failed: %s", th.label, e)
