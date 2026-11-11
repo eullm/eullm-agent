@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.35.1
+
+### Fixed
+
+- **Il Feedback dei lettori funziona sul server** (Francesco, 11 novembre:
+  «attivato feedback ma non vedo»). Il modulo cercava il sito, e il link di
+  conferma il messaggio, con la connessione del proprietario. Sul server
+  quel ruolo non è un superutente e la sicurezza per riga gli nasconde i
+  dati di ogni redazione, quindi ogni sito rispondeva «spento». Ora le due
+  ricerche passano da due funzioni del database che guardano redazione per
+  redazione (migrazione 0047). Provato con un proprietario non superutente,
+  come sul server.
+- **CI**: bubblewrap si installa solo se manca dall'immagine del runner
+  (c'è già): l'11 novembre i mirror Ubuntu non rispondevano e il passo
+  andava in timeout prima dei test, su main e su dev.
+
 ## 0.35.0
 
 ### Added
