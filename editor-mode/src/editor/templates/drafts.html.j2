@@ -13,7 +13,7 @@
 
 <section class="card" aria-label="{{ _('Elenco bozze') }}">
   {% if rows %}
-  {% set states = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('green', _('Approvata')), 'discarded': ('', _('Scartata')), 'rejected': ('', _('Rifiutata'))} %}
+  {% set states = {'draft': ('blue', _('Pronta')), 'needs_review': ('amber', _('Da rivedere')), 'approved': ('blue', _('Approvata')), 'published': ('green', _('Pubblicata')), 'discarded': ('', _('Scartata')), 'rejected': ('', _('Rifiutata'))} %}
   <div class="pad" style="padding-bottom: 0; display: flex; flex-direction: column; gap: 12px;">
     <input type="search" id="draft-filter" class="search" placeholder="{{ _('Cerca nei titoli') }}" aria-label="{{ _('Cerca nei titoli') }}" autocomplete="off">
     <nav class="tabs" id="draft-states" aria-label="{{ _('Mostra') }}">

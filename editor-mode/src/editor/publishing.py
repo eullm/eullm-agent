@@ -885,10 +885,19 @@ class Publisher:
         info.raise_for_status()
         base = cfg.get("branch") or info.json()["default_branch"]
         gh = sitegit.Repo(call, repo, sleep=self.sleep)
-        try:
-            return self._github_send(gh, cfg, pub, base, image, delivery, sitegit, op, payload or pub.payload)
-        except sitegit.GitHubError as e:
-            raise PublishError(str(e)) from None
+        # Two articles sent together both add their line to llms.txt and the
+        # sitemap: the second pull request conflicts once the first is merged
+        # (Francesco 2026-11-11, "405 Pull Request has merge conflicts"). It
+        # is built again on top of the site as it is now, at most twice more.
+        for attempt in range(3):
+            try:
+                return self._github_send(gh, cfg, pub, base, image, delivery, sitegit, op, payload or pub.payload)
+            except sitegit.GitHubError as e:
+                text_ = str(e).lower()
+                if attempt < 2 and "merge" in text_ and ("conflict" in text_ or "base branch was modified" in text_):
+                    self.sleep(5)
+                    continue
+                raise PublishError(str(e)) from None
 
     def _github_send(self, gh, cfg, pub, base, image, delivery, sitegit, op="publish", payload=None):
         import posixpath

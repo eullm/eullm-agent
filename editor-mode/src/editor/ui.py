@@ -1950,7 +1950,13 @@ def register(app, ctx) -> None:
                                         claims.label("claims")).where(d.c.site_id == site.id)
                                  .order_by(d.c.created_at.desc()).limit(300)).all()
                 # Discarded by the automatic newsroom, refused by a person: two different things.
-                rows = [{**r._mapping, "state": draft_state(r.status, r.decided_by)} for r in rows]
+                # Out on the site: "Pubblicata", not "Approvata" (Francesco 2026-11-11).
+                pub = m.publications
+                live = set(s.execute(select(pub.c.draft_id).where(
+                    pub.c.draft_id.in_([r.id for r in rows] or [0]), pub.c.status == "published",
+                    pub.c.withdrawn_at.is_(None))).scalars())
+                rows = [{**r._mapping, "state": "published" if r.id in live else draft_state(r.status, r.decided_by)}
+                        for r in rows]
                 # Each translation right under its original.
                 kids: dict[int, list] = {}
                 shown = {r["id"] for r in rows}
@@ -1996,7 +2002,7 @@ def register(app, ctx) -> None:
             targets = [x for x in s.execute(select(m.publish_targets).where(
                 m.publish_targets.c.site_id == d.site_id, m.publish_targets.c.enabled.is_not(False))).all()
                 if publishing.fits_language(x, d.language)]  # Italian text never goes to the English site
-            pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode,
+            pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode, m.publications.c.target_id,
                                     m.publications.c.external_url, m.publications.c.withdrawn_at,
                                     m.publications.c.updated_at, m.publications.c.published_at, m.publications.c.error,
                                     m.publish_targets.c.name, m.publish_targets.c.kind)
