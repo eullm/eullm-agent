@@ -1,0 +1,60 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ _('Feedback') }}{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">{{ _('Feedback') }}{% if site %} · {{ site.domain }}{% endif %} · <span class="chip">{{ _('in prova') }}</span></span>
+    <h1>{{ _('Cosa ti scrivono i lettori') }}</h1>
+    <p class="lead">{{ _("Sotto ogni articolo un modulo permette di segnalare un errore o scrivere alla redazione. Il messaggio arriva qui solo dopo che il lettore ha confermato il suo indirizzo email; non viene pubblicato e non viene mai dato al modello. La funzione è in prova e per ora è gratuita.") }}</p>
+  </div>
+</header>
+
+{% if site %}
+<section class="card pad" aria-labelledby="h-fb-on">
+  <h2 id="h-fb-on">{{ _('Il modulo su {domain}', domain=site.domain) }}</h2>
+  {% if not can_mail %}<p class="note warn">{{ _("Questo server non manda email: senza la conferma via email il modulo non si mostra.") }}</p>{% endif %}
+  <p>{% if site.feedback %}<span class="chip green">{{ _('Attivo') }}</span> {{ _('Il modulo si mostra sotto gli articoli che hanno la riga di codice.') }}{% else %}<span class="chip">{{ _('Spento') }}</span> {{ _('Anche con la riga di codice nel sito, il modulo non si mostra.') }}{% endif %}</p>
+  {% if caller.can('owner') %}
+  <form method="post" action="/ui/sites/{{ site.id }}/feedback" class="inline">
+    <input type="hidden" name="on" value="{{ '0' if site.feedback else '1' }}">
+    <button class="btn{% if not site.feedback %} pri{% endif %}" type="submit">{{ _('Spegni il modulo') if site.feedback else _('Attiva il modulo') }}</button>
+  </form>
+  {% endif %}
+  <details class="act" {% if site.feedback and not rows %}open{% endif %}>
+    <summary>{{ _('Come metterlo sul sito') }}</summary>
+    <p class="hint">{{ _('Aggiungi questa riga in fondo al modello degli articoli, dove vuoi che compaia il modulo. I siti fatti con il modello di Redazia la hanno già: basta attivare il modulo qui.') }}</p>
+    <pre style="white-space: pre-wrap; word-break: break-all;"><code>{{ snippet }}</code></pre>
+    <p class="hint">{{ _('Facoltativi: data-lang="it" per la lingua (altrimenti quella della pagina) e data-privacy="/privacy" per il link alla pagina privacy. Il modulo accetta messaggi solo da {domain} e dai suoi sottodomini.', domain=site.domain) }}</p>
+    <p class="hint">{{ _("Protezioni: limiti per indirizzo e per email, un messaggio in attesa per email, conferma via email, testo semplice fino a 2000 caratteri. I messaggi non confermati spariscono dopo 48 ore, gli altri dopo un anno.") }}{% if turnstile %} {{ _('Verifica Cloudflare Turnstile attiva.') }}{% endif %}</p>
+    <p class="hint">{{ _("Nell'informativa privacy del sito va detto che email e messaggio arrivano alla redazione tramite Redazia, solo per rispondere, e che vengono cancellati dopo un anno.") }}</p>
+  </details>
+</section>
+
+<section class="card" aria-labelledby="h-fb-list" style="gap: 0;">
+  <div class="card-head"><h2 id="h-fb-list">{{ _('Messaggi') }}</h2>
+    <span class="row">{% if show == 'all' %}<a class="btn sm" href="/feedback">{{ _('Solo da gestire') }}</a>{% else %}<a class="btn sm" href="/feedback?show=all">{{ _('Anche i chiusi') }}</a>{% endif %}</span>
+  </div>
+  {% for r in rows %}
+  <div class="item line" id="m-{{ r.id }}" style="align-items: flex-start;">
+    {% if r.status == 'new' %}<span class="chip blue">{{ _('Nuovo') }}</span>{% elif r.status == 'read' %}<span class="chip">{{ _('Letto') }}</span>{% else %}<span class="chip green">{{ _('Chiuso') }}</span>{% endif %}
+    <div style="flex: 1; min-width: 0;">
+      <strong>{{ _(kinds.get(r.kind, r.kind)) }}</strong>{% if r.url %} · <a href="{{ r.url }}" target="_blank" rel="noopener nofollow">{{ r.title or r.url }}</a>{% endif %}
+      <p style="white-space: pre-wrap; margin: 6px 0;">{{ r.message }}</p>
+      <span class="hint"><a href="mailto:{{ r.email }}">{{ r.email }}</a> · {{ when(r.confirmed_at or r.created_at) }}</span>
+    </div>
+    {% if caller.can('editor') %}
+    <div class="row" style="flex: none;">
+      {% if r.status == 'new' %}<form class="inline" method="post" action="/ui/feedback/{{ r.id }}"><input type="hidden" name="status" value="read"><button class="btn sm" type="submit">{{ _('Letto') }}</button></form>{% endif %}
+      {% if r.status != 'closed' %}<form class="inline" method="post" action="/ui/feedback/{{ r.id }}"><input type="hidden" name="status" value="closed"><button class="btn sm" type="submit">{{ _('Chiudi') }}</button></form>{% else %}<form class="inline" method="post" action="/ui/feedback/{{ r.id }}"><input type="hidden" name="status" value="read"><button class="btn sm" type="submit">{{ _('Riapri') }}</button></form>{% endif %}
+      <form class="inline" method="post" action="/ui/feedback/{{ r.id }}" onsubmit="return confirm('{{ _('Eliminare il messaggio?') }}');"><input type="hidden" name="status" value="delete"><button class="btn sm" type="submit">{{ _('Elimina') }}</button></form>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="hint" style="padding: 0 20px 16px;">{{ _('Nessun messaggio da gestire.') if show != 'all' else _('Nessun messaggio.') }}</p>
+  {% endfor %}
+</section>
+{% else %}
+<section class="card pad"><p>{{ _('Aggiungi prima un sito.') }}</p></section>
+{% endif %}
+{% endblock %}

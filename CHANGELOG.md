@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.35.0
+
+### Added
+
+- **Feedback dei lettori, in prova e per ora gratuito** (Francesco,
+  11 novembre). Sotto ogni articolo un modulo permette di segnalare un
+  errore o scrivere alla redazione. Il messaggio arriva nel pannello, nella
+  nuova voce «Feedback», solo dopo che il lettore ha confermato l'email
+  dal link che riceve. La conferma è un bottone e non il link stesso,
+  così i programmi che aprono i link nelle email non confermano al posto
+  suo. Il messaggio non viene pubblicato e non va mai al modello. Ogni
+  sito lo accende o spegne da Feedback, dove trova anche la riga di codice
+  da mettere nel sito (`/static/feedback.js`, in 5 lingue). Il modello
+  Redazia lo mette da solo con `feedback` in site.config.mjs.
+  Protezioni: il modulo accetta messaggi solo dal dominio del sito (e dai
+  suoi sottodomini) e solo se il sito l'ha acceso. Ci sono limiti per
+  indirizzo (10 all'ora) e per email (3 all'ora), un solo messaggio in
+  attesa per email e un campo trappola per i programmi. Il testo è
+  semplice, fino a 2000 caratteri, e mostrato senza HTML. Con
+  `EDITOR_TURNSTILE_SITEKEY` e `EDITOR_TURNSTILE_SECRET` c'è anche la
+  verifica Cloudflare Turnstile. I messaggi non confermati spariscono dopo
+  48 ore, gli altri dopo un anno; l'indirizzo IP non viene conservato, solo
+  un'impronta cifrata. Senza server di posta il modulo non si mostra.
+  Migrazione 0046 (SQLite 0035): `sites.feedback`, `reader_messages`.
+
 ## 0.34.6
 
 ### Fixed

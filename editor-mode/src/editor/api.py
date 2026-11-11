@@ -23,13 +23,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.exc import IntegrityError
 
-from . import accounts, auth, console, delivery, drafts, i18n, jobs, models as m, profile as prof, proposals as props, publishing, queue, quotas, repo, slowlog, translate as tr, trials, ui, vault
+from . import accounts, auth, console, delivery, drafts, i18n, jobs, models as m, profile as prof, proposals as props, publishing, queue, quotas, readers, repo, slowlog, translate as tr, trials, ui, vault
 from .briefing import TEMPLATES as _BRIEF_TEMPLATES
 
 _STATIC_DIR = Path(__file__).parent / "static"
 _STATIC = {name: (kind, (_STATIC_DIR / name).read_bytes())
            for name, kind in (("redazia-logo.webp", "image/webp"), ("redazia-icon.png", "image/png"),
-                                       ("redazia-mail.png", "image/png"))}
+                                       ("redazia-mail.png", "image/png"),
+                                       ("feedback.js", "text/javascript; charset=utf-8"))}
 # The dashboard's typefaces, served from here so that every computer and phone
 # sees the same letters (SIL Open Font License, static/FONTS-OFL.txt).
 FONTS = ("ibm-plex-sans-latin-400-normal", "ibm-plex-sans-latin-500-normal", "ibm-plex-sans-latin-600-normal",
@@ -615,6 +616,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
                                      run_publication=run_publication, run_translation=run_translation,
                                      run_translations=run_translations, run_image=run_image, imager=imager,
                                      run_delivery=run_delivery, gateway=gateway))
+    readers.register(app, db, admin, pages, mail, public_url)
     console.register(app, SimpleNamespace(db=db, admin=admin, pages=pages, core=core, mail=mail,
                                           public_url=public_url, gateway=gateway, updates_dir=updates_dir))
 

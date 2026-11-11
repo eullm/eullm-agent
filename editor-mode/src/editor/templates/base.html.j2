@@ -46,6 +46,7 @@
   <a href="/index" {% if active == 'index' %}class="on" aria-current="page"{% endif %}>{{ icon('index') }}{{ _('Indice notizie') }}</a>
   <a href="/drafts" {% if active == 'drafts' %}class="on" aria-current="page"{% endif %}>{{ icon('drafts') }}{{ _('Bozze') }}</a>
   <a href="/publications" {% if active == 'publications' %}class="on" aria-current="page"{% endif %}>{{ icon('publications') }}{{ _('Pubblicazioni') }}</a>
+  <a href="/feedback" {% if active == 'feedback' %}class="on" aria-current="page"{% endif %}>{{ icon('feedback') }}{{ _('Feedback') }} <span class="chip" style="font-size: 10px; padding: 0 6px;">{{ _('in prova') }}</span>{% if feedback_new %} <span class="chip blue num" title="{{ _('Messaggi nuovi dei lettori') }}">{{ feedback_new }}</span>{% endif %}</a>
   <span class="grow"></span>
   <div class="nav-foot">
   <a href="/plan" class="plan-link{% if active == 'plan' %} on{% endif %}" {% if active == 'plan' %}aria-current="page"{% endif %}>{{ icon('plans') }}<span class="txt"><span>{{ _('Il mio piano') }}</span>{% if plan_state %}<small>{{ plan_state.plan_name }} · {{ (_('{n} giorno rimasto', n=plan_state.days_left) if plan_state.days_left == 1 else _('{n} giorni rimasti', n=plan_state.days_left)) if plan_state.status == 'trialing' else plan_state.label|lower }}</small>{% elif plan_name %}<small>{{ plan_name }}</small>{% endif %}</span></a>

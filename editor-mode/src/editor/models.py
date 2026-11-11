@@ -105,6 +105,7 @@ sites = Table(
     Column("gsc_property", Text),  # Google Search Console: sc-domain:example.com or https://example.com/
     Column("gsc_status", Text),  # the last check or reading: "ok" or what went wrong
     Column("gsc_checked_at", _ts()),
+    Column("feedback", Boolean, nullable=False, default=False),  # readers may write to the newsroom (readers.py)
 )
 
 sources = Table(
@@ -823,4 +824,26 @@ trial_refusals = Table(
     Column("customer_id", BigInteger),
     Column("reasons", JSONB, nullable=False),
     Column("created_at", _ts()),
+)
+
+
+# Readers' messages from the form under the articles (readers.py): private,
+# never sent to the model; pending until the reader confirms by email.
+reader_messages = Table(
+    "reader_messages",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("site_id", BigInteger, nullable=False),
+    Column("url", Text, nullable=False, default=""),
+    Column("title", Text, nullable=False, default=""),
+    Column("kind", Text, nullable=False),  # error, comment, other
+    Column("message", Text, nullable=False),
+    Column("email", Text, nullable=False),
+    Column("language", Text),
+    Column("status", Text, nullable=False),  # pending, new, read, closed
+    Column("token_sha256", Text),
+    Column("address_hash", Text),
+    Column("created_at", _ts()),
+    Column("confirmed_at", _ts()),
 )

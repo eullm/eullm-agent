@@ -71,6 +71,9 @@ def populate(db, tenant, monkeypatch):
                        "VALUES (:t, '2026-10-19', 'x', '<p>x</p>')"), {"t": tenant})
         s.execute(text("INSERT INTO editor.credit_ledger (tenant_id, pool, delta, reason) "
                        "VALUES (:t, 'extra', 500, 'grant')"), {"t": tenant})
+        s.execute(text("INSERT INTO editor.reader_messages (tenant_id, site_id, kind, message, email, status) "
+                       "VALUES (:t, :s, 'error', 'Una data sbagliata.', 'l@example.org', 'new')"),
+                  {"t": tenant, "s": site_id})
 
 
 @pytest.mark.postgres
