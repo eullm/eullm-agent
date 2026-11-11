@@ -72,3 +72,27 @@ def humanize(text: str) -> str:
     t = re.sub(r"\.\.+", ".", t)
     return " ".join(t.split())
 
+
+
+TITLE_COPY = 0.88  # this close to an outlet's headline, a title is a copy
+
+
+def _title_words(title: str) -> str:
+    return " ".join(re.findall(r"\w+", (title or "").lower()))
+
+
+def copied_title(title: str, headlines) -> str | None:
+    """The outlet's headline the title copies (the same words, or nearly),
+    or None. A dish's own name alone is no copy: «Cotoletta alla milanese»
+    stays its name, only the words around it must be the site's own
+    (Francesco 2026-11-11)."""
+    from difflib import SequenceMatcher
+
+    mine = _title_words(title)
+    if len(mine.split()) < 4:
+        return None
+    for h in headlines:
+        theirs = _title_words(h)
+        if theirs and (mine == theirs or SequenceMatcher(None, mine, theirs).ratio() >= TITLE_COPY):
+            return h
+    return None

@@ -27,7 +27,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from . import models as m
 from . import credits, quotas, repo, seo, style, usage
-from .text import humanize
+from .text import copied_title, humanize
 from .core_client import CoreClient, CoreError
 from .evergreen import is_evergreen
 from .html_extract import parse_html
@@ -969,7 +969,8 @@ OWN_RECIPE = (
     "nutrition estimated from the quantities. Write the recipe in the site's language as a cookbook of that "
     "language writes it, with its usual kitchen words, never phrases translated word for word; tell when a step "
     "is done by what the cook sees, feels or measures (for fish: the flesh turns opaque and flakes under a fork; "
-    "a core temperature when it matters). Keep to the dish: no nutrition, health or sport advice in the opening."
+    "a core temperature when it matters). Keep to the dish: no nutrition, health or sport advice in the opening. "
+    "Call the dish by its traditional name exactly as it is known (Cotoletta alla milanese, Saltimbocca alla romana, Pasta e patate), never a made-up or descriptive name for it; but never copy an item's headline: the words around the dish's name are the site's own."
 )
 
 
@@ -1207,6 +1208,9 @@ def write_draft(db, tenant_id: str, proposal_id: int, core: CoreClient, client: 
             value = extract_json(res.content)
             article = check(parse_article(value, allowed, profile.get("language"),
                                           own=own_recipe(profile, prop), brief=menu), sources)
+            if own_recipe(profile, prop) and (copy := copied_title(article.title, [x.title for x in sources.values()])):
+                raise ValueError(f"the title copies the headline «{copy}»: keep the dish's traditional name as it is "
+                                 "and write the rest of the title in the site's own words")
             if menu:
                 article.menu = menus.parse(value, recipes)
         except ValueError as e:

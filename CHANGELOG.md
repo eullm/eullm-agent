@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.34.5
+
+### Changed
+
+- **Titoli delle ricette propri, con il nome del piatto di sempre**
+  (Francesco, 11 novembre: il titolo non deve essere quello della ricetta
+  di partenza, ma «la cotoletta alla milanese si chiama così»). Le proposte
+  su un tema e le ricette del sito chiamano il piatto con il suo nome
+  tradizionale, mai con un nome inventato o descrittivo; il titolo però non
+  può copiare quello di una fonte (le stesse parole, o quasi): se lo fa, il
+  modello lo riscrive tenendo il nome del piatto e cambiando il resto. Il
+  solo nome del piatto («Cotoletta alla milanese») non è mai una copia.
+
 ## 0.34.4
 
 ### Changed
