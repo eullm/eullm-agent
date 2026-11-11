@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.36.0
+
+### Added
+
+- **Chiedere un menù intero** (Francesco, 11 novembre: «sarebbe bello
+  poter chiedere un menu»). Sui siti di ricette, «Chiedi un articolo» nel
+  Desk ha la scelta «Un menù intero per un'occasione». Si scrive
+  l'occasione («Menù della Vigilia di pesce», «Pranzo di Natale vegetariano
+  per 8») e la redazione fa come per i menù proposti: da 3 a 5 portate,
+  riusa le ricette del sito che vanno bene, scrive solo quelle che mancano
+  (ognuna una bozza a sé, con foto e categoria), poi il menù esce dopo le
+  sue ricette nuove. Le notizie di cucina su cui si appoggia l'apertura si
+  cercano nell'ultimo mese invece che nelle ultime due settimane. Sugli
+  altri siti la scelta non c'è.
+
 ## 0.35.1
 
 ### Fixed
