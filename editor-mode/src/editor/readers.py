@@ -31,7 +31,7 @@ from urllib.parse import urlsplit
 import httpx
 from fastapi import Form, Request
 from fastapi.responses import JSONResponse, Response
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 
 from . import i18n, models as m
 from .ratelimit import Limiter
@@ -62,16 +62,22 @@ def host_of(origin: str | None) -> str:
     return parts.hostname.lower().removeprefix("www.")
 
 
-def site_for_origin(admin, origin: str | None):
+def site_for_origin(db, origin: str | None):
     """The site (tenant_id, id, domain, name, language) that takes feedback
-    from this Origin, or None. Read across newsrooms: the admin connection."""
+    from this Origin, or None. Read across newsrooms: on Postgres through
+    editor.feedback_sites(), since row level security is forced even on the
+    owner (migration 0047)."""
     host = host_of(origin)
     if not host:
         return None
-    with admin.engine.connect() as conn:
-        rows = conn.execute(select(m.sites.c.tenant_id, m.sites.c.id, m.sites.c.domain, m.sites.c.name,
-                                   m.sites.c.language).where(m.sites.c.feedback.is_(True))
-                            .order_by(m.sites.c.id)).all()
+    with db.engine.connect() as conn:
+        if db.sqlite:
+            rows = conn.execute(select(m.sites.c.tenant_id, m.sites.c.id, m.sites.c.domain, m.sites.c.name,
+                                       m.sites.c.language).where(m.sites.c.feedback.is_(True))
+                                .order_by(m.sites.c.id)).all()
+        else:
+            rows = conn.execute(text("SELECT tenant_id, id, domain, name, language FROM editor.feedback_sites()")).all()
+            conn.rollback()
     for r in rows:
         d = (r.domain or "").lower().removeprefix("www.")
         if d and (host == d or host.endswith("." + d)):
@@ -151,22 +157,33 @@ def submit(db, site, data: dict, address: str | None, now: datetime | None = Non
     return token
 
 
-def pending(admin, token: str, now: datetime | None = None):
-    """The message waiting for this token (any newsroom), or None."""
+def pending(db, token: str, now: datetime | None = None):
+    """The message of this token (any newsroom) if sent in the last 48
+    hours, or None (on Postgres through editor.reader_message_by_token())."""
     now = now or datetime.now(UTC)
     r = m.reader_messages
-    with admin.engine.connect() as conn:
-        return conn.execute(select(r.c.id, r.c.tenant_id, r.c.status, r.c.message, r.c.created_at, m.sites.c.name,
-                                   m.sites.c.domain)
-                            .join(m.sites, m.sites.c.id == r.c.site_id)
-                            .where(r.c.token_sha256 == token_hash(token),
-                                   r.c.created_at > now - timedelta(hours=PENDING_HOURS))).first()
+    with db.engine.connect() as conn:
+        if db.sqlite:
+            row = conn.execute(select(r.c.id, r.c.tenant_id, r.c.status, r.c.message, r.c.created_at, m.sites.c.name,
+                                      m.sites.c.domain)
+                               .join(m.sites, m.sites.c.id == r.c.site_id)
+                               .where(r.c.token_sha256 == token_hash(token))).first()
+        else:
+            row = conn.execute(text("SELECT id, tenant_id, status, message, created_at, name, domain "
+                                    "FROM editor.reader_message_by_token(:d)"), {"d": token_hash(token)}).first()
+            conn.rollback()
+    if row is None:
+        return None
+    created = row.created_at if isinstance(row.created_at, datetime) else datetime.fromisoformat(str(row.created_at))
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return row if created > now - timedelta(hours=PENDING_HOURS) else None
 
 
-def confirm(db, admin, token: str, now: datetime | None = None) -> str:
+def confirm(db, token: str, now: datetime | None = None) -> str:
     """"confirmed", "already" or "unknown"."""
     now = now or datetime.now(UTC)
-    row = pending(admin, token, now)
+    row = pending(db, token, now)
     if row is None:
         return "unknown"
     if row.status != "pending":
@@ -232,13 +249,13 @@ def register(app, db, admin, pages, mail, public_url: str) -> None:
     @app.options("/api/public/feedback", include_in_schema=False)
     def feedback_preflight(request: Request):
         origin = request.headers.get("origin")
-        site = site_for_origin(admin, origin)
+        site = site_for_origin(db, origin)
         return cors(Response(status_code=204), origin if site else None)
 
     @app.get("/api/public/feedback", include_in_schema=False)
     def feedback_config(request: Request):
         origin = request.headers.get("origin")
-        site = site_for_origin(admin, origin)
+        site = site_for_origin(db, origin)
         if site is None or mail is None:
             return answer(origin if site else None, 200, enabled=False)
         return answer(origin, 200, enabled=True, sitekey=turnstile_keys()[0] or None,
@@ -247,7 +264,7 @@ def register(app, db, admin, pages, mail, public_url: str) -> None:
     @app.post("/api/public/feedback", include_in_schema=False)
     async def feedback_post(request: Request):
         origin = request.headers.get("origin")
-        site = site_for_origin(admin, origin)
+        site = site_for_origin(db, origin)
         if site is None:
             # Not a site that takes feedback, or not from it: no CORS header, the browser drops it.
             return cors(JSONResponse({"error": "closed"}, status_code=403), None)
@@ -293,13 +310,13 @@ def register(app, db, admin, pages, mail, public_url: str) -> None:
 
     @app.get("/feedback/confirm", include_in_schema=False)
     def feedback_confirm_page(request: Request, t: str = ""):
-        row = pending(admin, t) if t else None
+        row = pending(db, t) if t else None
         if row is None:
             return confirm_page(request, "unknown")
         return confirm_page(request, "ask" if row.status == "pending" else "already", row, t)
 
     @app.post("/feedback/confirm", include_in_schema=False)
     def feedback_confirm(request: Request, t: str = Form("")):
-        row = pending(admin, t) if t else None
-        state = confirm(db, admin, t) if row is not None else "unknown"
+        row = pending(db, t) if t else None
+        state = confirm(db, t) if row is not None else "unknown"
         return confirm_page(request, state, row)

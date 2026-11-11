@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.35.1
+
+### Fixed
+
+- **Il Feedback dei lettori funziona sul server** (Francesco, 11 novembre:
+  «attivato feedback ma non vedo»). Il modulo cercava il sito, e il link di
+  conferma il messaggio, con la connessione del proprietario. Sul server
+  quel ruolo non è un superutente e la sicurezza per riga gli nasconde i
+  dati di ogni redazione, quindi ogni sito rispondeva «spento». Ora le due
+  ricerche passano da due funzioni del database che guardano redazione per
+  redazione (migrazione 0047). Provato con un proprietario non superutente,
+  come sul server.
+
 ## 0.35.0
 
 ### Added

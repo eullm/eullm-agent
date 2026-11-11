@@ -100,7 +100,7 @@ def test_unconfirmed_messages_go_after_two_days(db, tenant, monkeypatch):
     assert _post(c, domain).status_code == 202
     token = sent[0][2].split("t=")[1].split()[0]
     later = datetime.now(UTC) + timedelta(hours=49)
-    assert readers.confirm(db, db, token, now=later) == "unknown"
+    assert readers.confirm(db, token, now=later) == "unknown"
     with db.tenant(tenant) as s:
         assert readers.prune(s, later) == 1
 
