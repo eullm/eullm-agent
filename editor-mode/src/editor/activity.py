@@ -277,6 +277,14 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
     draft_ids = [r.args.get("draft_id") for r in rows if r.kind in ("translate", "image") and r.args]
     draft_title = dict(s.execute(select(m.drafts.c.id, m.drafts.c.title).where(
         m.drafts.c.id.in_([x for x in draft_ids if x]))).all()) if draft_ids else {}
+    # A publication knows its article only through the draft: without this the
+    # sending was left out of a site's box (Francesco 2026-11-11, "ma quale
+    # riquadro io non vedo nulla").
+    pub_ids = [r.args.get("publication_id") for r in rows if r.kind in ("publish", "change") and r.args]
+    pub_of = {x.id: x for x in s.execute(
+        select(m.publications.c.id, m.drafts.c.site_id, m.drafts.c.title, m.drafts.c.id.label("draft_id"))
+        .join(m.drafts, m.drafts.c.id == m.publications.c.draft_id)
+        .where(m.publications.c.id.in_([x for x in pub_ids if x]))).all()} if pub_ids else {}
     # Something running or just ended, among all the jobs and not only those
     # shown: a long queue pushes the running ones out of the list, and the
     # worker is not stalled because of that.
@@ -286,7 +294,8 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
     for r in rows:
         args, res = r.args or {}, r.result or {}
         site_id = res.get("site_id") or args.get("site_id") or by_domain.get(r.subject) \
-            or proposal_site.get(args.get("proposal_id"))
+            or proposal_site.get(args.get("proposal_id")) \
+            or getattr(pub_of.get(args.get("publication_id")), "site_id", None)
         if site is not None and site_id != site and r.kind not in ("collect", "tick"):
             continue
         where = domains.get(site_id) or (r.subject if r.kind == "analysis" else None)
@@ -299,9 +308,10 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
             except (KeyError, IndexError, ValueError):
                 step = r.progress["text"]
         title = res.get("title") or proposal_title.get(args.get("proposal_id")) or draft_title.get(args.get("draft_id")) \
+            or getattr(pub_of.get(args.get("publication_id")), "title", None) \
             or ((args.get("text") or "")[:120] if r.kind == "request" else None)
         item = {"id": r.id, "what": t(KINDS[r.kind]), "where": where, "status": r.status, "step": step,
-                "title": title if r.kind in ("draft", "auto", "translate", "image", "request") else None,
+                "title": title if r.kind in ("draft", "auto", "translate", "image", "request", "publish", "change") else None,
                 "lines": [], "href": None, "link": None, "warn": None,
                 # The hour it ended, or since when it waits or runs: the compact box's last column.
                 "at": _aware(r.finished_at or r.started_at or r.run_after, now).astimezone(tz).strftime("%H:%M")}

@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.34.6
+
+### Fixed
+
+- **Due articoli inviati insieme allo stesso repository non falliscono più**
+  (Francesco, 11 novembre: «GitHub, merge: 405 Pull Request has merge
+  conflicts»). Tutti e due aggiungono la loro riga a llms.txt e alla
+  sitemap: la seconda pull request andava in conflitto appena la prima era
+  unita. Ora viene ricostruita sul sito com'è in quel momento e riprovata,
+  fino a due volte.
+- **Bozze dice «Pubblicata»** per un articolo uscito (prima restava
+  «Approvata»), con il suo filtro; anche la pagina della bozza mostra
+  «Pubblicata» e non ripete il tentativo non riuscito quando un invio
+  successivo alla stessa destinazione è andato a buon fine (resta nello
+  storico di Pubblicazioni).
+- **La pubblicazione si vede nel riquadro Attività** anche quando il menu è
+  su un solo sito: l'invio non sapeva a quale sito appartenesse e veniva
+  nascosto («ma quale riquadro io non vedo nulla»). Ora ha anche il titolo.
+- **Il piano editoriale dice quando un articolo è uscito** (Francesco,
+  11 novembre: due ricette pubblicate restavano «Bozza pronta»). In Trend e
+  piano la riga di una bozza pubblicata mostra «Pubblicata» e il bottone
+  «Apri l'articolo» con il link vero; se la pubblicazione viene ritirata
+  torna «Bozza pronta». Vale per ricette e notizie.
+- **Niente pubblicità spacciate per notizie** (Francesco, 11 novembre: su
+  aitoday.it è uscito un articolo sull'offerta di un fornitore di luce e gas
+  «in scadenza il 10 novembre», preso da un publiredazionale e pubblicato
+  l'11). Le notizie marcate come contenuto sponsorizzato, publiredazionale,
+  advertorial, «in collaborazione con» e simili non entrano più fra le
+  candidate; proposte e selezione non propongono offerte, promozioni,
+  tariffe o scadenze commerciali di una singola azienda; il caporedattore
+  AI rifiuta un articolo che è in sostanza una pubblicità o che racconta
+  come ancora aperta una scadenza o un'offerta già finita alla data di
+  pubblicazione, che ora riceve. Le notizie di mercato, le decisioni di un
+  regolatore sui prezzi e i confronti fra molte offerte restano ammessi.
+
 ## 0.34.5
 
 ### Changed

@@ -67,7 +67,9 @@ SYSTEM = (
     '"why_now": "<why this matters now, from the items>", "format": "<one of: ' + ", ".join(FORMATS) + '>", '
     '"country": "<' + COUNTRY + '>", "section": "<' + SECTION + '>", '
     '"citations": [<ids of the items the proposal relies on>]}. '
-    "Cite at least one id; cite only ids from the list."
+    "Cite at least one id; cite only ids from the list. Never propose an advertisement: a topic whose subject is "
+    "one company's commercial offer, promotion, discount, tariff or sales deadline, or a sponsored text or press "
+    "release selling a product."
 )
 
 

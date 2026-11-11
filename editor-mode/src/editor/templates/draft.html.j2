@@ -7,7 +7,7 @@
     <span class="kicker"><a href="/drafts">{{ _('Bozze') }}</a> · {% if d.translation_of and original %}{{ _('traduzione in {language} di', language=langs.get(d.language, d.language)) }} <a href="/drafts/{{ original.id }}">«{{ original.title|truncate(60) }}»</a>{% else %}{{ _('versione {n}', n=d.version) }}{% endif %} · {{ when(d.created_at) }}</span>
     <div class="row">
       {% set st = {'draft': ('blue', _('Pronta da leggere')), 'needs_review': ('amber', _('Da rivedere a mano')), 'approved': ('green', _('Approvata')), 'discarded': ('', _('Scartata dalla redazione automatica')), 'rejected': ('', _('Rifiutata'))}.get(draft_state(d.status, d.decided_by), ('', d.status)) %}
-      <span class="chip {{ st[0] }}">{{ st[1] }}</span>
+      {% if pubs and pubs|selectattr('status', 'equalto', 'published')|rejectattr('withdrawn_at')|list %}<span class="chip green">{{ _('Pubblicata') }}</span>{% else %}<span class="chip {{ st[0] }}">{{ st[1] }}</span>{% endif %}
       {% if d.decided_by %}<span class="hint">{{ _('Approvata da {who} il {date}', who=d.decided_by, date=when(d.decided_at, 'day')) if d.status == 'approved' else _('Decisa da {who} il {date}', who=d.decided_by, date=when(d.decided_at, 'day')) }}</span>{% endif %}
     </div>
   </div>
@@ -135,7 +135,10 @@
   <div class="col-side">
     <section class="card pad" aria-labelledby="h-pub">
       <h2 id="h-pub">{{ _('Pubblicazione') }}</h2>
+      {% set live_targets = pubs|selectattr('status', 'equalto', 'published')|map(attribute='target_id')|list %}
       {% for p in pubs %}
+      {# A failed try followed by a send that went out is history, not news: Pubblicazioni keeps it. #}
+      {% if not (p.status == 'failed' and p.target_id in live_targets) %}
       <div class="list-row">
         <span>{{ p.name }} · {{ _('bozza') if p.mode == 'draft' else _('subito') }}</span>
         {% set ps = {'pending_approval': ('amber', _('In attesa del direttore')), 'approved': ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
@@ -160,6 +163,7 @@
         </div>
         {% if p.error %}<p class="hint">{{ _("L'ultima modifica sul sito non è riuscita: {e}", e=p.error|truncate(160)) }}</p>{% endif %}
         {% endif %}
+      {% endif %}
       {% endif %}
       {% endfor %}
       {% if pubs and d.status != 'approved' and pubs|selectattr('status', 'equalto', 'published')|list %}

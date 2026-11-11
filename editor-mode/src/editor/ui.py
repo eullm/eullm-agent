@@ -562,7 +562,16 @@ def register(app, ctx) -> None:
                  .where(m.proposal_citations.c.proposal_id == p.c.id).scalar_subquery())
         draft = (select(func.max(m.drafts.c.id)).where(m.drafts.c.proposal_id == p.c.id,
                                                        m.drafts.c.translation_of.is_(None)).scalar_subquery())
-        q = (select(p, m.sites.c.domain, hype.label("hype"), cites.label("citations"), draft.label("draft_id"))
+        # Once the draft went out the plan says so, with the link (Francesco 2026-11-11:
+        # published recipes still read "Bozza pronta").
+        pub = m.publications
+        out = (select(pub.c.external_url).where(pub.c.draft_id == draft, pub.c.status == "published",
+                                                pub.c.withdrawn_at.is_(None))
+               .order_by(pub.c.published_at.desc()).limit(1).scalar_subquery())
+        live = (select(func.count()).select_from(pub).where(pub.c.draft_id == draft, pub.c.status == "published",
+                                                            pub.c.withdrawn_at.is_(None)).scalar_subquery())
+        q = (select(p, m.sites.c.domain, hype.label("hype"), cites.label("citations"), draft.label("draft_id"),
+                    live.label("published"), out.label("published_url"))
              .join(m.sites, m.sites.c.id == p.c.site_id).where(p.c.status.in_(statuses))
              .order_by(p.c.created_at.desc()).limit(limit))
         if site_id is not None:
@@ -1941,7 +1950,13 @@ def register(app, ctx) -> None:
                                         claims.label("claims")).where(d.c.site_id == site.id)
                                  .order_by(d.c.created_at.desc()).limit(300)).all()
                 # Discarded by the automatic newsroom, refused by a person: two different things.
-                rows = [{**r._mapping, "state": draft_state(r.status, r.decided_by)} for r in rows]
+                # Out on the site: "Pubblicata", not "Approvata" (Francesco 2026-11-11).
+                pub = m.publications
+                live = set(s.execute(select(pub.c.draft_id).where(
+                    pub.c.draft_id.in_([r.id for r in rows] or [0]), pub.c.status == "published",
+                    pub.c.withdrawn_at.is_(None))).scalars())
+                rows = [{**r._mapping, "state": "published" if r.id in live else draft_state(r.status, r.decided_by)}
+                        for r in rows]
                 # Each translation right under its original.
                 kids: dict[int, list] = {}
                 shown = {r["id"] for r in rows}
@@ -1987,7 +2002,7 @@ def register(app, ctx) -> None:
             targets = [x for x in s.execute(select(m.publish_targets).where(
                 m.publish_targets.c.site_id == d.site_id, m.publish_targets.c.enabled.is_not(False))).all()
                 if publishing.fits_language(x, d.language)]  # Italian text never goes to the English site
-            pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode,
+            pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode, m.publications.c.target_id,
                                     m.publications.c.external_url, m.publications.c.withdrawn_at,
                                     m.publications.c.updated_at, m.publications.c.published_at, m.publications.c.error,
                                     m.publish_targets.c.name, m.publish_targets.c.kind)
