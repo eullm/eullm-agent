@@ -13,12 +13,13 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from . import drafts, models as m, repo
+from . import drafts, menus, models as m, repo
 from .html_extract import parse_html
 from .i18n import N_
 from .progress import step
@@ -34,6 +35,7 @@ MAX_LINKS = 5
 MAX_TEXT = 2000  # characters of a request
 FOUND = 6  # archive news cited, the closest first
 DAYS = 14  # how far back the archive is searched
+MENU_DAYS = 30  # for a menu: an occasion, not news (the items are kept 30 days)
 MIN_WORDS = 60  # a page with fewer is a landing page, a paywall or a login: not read
 
 # Words of the request that say it is a request, not what it is about.
@@ -177,9 +179,11 @@ def search(s, site_id: int, terms: set[str], skip: list[int], limit: int = FOUND
 
 
 def ask(db, tenant_id: str, site_id: int, request: str, links: list[str], by: str, core,
-        client: httpx.Client | None) -> dict:
+        client: httpx.Client | None, kind: str = "article") -> dict:
     """Write the article asked for. Returns the draft, or why there is none:
-    `no_profile`, or `none` when nothing could be cited."""
+    `no_profile`, or `none` when nothing could be cited. `kind` "menu": a
+    whole menu for the occasion asked for, on a site of recipes (menus.py);
+    its news are searched over the month the archive keeps."""
     request = " ".join(request.split())[:MAX_TEXT]
     links = list(dict.fromkeys(links + links_of(request)))[:MAX_LINKS]
     with db.tenant(tenant_id) as s:
@@ -194,7 +198,8 @@ def ask(db, tenant_id: str, site_id: int, request: str, links: list[str], by: st
     step(N_("Ricerca nell'archivio delle notizie sull'argomento"))
     terms = search_terms(db, tenant_id, site_id, request, language, core)
     with db.tenant(tenant_id) as s:
-        found = search(s, site_id, terms, given)
+        menu = kind == "menu" and menus.is_menu(row.body, SimpleNamespace(format="menu"))
+        found = search(s, site_id, terms, given, days=MENU_DAYS if menu else DAYS)
         items = list(dict.fromkeys(given + found))
         if not items:
             return {"none": True, "unread": unread, "site_id": site_id}
@@ -205,7 +210,8 @@ def ask(db, tenant_id: str, site_id: int, request: str, links: list[str], by: st
         title = request if len(request) <= 200 else request[:199].rsplit(" ", 1)[0] + "…"
         pid = s.execute(insert(m.proposals).values(
             tenant_id=tenant_id, site_id=site_id, topic_id=topic, profile_id=prof, opportunity=100.0,
-            title=title, angle=request, why_now="", format=FORMAT, generated_by="person", status="accepted",
+            title=title, angle=request, why_now="", format="menu" if menu else FORMAT, generated_by="person",
+            status="accepted",
             decided_by=by, basis={"request": request, "links": links, "unread": unread},
         ).returning(m.proposals.c.id)).scalar_one()
         s.execute(insert(m.proposal_citations).values(

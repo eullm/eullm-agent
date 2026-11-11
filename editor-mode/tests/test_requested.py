@@ -5,6 +5,7 @@ import json
 import re
 
 import httpx
+import pytest
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -129,4 +130,34 @@ def test_the_desk_takes_a_request_and_queues_it(db, tenant):
     with db.tenant(tenant) as s:
         jobs = s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "request")).scalars().all()
     assert jobs == [{"site_id": site_id, "text": "Un articolo sui prezzi di Starlink in Italia",
-                     "links": ["https://press.example/starlink"], "by": "editor-user"}]
+                     "links": ["https://press.example/starlink"], "by": "editor-user", "kind": "article"}]
+    assert "Un menù intero" not in c.get("/").text  # not a site of recipes
+    c.post("/ui/requests", data={"site_id": site_id, "text": "Menù della Vigilia di pesce", "kind": "menu"})
+    with db.tenant(tenant) as s:
+        kinds = [a["kind"] for a in s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "request")).scalars()]
+    assert kinds == ["article", "article"]
+
+
+def test_a_site_of_recipes_asks_for_a_whole_menu(db, tenant, monkeypatch):
+    from editor import drafts, profile as prof
+
+    site_id = setup_site(db, tenant)
+    with db.tenant(tenant) as s:
+        assert prof.mark_recipe_site(s, site_id, ["I Primi", "I Secondi", "I Dessert"])
+    c = TestClient(create_app(db, core=core()))
+    c.post("/login", data={"token": auth.create_token(db, tenant, "editor-user", "editor")})
+    assert "Un menù intero per un'occasione" in c.get("/").text
+    c.post("/ui/requests", data={"site_id": site_id, "text": "Menù della Vigilia di pesce per otto", "kind": "menu"})
+    with db.tenant(tenant) as s:
+        args = s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "request")).scalar()
+    assert args["kind"] == "menu"
+    written = []
+    monkeypatch.setattr(drafts, "write_draft", lambda db_, t, pid, core_, client: written.append(pid) or 0)
+    with respx.mock(assert_all_called=False) as router:
+        router.post(CORE).mock(return_value=chat(json.dumps({"terms": ["Starlink", "prezzi"]})))
+        with pytest.raises(Exception):  # the stub writes no draft: only the proposal matters here
+            rq.ask(db, tenant, site_id, "Menù della Vigilia: Starlink prezzi", [], "francesco", core(), None,
+                   kind="menu")
+    with db.tenant(tenant) as s:
+        fmt = s.execute(select(m.proposals.c.format).where(m.proposals.c.id == written[0])).scalar()
+    assert fmt == "menu"

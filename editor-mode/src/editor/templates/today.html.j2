@@ -69,6 +69,13 @@
     {% if request_sites|length > 1 %}
     <label class="field">{{ _('Sito') }}<select name="site_id" required>{% for x in request_sites %}<option value="{{ x.id }}">{{ x.domain }}</option>{% endfor %}</select></label>
     {% else %}<input type="hidden" name="site_id" value="{{ request_sites[0].id }}">{% endif %}
+    {% if menu_sites %}
+    <fieldset class="field" style="border: 0; padding: 0; margin: 0;"><legend>{{ _('Cosa chiedi') }}</legend>
+      <label class="row" style="gap: 6px;"><input type="radio" name="kind" value="article" checked> {{ _('Un articolo o una ricetta') }}</label>
+      <label class="row" style="gap: 6px;"><input type="radio" name="kind" value="menu"> {{ _('Un menù intero per un\'occasione') }}</label>
+      <span class="hint">{{ _('Menù: scrivi l\'occasione, per esempio «Menù della Vigilia di pesce» o «Pranzo di Natale vegetariano per 8». La redazione sceglie da 3 a 5 portate, riusa le ricette del sito che vanno bene e scrive solo quelle che mancano, ognuna come bozza a sé. Solo per i siti di ricette; ogni ricetta nuova conta come un articolo.') }}</span>
+    </fieldset>
+    {% endif %}
     <label class="field">{{ _('Cosa vuoi nell\'articolo') }}<textarea name="text" rows="3" required minlength="15" maxlength="2000" placeholder="{{ _('Es.: un articolo per titolari di piccole imprese sugli incentivi per l\'intelligenza artificiale: cosa prevedono, chi può chiederli, entro quando.') }}"></textarea></label>
     <label class="field">{{ _('Link (facoltativi, uno per riga, al massimo 5)') }}<textarea name="links" rows="2" placeholder="https://"></textarea></label>
     <div class="stack-sm"><button class="btn pri" type="submit">{{ _('Scrivi la bozza') }}</button>

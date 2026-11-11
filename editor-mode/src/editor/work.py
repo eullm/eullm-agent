@@ -152,11 +152,13 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         try:
             if http_factory is None:
                 out = requested.ask(db, tenant, args["site_id"], args["text"], args.get("links") or [],
-                                    args.get("by") or "persona", core_for(tenant), None)
+                                    args.get("by") or "persona", core_for(tenant), None,
+                                    kind=args.get("kind") or "article")
             else:
                 with http_factory() as client:
                     out = requested.ask(db, tenant, args["site_id"], args["text"], args.get("links") or [],
-                                        args.get("by") or "persona", core_for(tenant), client)
+                                        args.get("by") or "persona", core_for(tenant), client,
+                                    kind=args.get("kind") or "article")
         except quotas.QuotaExceeded as e:
             return {"site_id": args["site_id"], "skipped": str(e)}
         if out.get("draft_id") and imager is not None:  # the cover follows, as a job of its own
