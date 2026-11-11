@@ -96,3 +96,16 @@ def copied_title(title: str, headlines) -> str | None:
         if theirs and (mine == theirs or SequenceMatcher(None, mine, theirs).ratio() >= TITLE_COPY):
             return h
     return None
+
+
+# An item that says it is paid for (Francesco 2026-11-11: an energy offer
+# went out as news): no proposal is made from it.
+SPONSORED = re.compile(
+    r"\b(sponsori[sz]{1,2}at[oaie]|sponsored|pubbli-?redazional[ei]|publiredazional[ei]|advertorial|"
+    r"contenuto (?:pubblicitario|promozionale|sponsorizzato)|paid (?:post|content)|partner content|"
+    r"in collaborazione con|in partnership con|anzeige|publireportage|publirreportaje|contenido patrocinado)\b"
+    r"|\[(?:ad|adv|pr|promo)\]", re.I)
+
+
+def sponsored(*texts: str) -> bool:
+    return any(SPONSORED.search(x or "") for x in texts)

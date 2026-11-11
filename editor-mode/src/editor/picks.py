@@ -32,7 +32,7 @@ from . import news_base, usage
 from .core_client import CoreClient, CoreError
 from .opportunity import novelty
 from .proposals import COUNTRY, FORMATS, SECTION, _options_validator, full_line, mix
-from .text import tokens
+from .text import sponsored, tokens
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ SYSTEM = (
     '1-3 sentences>", "why_now": "<why it matters to these readers now>", "format": "<one of: '
     + ", ".join(FORMATS) + '>", "country": "<' + COUNTRY + '>", "section": "<' + SECTION + '>", '
     '"citations": [<the id of the item; first the main one>]}}]}}. '
-    "Cite only ids from the list."
+    "Cite only ids from the list. Never propose an advertisement: an item whose subject is one company's commercial offer, promotion, discount, tariff or sales deadline, or a sponsored text or press release selling a product."
 )
 
 
@@ -163,6 +163,8 @@ def candidates(s, site_id: int, profile: dict, now: datetime) -> list[Candidate]
     told_by = {t: len(v) for t, v in voices.items()}
     out = []
     for r in rows:
+        if sponsored(r.title, (r.summary or "")[:600]):
+            continue  # paid content is never news to propose
         near = closeness(set(tokens(r.title)) | set(tokens((r.summary or "")[:400])), profile)
         if near is None:
             continue

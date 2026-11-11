@@ -80,6 +80,13 @@ RULES = [
     "official statistic, a decision, a paper): the document wins over the outlets reporting it",
     "in its analysis or commentary, states as news a cause, a consequence, a forecast, a number or a fact that "
     "no source gives, or presents the newsroom's own reading as an established fact",
+    # Francesco 2026-11-11: an energy supplier's offer "expiring today" went out as news (the day after).
+    "is in substance an advertisement: its subject is one company's commercial offer, promotion, discount, "
+    "tariff, price list, coupon or sales deadline, or it reads as a sponsored text or a press release selling a "
+    "product (market news that concerns companies, a regulator's decision on prices or a comparison of many "
+    "offers is fine)",
+    "tells as still open, or as coming, a deadline, an offer or an event that has already ended by the date of "
+    "publication given",
 ]
 
 def _check_system(rules: list[str], what: str, joined: str) -> str:
@@ -1075,6 +1082,7 @@ def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: b
              f"search description: {seo.get('description') or ''}"]
     recent = [] if evening else recent_titles(db, tenant_id, d)
     prompt = "\n".join(lines + [f"Language: {d.language}", f"Reasons in: {reasons_language(db, tenant_id, d)}",
+                               f"Date of publication: {datetime.now(UTC).date().isoformat()}",
                                "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id),
                                *(["The site's articles of the last two days:", *(f"- {x}" for x in recent)]
                                  if recent else [])])
