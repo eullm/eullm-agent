@@ -403,6 +403,20 @@ MENU_PLACES = ("primary", "main", "menu-1", "primary-menu", "main-menu", "header
 MENU_NAME = "Redazia"
 
 
+class _Staged:
+    """A repository as it will be once the files staged for the same commit
+    are in: what is staged is read from there, the rest from GitHub."""
+
+    def __init__(self, gh, staged: dict):
+        self._gh, self._staged = gh, staged
+
+    def file(self, path: str, ref: str):
+        return self._staged[path] if path in self._staged else self._gh.file(path, ref)
+
+    def __getattr__(self, name):
+        return getattr(self._gh, name)
+
+
 class Publisher:
     def __init__(self, http: httpx.Client | None = None, resolver=None, telegram_api="https://api.telegram.org",
                  public_url: str = "", sleep=None):
@@ -412,13 +426,19 @@ class Publisher:
         self.telegram_api = telegram_api
         self.sleep = sleep or __import__("time").sleep  # waiting for a site's checks
 
-    def run(self, db, tenant_id: str, pub_id: int) -> dict:
+    def run(self, db, tenant_id: str, pub_id: int, together=()) -> dict:
         """Execute an approved publication. Refuses anything not approved.
 
         The publication is marked ``sending`` before the request leaves: two
         workers cannot both send it, and a process that dies mid-way leaves
         it ``sending`` for a person to check on the CMS (see
-        `mark_uncertain_failed`) instead of sending it again."""
+        `mark_uncertain_failed`) instead of sending it again.
+
+        `together`: other approved publications, the article's translations,
+        that go in the same commit when they are for the same GitHub
+        repository and branch; any other is sent on its own after it."""
+        if together:
+            return self._run_together(db, tenant_id, pub_id, list(together))
         with db.tenant(tenant_id) as s:
             pub = s.execute(update(m.publications).where(
                 m.publications.c.id == pub_id, m.publications.c.status == "approved",
@@ -471,6 +491,87 @@ class Publisher:
         key = (target.config or {}).get("indexnow_key")
         if key and ext_url and pub.mode == "publish":
             out["indexnow"] = self.indexnow(ext_url, key)
+        return out
+
+    def _run_together(self, db, tenant_id: str, pub_id: int, others: list[int]) -> dict:
+        p, tg = m.publications.c, m.publish_targets.c
+
+        def where(t):
+            c = t.config or {}
+            return (t.kind, c.get("repo"), c.get("branch"), c.get("api"), t.secret_env)
+
+        with db.tenant(tenant_id) as s:
+            rows = {r.pub_id: r for r in s.execute(select(p.id.label("pub_id"), m.publish_targets).join(
+                m.publish_targets, tg.id == p.target_id).where(p.id.in_([pub_id, *others]))).all()}
+        first = rows.get(pub_id)
+        same = [i for i in others if first is not None and first.kind == "github" and i in rows
+                and where(rows[i]) == where(first)]
+        alone = [i for i in others if i not in same]
+        if not same:
+            out = self.run(db, tenant_id, pub_id)
+        else:
+            out = self._send_together(db, tenant_id, [pub_id, *same])
+        for i in alone:
+            self.run(db, tenant_id, i)
+        return out
+
+    def _send_together(self, db, tenant_id: str, ids: list[int]) -> dict:
+        """The publications of `ids`, all for one GitHub repository, in one
+        commit. Those no longer approved (already sent) are left out."""
+        p = m.publications.c
+        with db.tenant(tenant_id) as s:
+            pubs = s.execute(update(m.publications).where(
+                p.id.in_(ids), p.status == "approved", p.decided_by.is_not(None),
+            ).values(status="sending", attempts=p.attempts + 1).returning(m.publications)).all()
+            pubs = sorted(pubs, key=lambda r: ids.index(r.id))
+            if not pubs:
+                cur = s.execute(select(m.publications).where(p.id == ids[0])).first()
+                if cur is None:
+                    raise PublishError("publication not found")
+                return {"status": cur.status, "url": cur.external_url}
+            targets = {t.id: t for t in s.execute(select(m.publish_targets).where(
+                m.publish_targets.c.id.in_({x.target_id for x in pubs}))).all()}
+            images = {}
+            for x in pubs:
+                images[x.id] = s.execute(select(m.draft_images.c.mime, m.draft_images.c.content,
+                                                m.draft_images.c.alt, m.draft_images.c.token)
+                                         .where(m.draft_images.c.draft_id == x.draft_id)).first()
+        head, rest = pubs[0], pubs[1:]
+        target = targets[head.target_id]
+        more = [(targets[x.target_id], x, images[x.id]) for x in rest]
+        secret = None
+        try:
+            secret = resolve_secret(db, target) if target.secret_env else None
+            for pause in (*GITHUB_AGAIN, None):
+                try:
+                    ext_id, urls = self._github(target, head, None, secret, images[head.id], more=more)
+                    break
+                except (PublishError, httpx.HTTPError) as e:
+                    if pause is None or not _github_hiccup(e):
+                        raise
+                    log.warning("GitHub hiccup publishing %s (%s): trying again in %s s", head.id, e, pause)
+                    self.sleep(pause)
+        except (PublishError, httpx.HTTPError, KeyError, ValueError) as e:
+            msg = f"{type(e).__name__}: {e}"
+            if secret:
+                msg = msg.replace(secret, "***")
+            with db.tenant(tenant_id) as s:
+                s.execute(update(m.publications).where(p.id.in_([x.id for x in pubs])).values(
+                    status="failed", error=msg[:500]))
+            return {"status": "failed", "error": msg}
+        with db.tenant(tenant_id) as s:
+            for x, url in zip(pubs, urls):
+                s.execute(update(m.publications).where(p.id == x.id).values(
+                    status="published", published_at=datetime.now(UTC), external_id=ext_id, external_url=url,
+                    error=None))
+            if head.mode == "publish":
+                seo.remember_published(s, tenant_id, target.site_id)
+        out = {"status": "published", "url": urls[0], "together": [x.id for x in rest]}
+        if head.mode == "publish":
+            for x, url in zip(pubs, urls):
+                key = (targets[x.target_id].config or {}).get("indexnow_key")
+                if key and url:
+                    out.setdefault("indexnow", self.indexnow(url, key))
         return out
 
     # --- after publication: the director keeps the article in hand ----------------------
@@ -851,7 +952,8 @@ class Publisher:
         r.raise_for_status()
         return str(r.json().get("result", {}).get("message_id")), None
 
-    def _github(self, target, pub, cms_url, secret, image=None, op: str = "publish", payload: dict | None = None):
+    def _github(self, target, pub, cms_url, secret, image=None, op: str = "publish", payload: dict | None = None,
+                more=()):
         """The article committed to the repository the site is deployed from
         (Vercel, Netlify, GitHub Pages), in the shape of the blog's own posts,
         with its cover, a line in llms.txt and, if the site keeps it as a
@@ -863,7 +965,13 @@ class Publisher:
         ``verify: false`` it goes straight on the site's branch. "draft":
         the pull request only, for a person to merge. A send interrupted
         after the merge is safe to repeat: the article already there with
-        the same content counts as sent, with other content it is an error."""
+        the same content counts as sent, with other content it is an error.
+
+        `more`: other publications, as (target, publication, image), sent in
+        the same commit, the translations of the article on the same
+        repository: the site builds once for all its languages (Francesco
+        2026-11-13, Vercel bills each build). Then the second value returned
+        is the list of every article's address, this one first."""
         from . import delivery, sitegit
 
         api = (target.config.get("api") or GITHUB_API).rstrip("/")
@@ -891,7 +999,9 @@ class Publisher:
         # is built again on top of the site as it is now, at most twice more.
         for attempt in range(3):
             try:
-                return self._github_send(gh, cfg, pub, base, image, delivery, sitegit, op, payload or pub.payload)
+                items = [(cfg, pub, image, payload or pub.payload)] + [(t.config, p, i, p.payload) for t, p, i in more]
+                sha, urls = self._github_send(gh, items, base, delivery, sitegit, op)
+                return (sha, urls) if more else (sha, urls[0])
             except sitegit.GitHubError as e:
                 text_ = str(e).lower()
                 if attempt < 2 and "merge" in text_ and ("conflict" in text_ or "base branch was modified" in text_):
@@ -899,10 +1009,64 @@ class Publisher:
                     continue
                 raise PublishError(str(e)) from None
 
-    def _github_send(self, gh, cfg, pub, base, image, delivery, sitegit, op="publish", payload=None):
+    def _github_send(self, gh, items, base, delivery, sitegit, op="publish"):
+        """One commit with the articles of `items`, (config, publication, image,
+        payload) each: each one sees the files of those before it, so their
+        lines in llms.txt and the sitemap add up."""
+        staged: dict[str, bytes | None] = {}
+        view = _Staged(gh, staged)
+        urls, titles, first_url = [], [], None
+        for cfg, _pub, image, payload in items:
+            files, url, blob_url = self._github_files(view, cfg, base, image, delivery, sitegit, op, payload)
+            staged.update(files)
+            urls.append(url or blob_url)
+            titles.append(payload["title"])
+            first_url = url if len(urls) == 1 else first_url
+        if not staged:  # nothing of it on the site any more, or all there already
+            return None, urls
+        files = list(staged.items())
+        cfg, pub, title, article_url = items[0][0], items[0][1], titles[0], first_url
+        message = {"publish": "editor", "update": "editor: update", "withdraw": "editor: withdraw"}[op] + f": {title}"
+        if len(titles) > 1:
+            message += "".join(f"\n\n{x}" for x in titles[1:])
+        if pub.mode == "publish" and cfg.get("verify") is False:
+            for attempt in (1, 2):  # the branch moved under us: once more on top of it
+                sha = gh.commit(gh.head(base), files, message)
+                try:
+                    gh.point(base, sha)
+                    break
+                except sitegit.GitHubError:
+                    if attempt == 2:
+                        raise
+            return sha, urls
+
+        branch = f"editor/{op}-{pub.id}"
+        sha = gh.commit(gh.head(base), files, message)
+        gh.point(branch, sha, create=True)
+        note = {"publish": "Articolo di Redazia.", "update": "Articolo aggiornato da Redazia.",
+                "withdraw": "Articolo ritirato da Redazia."}[op] + (f" Indirizzo: {article_url}" if article_url else "")
+        pr = gh.pull(branch, base, title, note)
+        if pub.mode == "draft":
+            return str(pr["number"]), [pr["html_url"]] + urls[1:]
+        minutes = float(cfg.get("wait_minutes") or 15)
+        state, link = gh.wait(sha, minutes)
+        if state == "failure":
+            raise PublishError(f"the site's checks failed ({link or pr['html_url']}): the site did not change, "
+                               f"pull request {pr['html_url']} is open")
+        if state == "timeout":
+            raise PublishError(f"the site's checks did not finish in {minutes:g} minutes: the site did not change, "
+                               f"pull request {pr['html_url']} is open")
+        merged = gh.merge(pr["number"], message)
+        gh.drop(branch)
+        return merged or sha, [article_url or pr["html_url"]] + urls[1:]
+
+    def _github_files(self, gh, cfg, base, image, delivery, sitegit, op, payload):
+        """The files of one article for the commit: the post, its cover, and
+        llms.txt and the sitemap as they become with it. Returns them with
+        the article's address (None if unknown) and its file on GitHub; no
+        files when the site already has it."""
         import posixpath
 
-        payload = payload or pub.payload
         title = payload["title"]
         slug = re.sub(r"[^a-z0-9-]+", "-", (payload.get("slug") or "").lower()).strip("-") or "article"
         published = next((x.get("datePublished") for x in payload.get("jsonld") or [] if x.get("datePublished")), None)
@@ -974,10 +1138,10 @@ class Publisher:
                         files.append((f"{folder}/{name}", None))
         elif existing is not None and op == "publish":
             if existing == content:
-                return None, article_url or blob_url
+                return [], article_url, blob_url
             raise PublishError(f"{post_path} already exists in {gh.repo} with other content: not overwritten")
         elif existing == content and not files:
-            return None, article_url or blob_url
+            return [], article_url, blob_url
         if op != "withdraw":
             files.append((post_path, content))
         if article_url:
@@ -993,37 +1157,5 @@ class Publisher:
                         else sitegit.add_to_sitemap(text_, article_url, when)
                 if changed and changed != text_:
                     files.append((path, changed.encode()))
-        if not files:  # nothing of it on the site any more
-            return None, article_url or blob_url
+        return files, article_url, blob_url
 
-        message = {"publish": "editor", "update": "editor: update", "withdraw": "editor: withdraw"}[op] + f": {title}"
-        if pub.mode == "publish" and cfg.get("verify") is False:
-            for attempt in (1, 2):  # the branch moved under us: once more on top of it
-                sha = gh.commit(gh.head(base), files, message)
-                try:
-                    gh.point(base, sha)
-                    break
-                except sitegit.GitHubError:
-                    if attempt == 2:
-                        raise
-            return sha, article_url or blob_url
-
-        branch = f"editor/{op}-{pub.id}"
-        sha = gh.commit(gh.head(base), files, message)
-        gh.point(branch, sha, create=True)
-        note = {"publish": "Articolo di Redazia.", "update": "Articolo aggiornato da Redazia.",
-                "withdraw": "Articolo ritirato da Redazia."}[op] + (f" Indirizzo: {article_url}" if article_url else "")
-        pr = gh.pull(branch, base, title, note)
-        if pub.mode == "draft":
-            return str(pr["number"]), pr["html_url"]
-        minutes = float(cfg.get("wait_minutes") or 15)
-        state, link = gh.wait(sha, minutes)
-        if state == "failure":
-            raise PublishError(f"the site's checks failed ({link or pr['html_url']}): the site did not change, "
-                               f"pull request {pr['html_url']} is open")
-        if state == "timeout":
-            raise PublishError(f"the site's checks did not finish in {minutes:g} minutes: the site did not change, "
-                               f"pull request {pr['html_url']} is open")
-        merged = gh.merge(pr["number"], message)
-        gh.drop(branch)
-        return merged or sha, article_url or pr["html_url"]

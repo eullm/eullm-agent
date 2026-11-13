@@ -121,7 +121,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         return autopilot.finish(db, tenant, did, core_for(tenant), publish_job(tenant, args["site_id"]),
                                 lambda language, final: enqueue(db, tenant, "translate", f"draft {final} {language}", {
                                     "draft_id": final, "language": language, "site_id": args["site_id"], "auto": True}),
-                                rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover)
+                                rewrite=lambda _old, notes: write("auto_fix", notes), cover=cover,
+                                translate_now=translate_now(tenant))
 
     def wpmenu(tenant: str, subject: str, args: dict) -> dict:
         """The WordPress menu with the site's sections."""
@@ -198,11 +199,16 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                                     "draft_id": final, "language": language, "site_id": site_id, "auto": True}),
                                 rewrite=lambda _old, notes: ev.write(db, tenant, site_id, core_for(tenant), now, tz,
                                                                      notes=notes, proposal_id=d.proposal_id),
-                                cover=cover)
+                                cover=cover, translate_now=translate_now(tenant))
 
     def publish_job(tenant: str, site_id):
-        return lambda pub_id: enqueue(db, tenant, "publish", f"publication {pub_id}",
-                                      {"publication_id": pub_id, "site_id": site_id})
+        # `together`: the article's translations, in the same commit when they go to the same repository.
+        return lambda pub_id, together=(): enqueue(db, tenant, "publish", f"publication {pub_id}", {
+            "publication_id": pub_id, "site_id": site_id, **({"together": list(together)} if together else {})})
+
+    def translate_now(tenant: str):
+        return lambda language, draft_id: tr.translate(db, tenant, draft_id, language,
+                                                       need(core_for(tenant), "model (Core)"), pay=False)
 
     def brief(tenant: str, subject: str, args: dict) -> dict:
         step(N_("Il modello ricava il profilo dal contesto"))
@@ -262,11 +268,13 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         return {"site_id": args["site_id"], "proposals": len(ids)}
 
     def publish(tenant: str, subject: str, args: dict) -> dict:
-        res = need(publisher, "publisher").run(db, tenant, args["publication_id"])
+        together = args.get("together") or []
+        res = need(publisher, "publisher").run(db, tenant, args["publication_id"], together)
         if res.get("status") == "failed":
             raise RuntimeError(res.get("error") or "publication failed")
         # The last new recipe of a menu online: the menu waiting for it goes out.
-        menus.after_publication(db, tenant, args["publication_id"], publish_job(tenant, args.get("site_id")))
+        for pid in (args["publication_id"], *together):
+            menus.after_publication(db, tenant, pid, publish_job(tenant, args.get("site_id")))
         return {"url": res.get("url"), "indexnow": res.get("indexnow")}
 
     def change(tenant: str, subject: str, args: dict) -> dict:

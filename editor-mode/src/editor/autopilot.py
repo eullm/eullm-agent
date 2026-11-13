@@ -1105,8 +1105,9 @@ def target_for(s, site_id: int, cfg: dict, language: str | None, main: bool = Tr
     return next((r for r in fits if r.id == cfg.get("target_id")), fits[0] if fits else None)
 
 
-def _send(db, tenant_id: str, d, cfg: dict, main: bool, publish) -> dict:
-    """Label, approve and publish a draft that passed."""
+def _send(db, tenant_id: str, d, cfg: dict, main: bool, publish, hold: bool = False) -> dict:
+    """Label, approve and publish a draft that passed; with `hold` the
+    publication is only made ready, for the caller to send with others."""
     with db.tenant(tenant_id) as s:
         s.execute(update(m.drafts).where(m.drafts.c.id == d.id).values(
             body_md=add_label(d.body_md, d.language, cfg["credit"])))
@@ -1118,16 +1119,32 @@ def _send(db, tenant_id: str, d, cfg: dict, main: bool, publish) -> dict:
     step(N_("Pubblicazione su {name}"), name=target.name)
     pub_id = publishing.request(db, tenant_id, d.id, target.id, "publish", AUTO)
     publishing.decide(db, tenant_id, pub_id, True, AUTO)
-    publish(pub_id)
+    if not hold:
+        publish(pub_id)
     return {"approved": True, "target": target.name, "publication_id": pub_id}
 
 
+def one_commit(s, site_id: int, cfg: dict, language: str | None, languages: list[str]) -> bool:
+    """Whether the article and its translations go to the same GitHub
+    repository and branch: then they are sent in one commit, so the site
+    builds once (Francesco 2026-11-13: Vercel bills every build)."""
+    def where(t):
+        c = (t.config or {}) if t is not None else {}
+        return t is not None and t.kind == "github" and (c.get("repo"), c.get("branch"), c.get("api"), t.secret_env)
+
+    first = where(target_for(s, site_id, cfg, language, True))
+    return bool(first) and all(where(target_for(s, site_id, cfg, x, False)) == first for x in languages)
+
+
 def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, translate=lambda language, draft_id: None,
-           rewrite=None, cover=None, rounds: int = 0, corrected: bool = False) -> dict:
+           rewrite=None, cover=None, rounds: int = 0, corrected: bool = False, translate_now=None) -> dict:
     """After the draft: the guardrails, the editor-in-chief, the cover, the
     label, the approval and the publication. `publish(pub_id)` queues the
     sending, `translate(language, draft_id)` a translation into each of the site's
-    languages, `rewrite(draft_id, notes)` writes the article again with the
+    languages, `translate_now(language, draft_id)` writes it here and returns
+    its draft: when the article and its translations go to the same GitHub
+    repository they are then published together, `publish(pub_id, others)`,
+    in one commit. `rewrite(draft_id, notes)` writes the article again with the
     stronger model and returns the new draft, `cover(draft_id)` draws it.
 
     With on_problem "fix" nothing waits for a person: what can be fixed is
@@ -1248,9 +1265,29 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
             log.warning("cover for draft %s failed: %s", draft_id, e)
     with db.tenant(tenant_id) as s:
         d = s.execute(select(m.drafts).where(m.drafts.c.id == draft_id)).first()
-    res = {**out, **_send(db, tenant_id, d, cfg, True, publish)}
     with db.tenant(tenant_id) as s:
         langs = tr.missing(s, draft_id)
+        together = bool(translate_now and langs and one_commit(s, d.site_id, cfg, d.language, langs))
+    res = {**out, **_send(db, tenant_id, d, cfg, True, publish, hold=together)}
+    if together and res.get("publication_id"):
+        others = []
+        for language in langs:
+            step(N_("Traduzione dell'articolo"))
+            try:
+                tid = translate_now(language, draft_id)
+            except Exception as e:  # the article does not wait: this language follows on its own
+                log.warning("translation of draft %s into %s failed: %s", draft_id, language, e)
+                translate(language, draft_id)
+                continue
+            done = finish_translation(db, tenant_id, tid, publish, hold=True)
+            if done.get("publication_id"):
+                others.append(done["publication_id"])
+        if others:
+            publish(res["publication_id"], others)
+        else:
+            publish(res["publication_id"])
+        res["translations"] = langs
+        return res
     for language in langs:
         translate(language, draft_id)
     if langs:
@@ -1325,7 +1362,7 @@ def owns(db, tenant_id: str, draft_id: int) -> bool:
     return by == AUTO and settings_of(body)["enabled"]
 
 
-def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
+def finish_translation(db, tenant_id: str, draft_id: int, publish, hold: bool = False) -> dict:
     """A translation of an article the editor-in-chief let through: the
     same sentences and sources, so it only has to pass its own checks."""
     with db.tenant(tenant_id) as s:
@@ -1340,7 +1377,7 @@ def finish_translation(db, tenant_id: str, draft_id: int, publish) -> dict:
     if d.status == "needs_review":  # the original stays published; this language is skipped
         return _stop(db, tenant_id, d, [t("alcune frasi non superano i controlli sulle fonti", lang)], out,
                      discard=cfg["on_problem"] == "fix")
-    return {**out, **_send(db, tenant_id, d, cfg, False, publish)}
+    return {**out, **_send(db, tenant_id, d, cfg, False, publish, hold)}
 
 
 def left_out(s, site_id: int, cfg: dict, now: datetime) -> int:

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.36.2
+
+### Changed
+
+- **Articolo e traduzioni nello stesso commit** (Francesco, 13 novembre:
+  Vercel fa pagare ogni build). Quando l'originale e le sue traduzioni
+  vanno nello stesso repository GitHub, la redazione automatica scrive
+  prima le traduzioni e poi manda tutto in un solo commit: il sito si
+  ricostruisce una volta sola invece di una per lingua. Se una traduzione
+  non riesce, l'articolo esce lo stesso e quella lingua segue da sola,
+  come prima. Su WordPress e webhook non cambia niente.
+
 ## 0.36.1
 
 ### Added
