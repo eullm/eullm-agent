@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.36.3
+
+### Fixed
+
+- **Il Punto della Sera restava bozza due sere di fila** (Francesco, 13
+  novembre). Il direttore AI scriveva frasi come «è una lettura della
+  redazione: nessuna fonte collega i due fatti», che il caporedattore
+  rifiuta perché parlano delle fonti. Ora le letture si scrivono e basta,
+  senza commentare le fonti, e i fatti restano nell'ordine e alle date
+  degli articoli. Il caporedattore può togliere fino a dodici frasi invece
+  di sei, perché il Punto della Sera è lungo.
+- **Notizie di una sola testata scritte e poi scartate.** Quando una
+  notizia ha una sola testata, la redazione la scrive lo stesso (le testate
+  minime sono una preferenza), ma il caporedattore la scartava dopo, a
+  spese pagate, perché le direttive chiedono due fonti. Ora sa che la
+  notizia ha una sola testata e non la scarta per questo.
+
 ## 0.36.2
 
 ### Changed

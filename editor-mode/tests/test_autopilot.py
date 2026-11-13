@@ -317,6 +317,20 @@ def _written(db, tenant, again=None):
     return did, site_id, (pid, cited)
 
 
+def test_a_story_one_outlet_told_is_not_refused_for_that(db, tenant, monkeypatch):
+    # Francesco 2026-11-13: articles from one outlet written, then discarded for citing one outlet.
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    did, site_id, _ = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=2, sections=["Rete"])
+    monkeypatch.setattr(ap, "source_count", lambda s, proposal_id, most: 1)  # only one outlet has the story
+    with respx.mock() as router:
+        check = router.post(CORE).mock(return_value=chat(json.dumps({"publish": True, "problems": [], "section": "rete"})))
+        ap.finish(db, tenant, did, core(), lambda pid, together=(): None)
+        asked = json.loads(check.calls[0].request.content)["messages"]
+    assert ap.ONE_OUTLET in asked[-1]["content"]
+    assert "up to twelve sentences" in ap.EVENING_CHECK_SYSTEM and "up to six sentences" in ap.CHECK_SYSTEM
+
+
 def test_on_one_repository_the_article_and_its_translation_go_out_together(db, tenant, monkeypatch):
     # Vercel bills every build (Francesco 2026-11-13): IT and EN in one commit, not two.
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
