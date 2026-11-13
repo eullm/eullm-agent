@@ -317,6 +317,41 @@ def _written(db, tenant, again=None):
     return did, site_id, (pid, cited)
 
 
+def test_on_one_repository_the_article_and_its_translation_go_out_together(db, tenant, monkeypatch):
+    # Vercel bills every build (Francesco 2026-11-13): IT and EN in one commit, not two.
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "GH"), "ghp_test123")
+    did, site_id, prop = _written(db, tenant)
+    settings(db, tenant, site_id, min_sources=1, sections=["Rete", "Mondo"])
+    main = pub.add_target(db, tenant, site_id, "github", "sito", {"repo": "me/site", "path": "content/it"}, "GH")
+    english = pub.add_target(db, tenant, site_id, "github", "site en", {"repo": "me/site", "path": "content/en",
+                                                                        "language": "en"}, "GH")
+    tr.set_languages(db, tenant, site_id, ["en"])
+    sent, later = [], []
+    with respx.mock() as router:
+        router.post(CORE).mock(side_effect=[chat(json.dumps({"publish": True, "problems": [], "section": "rete"})),
+                                            chat(json.dumps(ENGLISH))])
+        out = ap.finish(db, tenant, did, core(), lambda pid, together=(): sent.append((pid, list(together))),
+                        lambda language, d: later.append(language),
+                        translate_now=lambda language, d: tr.translate(db, tenant, d, language, core(), pay=False))
+    assert later == [] and out["translations"] == ["en"] and len(sent) == 1
+    first, others = sent[0]
+    with db.tenant(tenant) as s:
+        rows = {r.id: r.target_id for r in s.execute(select(m.publications)).all()}
+    assert first == out["publication_id"] and rows[first] == main and [rows[x] for x in others] == [english]
+    # A translation that fails does not hold the article back: it follows on its own.
+    did2, _, _ = _written(db, tenant, prop)
+    sent.clear()
+
+    def broken(language, d):
+        raise RuntimeError("model down")
+    with respx.mock() as router:
+        router.post(CORE).mock(return_value=chat(json.dumps({"publish": True, "problems": [], "section": "rete"})))
+        out = ap.finish(db, tenant, did2, core(), lambda pid, together=(): sent.append((pid, list(together))),
+                        lambda language, d: later.append(language), translate_now=broken)
+    assert sent == [(out["publication_id"], [])] and later == ["en"]
+
+
 def test_the_editor_in_chief_lets_it_through_or_stops_it(db, tenant, monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
     did, site_id, prop = _written(db, tenant)

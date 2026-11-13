@@ -328,6 +328,34 @@ def test_github_without_checks_merges_and_a_repeated_send_is_safe(db, tenant, mo
     assert out["status"] == "failed" and "other content" in out["error"]
 
 
+def test_github_publications_sent_together_make_one_commit(db, tenant, monkeypatch):
+    # The article and its translation on the same repository: one commit, so the site builds once.
+    from github_fake import FakeGitHub
+    did, site_id = approved_draft(db, tenant)
+    it = _target(db, tenant, site_id, monkeypatch, path="content/it", verify=False,
+                 url="https://sito.it/articoli/{slug}")
+    en = _target(db, tenant, site_id, monkeypatch, path="content/en", verify=False,
+                 url="https://sito.it/en/articles/{slug}")
+    gh = FakeGitHub({"README.md": "sito", "public/llms.txt": "# Sito\n"})
+    ids = []
+    for t in (it, en):
+        ids.append(pub.request(db, tenant, did, t, "publish", "redazione"))
+        pub.decide(db, tenant, ids[-1], True, "francesco")
+    before = len(gh.commits)
+    with respx.mock(assert_all_called=False) as router:
+        gh.route(router)
+        out = pub.Publisher(resolver=public_resolver, sleep=lambda s: None).run(db, tenant, ids[0], [ids[1]])
+    assert out["status"] == "published" and out["together"] == [ids[1]]
+    assert len(gh.commits) == before + 1
+    files = gh.files()
+    assert "content/it/bari-in-fibra.md" in files and "content/en/bari-in-fibra.md" in files
+    llms = gh.text("public/llms.txt")
+    assert "https://sito.it/articoli/bari-in-fibra" in llms and "https://sito.it/en/articles/bari-in-fibra" in llms
+    with db.tenant(tenant) as s:
+        rows = dict(s.execute(text("SELECT id, external_url FROM editor.publications WHERE status = 'published'")).all())
+    assert rows == {ids[0]: "https://sito.it/articoli/bari-in-fibra", ids[1]: "https://sito.it/en/articles/bari-in-fibra"}
+
+
 def test_github_folder_posts_mdx_and_image_beside_the_post(db, tenant, monkeypatch):
     from github_fake import FakeGitHub
     did, site_id = approved_draft(db, tenant)
