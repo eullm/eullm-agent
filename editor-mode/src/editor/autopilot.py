@@ -89,7 +89,7 @@ RULES = [
     "publication given",
 ]
 
-def _check_system(rules: list[str], what: str, joined: str) -> str:
+def _check_system(rules: list[str], what: str, joined: str, cuts: str = "six") -> str:
     return (
     "You are the editor-in-chief of a news site whose articles are published without human review. Decide "
     f"whether the {what} below can be published as it is. Refuse it if it breaks any of these rules: "
@@ -110,7 +110,7 @@ def _check_system(rules: list[str], what: str, joined: str) -> str:
     '"seo_title": "<same, or null>", "seo_description": "<same, or null>"}}. headline_fixes is a last proofread '
     "of the Headlines given after the article: correct only a clear typo, a missing or doubled word or a grammar "
     "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right. "
-    'Add "cut": ["<sentence copied exactly from the article>"] when removing up to six sentences fixes every '
+    'Add "cut": ["<sentence copied exactly from the article>"] when removing up to ' + cuts + ' sentences fixes every '
     "problem (a detail the sources do not support, a sentence about the sources): then set publish to true, "
     "because the article goes out without them, shorter. Refuse only what removing sentences cannot fix: the event "
     f"itself wrong, the title or the opening wrong{joined}"
@@ -145,7 +145,17 @@ EVENING_RULES = [r for r in RULES if not r.startswith(("joins separate", "does n
     "gives a fact, a number, a name, a quote or a date that none of the articles gives",
 ]
 EVENING_CHECK_SYSTEM = _check_system(EVENING_RULES, "evening analysis of the day's articles (the sources are the "
-                                     "site's own articles)", "")
+                                     "site's own articles)", "", "twelve")
+# The evening analysis is long (600-1200 words): it may lose more sentences and still be the
+# same piece (Francesco 2026-11-13: two evenings in a row left as a draft for "more than six cuts").
+EVENING_CUT_MAX = 12
+
+# A story only one outlet told is written from that one (Francesco 2026-11-05: the number of
+# outlets is a preference): the editor-in-chief must not refuse it for that alone, even when the
+# directives ask for more (2026-11-13: five articles of a day discarded after they were paid for).
+ONE_OUTLET = ("Outlets: only one outlet told this story, so the article cites that one. The newsroom's wish "
+              "for more outlets is a preference: citing one outlet is not a reason to refuse, nor is the "
+              "article following that outlet's account; refuse only for the other rules.")
 
 
 LABELS = {
@@ -839,7 +849,7 @@ def _check_validator(v) -> dict:
     fixes = v.get("headline_fixes") if isinstance(v.get("headline_fixes"), dict) else {}
     fixes = {k: " ".join(str(x).split()) for k, x in fixes.items()
              if k in ("title", "subtitle", "seo_title", "seo_description") and isinstance(x, str) and x.strip()}
-    cut = [" ".join(str(x).split()) for x in v.get("cut") or [] if isinstance(x, str) and x.strip()][:CUT_MAX]
+    cut = [" ".join(str(x).split()) for x in v.get("cut") or [] if isinstance(x, str) and x.strip()][:EVENING_CUT_MAX]
     repeats = " ".join(str(v.get("repeats") or "").split())[:300] if isinstance(v.get("repeats"), str) else ""
     return {"publish": v["publish"] and not repeats, "problems": problems,
             "section": str(v.get("section") or "").strip()[:80], "fixes": fixes, "cut": cut, "repeats": repeats}
@@ -862,7 +872,7 @@ def _key(text: str) -> str:
     return " ".join(re.sub(r"[^\w\s]", " ", (text or "").lower()).split())
 
 
-def cut(db, tenant_id: str, d, drop: set[int]) -> bool:
+def cut(db, tenant_id: str, d, drop: set[int], most: int = CUT_MAX) -> bool:
     """The draft without the sentences at these positions, and with the
     headings about its own sources removed (their sentences join the
     section before). False, and nothing changed, when cutting them would
@@ -875,7 +885,7 @@ def cut(db, tenant_id: str, d, drop: set[int]) -> bool:
     if any(c["ordinal"] in drop and c["section"] == first for c in claims):
         return False  # the opening answers the reader: rewritten, not cut
     keep = [dict(c) for c in claims if c["ordinal"] not in drop]
-    if drop and (len(drop) > max(CUT_MAX, 1) or len(drop) > max(1, round(len(claims) * CUT_MAX_SHARE))
+    if drop and (len(drop) > max(most, 1) or len(drop) > max(1, round(len(claims) * CUT_MAX_SHARE))
                  or len(keep) < CUT_MIN_LEFT):
         return False
     heads = False
@@ -891,7 +901,7 @@ def cut(db, tenant_id: str, d, drop: set[int]) -> bool:
     return True
 
 
-def cut_sentences(db, tenant_id: str, d, sentences: list[str]) -> bool:
+def cut_sentences(db, tenant_id: str, d, sentences: list[str], most: int = CUT_MAX) -> bool:
     """The editor-in-chief's cuts, found among the draft's sentences."""
     with db.tenant(tenant_id) as s:
         claims = drafts.stored_claims(s, d.id)
@@ -902,7 +912,7 @@ def cut_sentences(db, tenant_id: str, d, sentences: list[str]) -> bool:
         if not hit:
             return False
         drop.update(hit[:1])
-    return cut(db, tenant_id, d, drop)
+    return cut(db, tenant_id, d, drop, most)
 
 
 def proofread(db, tenant_id: str, d, fixes: dict) -> bool:
@@ -1074,7 +1084,8 @@ def themed(db, tenant_id: str, d) -> bool:
     return row is not None and (row.format == "request" or is_evergreen(row.basis))
 
 
-def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: bool = False) -> dict:
+def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: bool = False,
+                 one_outlet: bool = False) -> dict:
     """The AI editor-in-chief's verdict on a draft."""
     lines = brief_lines(body) or ["Newsroom brief: none given"]
     seo = d.seo or {}
@@ -1083,6 +1094,7 @@ def editor_check(db, tenant_id: str, d, body: dict, core: CoreClient, evening: b
     recent = [] if evening else recent_titles(db, tenant_id, d)
     prompt = "\n".join(lines + [f"Language: {d.language}", f"Reasons in: {reasons_language(db, tenant_id, d)}",
                                f"Date of publication: {datetime.now(UTC).date().isoformat()}",
+                               *([ONE_OUTLET] if one_outlet else []),
                                "Article:", d.body_md[:14000], *heads, *_excerpts(db, tenant_id, d.id),
                                *(["The site's articles of the last two days:", *(f"- {x}" for x in recent)]
                                  if recent else [])])
@@ -1186,7 +1198,7 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if cfg["on_problem"] == "fix":
         # A few sentences the checks found wrong, and headings about the sources: cut, for free.
         flagged = {f.get("claim") for f in (d.flags or []) if isinstance(f.get("claim"), int)}
-        if cut(db, tenant_id, d, flagged):
+        if cut(db, tenant_id, d, flagged, EVENING_CUT_MAX if evening else CUT_MAX):
             step(N_("Tolte le frasi che non superano i controlli"))
             d, cited = load()
             out["cut"] = len(flagged)
@@ -1200,7 +1212,8 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
     if not fixable:
         step(N_("Il caporedattore AI rilegge l'articolo"))
         try:
-            verdict = editor_check(db, tenant_id, d, body, core, evening)
+            verdict = editor_check(db, tenant_id, d, body, core, evening,
+                                   one_outlet=not evening and need == 1 < cfg["min_sources"])
         except CoreError as e:
             return _stop(db, tenant_id, d, [t("il caporedattore AI non ha risposto: {error}", lang, error=e)], out,
                          discard=False)
@@ -1210,7 +1223,8 @@ def finish(db, tenant_id: str, draft_id: int, core: CoreClient, publish, transla
         if not verdict["publish"]:
             fixable += verdict["problems"]
         elif verdict.get("cut"):  # publishable without a few sentences: cut, not written again
-            if cfg["on_problem"] != "fix" or not cut_sentences(db, tenant_id, d, verdict["cut"]):
+            if cfg["on_problem"] != "fix" or not cut_sentences(db, tenant_id, d, verdict["cut"],
+                                                                EVENING_CUT_MAX if evening else CUT_MAX):
                 fixable += verdict["problems"] or [t("il caporedattore AI vuole togliere: {sentences}", lang,
                                                      sentences=" / ".join(verdict["cut"]))[:600]]
             else:
