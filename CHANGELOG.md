@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.36.4
+
+### Changed
+
+- **Controllo prima di scrivere** (Francesco, 14 novembre: «4 scarti e 4
+  pubblicazioni, pago sempre il doppio»). Prima di scrivere una notizia
+  la redazione automatica guarda la proposta, i titoli delle notizie su cui
+  si basa e gli articoli del sito degli ultimi due giorni. Se è la stessa
+  storia già uscita, un editoriale o un commento senza un fatto da
+  raccontare, o una raccolta di fatti diversi, la chiude senza scriverla,
+  come le notizie troppo corte, e al suo posto va un'altra proposta. Prima
+  queste venivano scritte, scartate dal caporedattore, riscritte dal
+  modello più forte e scartate di nuovo. Il passo si chiama «Controllo
+  prima di scrivere» in Consumi › Modello per passo e può andare su Haiku.
+  Se il modello non risponde, la notizia si scrive come prima.
+- **«Pubblica le autorizzate»** (Francesco, 14 novembre: cinque ricette
+  una dietro l'altra facevano dieci build su Vercel). Sui siti collegati a
+  GitHub il direttore approva e autorizza («Approva e autorizza», o
+  «Pubblica» su una bozza già approvata), ma l'articolo non parte subito.
+  In basso a destra compare, su ogni pagina, il riquadro «N articoli
+  autorizzati da pubblicare» con il pulsante «Pubblica le autorizzate»: un
+  clic e tutti vanno online in un solo commit per repository, quindi una
+  build sola. Il riquadro c'è solo quando qualcosa aspetta. WordPress e
+  webhook pubblicano subito come prima. Le ricette nuove di un menù partono
+  ancora subito, prima del menù.
+- **Copertine meno uguali** (Francesco, 14 novembre: «tavoli, computer,
+  gilet gialli, sale riunioni a gogo, sempre stesso legno»). Chi descrive
+  la copertina evita le scene di repertorio (sale riunioni vuote, tavoli di
+  legno, portatili sulla scrivania, mani che scrivono, gilet ad alta
+  visibilità, uffici generici, microfoni, telefono in mano) se l'articolo
+  non parla proprio di quello. Vede le ultime 12 copertine del sito per non
+  ripeterne scena, oggetti e colori, e ogni copertina ha un tipo di
+  inquadratura diverso: campo largo all'aperto, dettaglio, persone in
+  azione, vista dall'alto, scena di strada, oggetto simbolico, notte.
+- **Le letture della redazione nel «Cosa cambia» si tagliano.** Se il
+  problema è solo una lettura scritta come un fatto nell'ultima sezione, il
+  caporedattore toglie quelle frasi invece di scartare l'articolo.
+
 ## 0.36.3
 
 ### Fixed

@@ -112,6 +112,20 @@
 })();
 </script>
 {% endif %}
+{% if held %}
+{# «Pubblica le autorizzate»: on every page while something authorized waits, so it is not forgotten. #}
+<form method="post" action="/ui/publications/release" class="release" role="region" aria-label="{{ _('Da pubblicare') }}">
+  <input type="hidden" name="back" value="{{ request.url.path }}">
+  <span>{{ _('{n} articolo autorizzato da pubblicare', n=held) if held == 1 else _('{n} articoli autorizzati da pubblicare', n=held) }}</span>
+  <button class="btn pri" type="submit">{{ _('Pubblica le autorizzate') }}</button>
+</form>
+<style>
+.release { position: fixed; right: 24px; bottom: 24px; z-index: 50; display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px 12px 18px; border-radius: 12px; background: var(--surface); border: 2px solid var(--accent);
+  box-shadow: 0 8px 28px rgba(0,0,0,.18); font-weight: 600; max-width: calc(100vw - 32px); }
+@media (max-width: 640px) { .release { left: 16px; right: 16px; bottom: 16px; justify-content: space-between; } }
+</style>
+{% endif %}
 {% include "_once.html.j2" %}
 </body>
 </html>

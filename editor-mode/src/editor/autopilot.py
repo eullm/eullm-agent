@@ -111,7 +111,8 @@ def _check_system(rules: list[str], what: str, joined: str, cuts: str = "six") -
     "of the Headlines given after the article: correct only a clear typo, a missing or doubled word or a grammar "
     "error (\"i Senato\" for \"il Senato\"), in the same language, changing nothing else; null when it is right. "
     'Add "cut": ["<sentence copied exactly from the article>"] when removing up to ' + cuts + ' sentences fixes every '
-    "problem (a detail the sources do not support, a sentence about the sources): then set publish to true, "
+    "problem (a detail the sources do not support, a sentence about the sources, a reading of the newsroom "
+    "told as news in the last section that reads the facts: cut those sentences of it): then set publish to true, "
     "because the article goes out without them, shorter. Refuse only what removing sentences cannot fix: the event "
     f"itself wrong, the title or the opening wrong{joined}"
     )
@@ -1323,6 +1324,73 @@ def too_thin(db, tenant_id: str, proposal_id: int, words: int) -> dict:
 
 
 RECENT_TITLES = 80
+
+
+# Before writing, a short look at the proposal (Francesco 2026-11-14: «gli ultimi 8 sono 4 scarti e
+# 4 pubblicazioni, pago sempre il doppio»): a story the site told yesterday in other words, a
+# columnist's thesis, a list of separate events were written, refused by the editor-in-chief,
+# written again by the stronger model and refused again. Now they are closed before any of it.
+PRECHECK_SYSTEM = (
+    "You decide, before an article is written and paid for, whether a proposed story is worth writing for a "
+    "news site. You receive the proposal (title, angle, why now), the titles of the news items it rests on and "
+    "the titles of the site's articles of the last two days. Answer write false only when: (a) one of the "
+    "site's articles already tells the same story and the proposal brings no new fact in its title (a "
+    "decision, a result, an answer, a number that is news itself; a new comment or a new outlet on the same "
+    "event is not new); (b) the news items are an opinion piece, an editorial, a column or someone's thesis, "
+    "with no event of their own to report; (c) the proposal bundles several separate events (a list of "
+    "examples, a round-up) instead of telling one. In any other case, and when in doubt, write true. Reply "
+    'with JSON only: {"write": true|false, "reason": "<when false, one plain sentence for the newsroom\'s '
+    'editor in the language named after Reasons in; else null>", "repeats": "<the site\'s title it repeats, '
+    'copied exactly, or null>"}')
+# Proposals of these formats bring several items together by design, or were asked for.
+PRECHECK_SKIP = ("evening", "request", "menu", "recipe")
+
+
+def _precheck_validator(v) -> dict:
+    if not isinstance(v, dict) or not isinstance(v.get("write"), bool):
+        raise ValueError('expected {"write": true|false, "reason": ...}')
+    return {"write": v["write"], "reason": str(v.get("reason") or "").strip()[:400],
+            "repeats": str(v.get("repeats") or "").strip()[:300]}
+
+
+def worth_writing(db, tenant_id: str, proposal_id: int, core: CoreClient) -> dict | None:
+    """None when the proposal is worth writing; else it is closed, like a thin
+    one, and the reason returned. A model that does not answer lets it through."""
+    pr, dr = m.proposals.c, m.drafts.c
+    with db.tenant(tenant_id) as s:
+        p = s.execute(select(pr.title, pr.angle, pr.why_now, pr.format, pr.site_id, pr.basis)
+                      .where(pr.id == proposal_id)).first()
+        if p is None or (p.format or "") in PRECHECK_SKIP or is_evergreen(p.basis):
+            return None
+        items = list(s.execute(select(m.source_items.c.title).join(
+            m.proposal_citations, m.proposal_citations.c.item_id == m.source_items.c.id)
+            .where(m.proposal_citations.c.proposal_id == proposal_id).limit(12)).scalars())
+        recent = list(s.execute(select(dr.title).where(
+            dr.site_id == p.site_id, dr.status == "approved", dr.translation_of.is_(None),
+            dr.proposal_id.is_distinct_from(proposal_id),
+            dr.created_at >= datetime.now(UTC) - timedelta(days=OVERLAP_DAYS))
+            .order_by(dr.id.desc()).limit(RECENT_TITLES)).scalars())
+        lang = _language_in(s, tenant_id, p.site_id)
+    prompt = "\n".join([f"Reasons in: {tr.LANGUAGES[lang]}", f"Proposal: {p.title}",
+                        f"Angle: {p.angle or ''}", f"Why now: {p.why_now or ''}", "News items:",
+                        *(f"- {x}" for x in items), "The site's articles of the last two days:",
+                        *(f"- {x}" for x in recent or ["(none)"])])
+    try:
+        with usage.tagged(db, tenant_id, "precheck", site_id=p.site_id, ref=f"proposal:{proposal_id}"):
+            verdict, _calls = core.chat_json(PRECHECK_SYSTEM, prompt, _precheck_validator)
+    except (CoreError, ValueError) as e:
+        log.warning("precheck of proposal %s failed: %s", proposal_id, e)
+        return None
+    if verdict["write"]:
+        return None
+    why = (t("la stessa notizia è già uscita: «{title}»", lang, title=verdict["repeats"]) if verdict["repeats"]
+           else verdict["reason"] or t("non adatta a un articolo", lang))
+    with db.tenant(tenant_id) as s:
+        s.execute(update(m.proposals).where(pr.id == proposal_id).values(status="rejected", decided_by=AUTO))
+        proposals.record_feedback(s, tenant_id, "proposal", proposal_id, "down", AUTO, why, p.site_id)
+    return {"title": p.title, "site_id": p.site_id, "proposal_id": proposal_id, "skipped": [why]}
+
+
 
 
 def recent_titles(db, tenant_id: str, d) -> list[str]:

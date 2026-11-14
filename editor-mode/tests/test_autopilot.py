@@ -7,6 +7,7 @@ import socket
 from datetime import UTC, datetime
 
 import pytest
+import httpx
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import func, insert, select, text, update
@@ -315,6 +316,28 @@ def _written(db, tenant, again=None):
     with db.tenant(tenant) as s:
         site_id = s.execute(select(m.drafts.c.site_id).where(m.drafts.c.id == did)).scalar()
     return did, site_id, (pid, cited)
+
+
+def test_a_story_told_yesterday_is_closed_before_it_is_written(db, tenant, monkeypatch):
+    # Francesco 2026-11-14: «4 scarti e 4 pubblicazioni, pago sempre il doppio».
+    pid, _cited = accepted_proposal(db, tenant)
+    with respx.mock() as router:
+        ask = router.post(CORE).mock(return_value=chat(json.dumps(
+            {"write": False, "reason": None, "repeats": "Interruzione Microsoft 365"})))
+        out = ap.worth_writing(db, tenant, pid, core())
+        prompt = json.loads(ask.calls[0].request.content)["messages"][-1]["content"]
+    assert "Proposal:" in prompt and "Interruzione Microsoft 365" in out["skipped"][0]
+    with db.tenant(tenant) as s:
+        p = s.execute(select(m.proposals).where(m.proposals.c.id == pid)).one()
+    assert p.status == "rejected" and p.decided_by == ap.AUTO
+    # Worth writing, or a model that does not answer: it is written.
+    pid2 = pid
+    with respx.mock() as router:
+        router.post(CORE).mock(return_value=chat(json.dumps({"write": True, "reason": None, "repeats": None})))
+        assert ap.worth_writing(db, tenant, pid2, core()) is None
+    with respx.mock() as router:
+        router.post(CORE).mock(return_value=httpx.Response(500))
+        assert ap.worth_writing(db, tenant, pid2, core()) is None
 
 
 def test_a_story_one_outlet_told_is_not_refused_for_that(db, tenant, monkeypatch):

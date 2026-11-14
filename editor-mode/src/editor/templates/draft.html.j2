@@ -24,7 +24,7 @@
     <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn" type="submit">{{ _('Approva senza pubblicare') }}</button></form>
     <form class="inline row" method="post" action="/ui/drafts/{{ d.id }}/decision" style="gap: 6px;"><input type="hidden" name="accept" value="1">
       {% if targets|length > 1 %}<select name="publish_to" aria-label="{{ _('Destinazione') }}">{% for x in targets %}<option value="{{ x.id }}">{{ x.name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="publish_to" value="{{ targets[0].id }}">{% endif %}
-      <button class="btn pri" type="submit">{{ _('Approva e pubblica') }}</button></form>
+      <button class="btn pri" type="submit">{{ _('Approva e autorizza') if targets|selectattr('kind', 'equalto', 'github')|list|length == targets|length else _('Approva e pubblica') }}</button></form>
     {% else %}
     <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/decision"><input type="hidden" name="accept" value="1"><button class="btn pri" type="submit">{{ _('Approva la bozza') }}</button></form>
     {% endif %}
@@ -141,7 +141,7 @@
       {% if not (p.status == 'failed' and p.target_id in live_targets) %}
       <div class="list-row">
         <span>{{ p.name }} · {{ _('bozza') if p.mode == 'draft' else _('subito') }}</span>
-        {% set ps = {'pending_approval': ('amber', _('In attesa del direttore')), 'approved': ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
+        {% set ps = {'pending_approval': ('amber', _('In attesa del direttore')), 'approved': ('amber', _('Autorizzata, da pubblicare')) if p.decision_note == 'held' else ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
         {% if p.withdrawn_at %}<span class="chip">{{ _('Ritirata il {d}', d=when(p.withdrawn_at)) }}</span>
         {% elif p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}{% if p.updated_at %} · {{ _('aggiornata il {d}', d=when(p.updated_at)) }}{% endif %}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
       </div>
