@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.36.4
+
+### Changed
+
+- **Controllo prima di scrivere** (Francesco, 14 novembre: «4 scarti e 4
+  pubblicazioni, pago sempre il doppio»). Prima di scrivere una notizia
+  la redazione automatica guarda la proposta, i titoli delle notizie su cui
+  si basa e gli articoli del sito degli ultimi due giorni. Se è la stessa
+  storia già uscita, un editoriale o un commento senza un fatto da
+  raccontare, o una raccolta di fatti diversi, la chiude senza scriverla,
+  come le notizie troppo corte, e al suo posto va un'altra proposta. Prima
+  queste venivano scritte, scartate dal caporedattore, riscritte dal
+  modello più forte e scartate di nuovo. Il passo si chiama «Controllo
+  prima di scrivere» in Consumi › Modello per passo e può andare su Haiku.
+  Se il modello non risponde, la notizia si scrive come prima.
+- **Le letture della redazione nel «Cosa cambia» si tagliano.** Se il
+  problema è solo una lettura scritta come un fatto nell'ultima sezione, il
+  caporedattore toglie quelle frasi invece di scartare l'articolo.
+
 ## 0.36.3
 
 ### Fixed

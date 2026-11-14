@@ -114,6 +114,10 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             if imager is not None:
                 images.make(db, tenant, did, imager, core_for(tenant))
 
+        # A story told yesterday, a column, a round-up: closed before the writing is paid for.
+        skipped = autopilot.worth_writing(db, tenant, args["proposal_id"], core_for(tenant))
+        if skipped:
+            return skipped
         try:
             did = write()
         except drafts.Thin as e:  # nothing paid: another proposal takes its place
