@@ -156,7 +156,7 @@
         <td>{{ p.requested_by }}<small>{{ when(p.requested_at) }}</small></td>
         <td>{{ p.decided_by or '–' }}{% if p.decided_at %}<small>{{ when(p.decided_at) }}</small>{% endif %}</td>
         <td>
-          {% set ps = {'approved': ('blue', _('In invio')), 'sending': ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
+          {% set ps = {'approved': ('amber', _('Autorizzata, da pubblicare')) if p.decision_note == 'held' else ('blue', _('In invio')), 'sending': ('blue', _('In invio')), 'published': ('green', _('Pubblicata')), 'rejected': ('', _('Rifiutata')), 'failed': ('red', _('Non riuscita'))}.get(p.status, ('', p.status)) %}
           {% if p.external_url %}<a class="chip {{ ps[0] }}" href="{{ p.external_url }}" rel="noopener noreferrer" target="_blank">{{ ps[1] }}</a>{% else %}<span class="chip {{ ps[0] }}">{{ ps[1] }}</span>{% endif %}
           {% if p.error %}<small>{{ p.error|problem|truncate(200) }}</small>{% endif %}
           {% if p.status == 'sending' and p.uncertain %}

@@ -108,6 +108,35 @@ def test_a_director_approves_and_publishes_in_one_click(db, tenant, monkeypatch)
         assert s.execute(text("SELECT status FROM editor.publications")).scalar() == "approved"
 
 
+def test_on_a_github_site_the_director_authorizes_and_publishes_them_together(db, tenant, monkeypatch):
+    # Francesco 2026-11-14: five recipes one after the other made ten Vercel builds.
+    from editor import publishing as pub
+    did, site_id = approved_draft(db, tenant)
+    monkeypatch.setattr(socket, "getaddrinfo", public_resolver)
+    monkeypatch.setenv(pub.secret_variable(tenant, "GH"), "ghp_test123")
+    it = pub.add_target(db, tenant, site_id, "github", "Sito", {"repo": "me/site", "path": "content/a"}, "GH")
+    other = pub.add_target(db, tenant, site_id, "github", "Sito bis", {"repo": "me/site", "path": "content/b"}, "GH")
+    c = logged_in(db, tenant, "owner")
+    assert "Pubblica le autorizzate" not in c.get("/").text
+    for tid in (it, other):
+        r = c.post(f"/ui/drafts/{did}/publish", data={"target_id": tid, "mode": "publish"})
+        assert "Autorizzata" in r.text
+    with db.tenant(tenant) as s:
+        assert s.execute(text("SELECT count(*) FROM editor.jobs WHERE kind = 'publish'")).scalar() == 0
+    page = c.get("/sources").text  # on every page, until it is pressed
+    assert "Pubblica le autorizzate" in page and "2 articoli autorizzati" in page
+    assert "Autorizzata, da pubblicare" in c.get(f"/drafts/{did}").text
+    assert "Pubblica le autorizzate" not in logged_in(db, tenant, "editor").get("/").text
+    r = c.post("/ui/publications/release", data={"back": "/sources"})
+    assert "Pubblicazione partita per 2 articoli" in r.text and "Pubblica le autorizzate" not in r.text
+    with db.tenant(tenant) as s:
+        jobs = s.execute(text("SELECT args FROM editor.jobs WHERE kind = 'publish'")).scalars().all()
+    assert len(jobs) == 1
+    args = jobs[0] if isinstance(jobs[0], dict) else __import__("json").loads(jobs[0])
+    assert len(args["together"]) == 1
+    assert "niente da pubblicare" in c.post("/ui/publications/release", data={"back": "/"}).text
+
+
 def test_site_switch_and_tokens(db, tenant):
     from editor import repo
     approved_draft(db, tenant)

@@ -34,7 +34,7 @@ from urllib.parse import quote, urljoin, urlsplit
 
 import httpcore
 import httpx
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from . import drafts, models as m
@@ -385,6 +385,46 @@ def decide(db, tenant_id: str, pub_id: int, approve: bool, by: str, note: str | 
         s.execute(update(m.publications).where(m.publications.c.id == pub_id).values(
             status="approved" if approve else "rejected", decided_by=by, decided_at=datetime.now(UTC), decision_note=note))
     return True
+
+
+# A publication a director authorized that waits for «Pubblica le autorizzate», to go out with the
+# others in one update of the site (Francesco 2026-11-14: five recipes one after the other made ten
+# Vercel builds). It is approved, with this note, and nothing has queued it yet.
+HELD = "held"
+
+
+def hold(db, tenant_id: str, pub_id: int) -> None:
+    with db.tenant(tenant_id) as s:
+        s.execute(update(m.publications).where(m.publications.c.id == pub_id,
+                                               m.publications.c.status == "approved").values(decision_note=HELD))
+
+
+def held_count(s) -> int:
+    p = m.publications.c
+    return s.execute(select(func.count()).select_from(m.publications).where(
+        p.status == "approved", p.decision_note == HELD)).scalar() or 0
+
+
+def release(db, tenant_id: str, send) -> int:
+    """Send every authorized publication: those for the same GitHub
+    repository and branch in one commit, `send(first, others, site_id)` once
+    per group, any other on its own. Returns how many went."""
+    p, tg = m.publications.c, m.publish_targets.c
+    with db.tenant(tenant_id) as s:
+        ids = list(s.execute(update(m.publications).where(p.status == "approved", p.decision_note == HELD)
+                             .values(decision_note=None).returning(p.id)).scalars())
+        rows = s.execute(select(p.id, p.mode, m.publish_targets, m.drafts.c.site_id.label("draft_site"))
+                         .join(m.publish_targets, tg.id == p.target_id).join(m.drafts, m.drafts.c.id == p.draft_id)
+                         .where(p.id.in_(ids or [0])).order_by(p.id)).all() if ids else []
+    groups: dict = {}
+    for r in rows:
+        c = r.config or {}
+        key = (r.kind, c.get("repo"), c.get("branch"), c.get("api"), r.secret_env, r.mode) if r.kind == "github" \
+            else ("alone", r[0])
+        groups.setdefault(key, []).append(r)
+    for group in groups.values():
+        send(group[0][0], [x[0] for x in group[1:]], group[0].draft_site)
+    return len(rows)
 
 
 def mark_uncertain_failed(db, tenant_id: str, pub_id: int, by: str) -> bool:

@@ -15,6 +15,16 @@
   modello più forte e scartate di nuovo. Il passo si chiama «Controllo
   prima di scrivere» in Consumi › Modello per passo e può andare su Haiku.
   Se il modello non risponde, la notizia si scrive come prima.
+- **«Pubblica le autorizzate»** (Francesco, 14 novembre: cinque ricette
+  una dietro l'altra facevano dieci build su Vercel). Sui siti collegati a
+  GitHub il direttore approva e autorizza («Approva e autorizza», o
+  «Pubblica» su una bozza già approvata), ma l'articolo non parte subito.
+  In basso a destra compare, su ogni pagina, il riquadro «N articoli
+  autorizzati da pubblicare» con il pulsante «Pubblica le autorizzate»: un
+  clic e tutti vanno online in un solo commit per repository, quindi una
+  build sola. Il riquadro c'è solo quando qualcosa aspetta. WordPress e
+  webhook pubblicano subito come prima. Le ricette nuove di un menù partono
+  ancora subito, prima del menù.
 - **Le letture della redazione nel «Cosa cambia» si tagliano.** Se il
   problema è solo una lettura scritta come un fatto nell'ultima sezione, il
   caporedattore toglie quelle frasi invece di scartare l'articolo.

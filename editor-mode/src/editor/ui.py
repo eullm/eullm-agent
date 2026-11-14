@@ -328,6 +328,8 @@ def register(app, ctx) -> None:
             "plan_state": billing.subscription(admin, c.tenant_id) if c.can("owner") else None,
             "plan_name": plan_name(s),
             "feedback_new": readers.unread(s, site.id if site else None),
+            # «Pubblica le autorizzate» follows the director on every page until it is pressed.
+            "held": publishing.held_count(s) if c.can("owner") else 0,
             # The newsroom sees its plan's units; the model's euros only the operators.
             "credit_state": None if c.operator else credits.state(s),
             "activity": data.pop("activity", None) or act.recent(s, tz, problem, site=scoped(request, sites, site)),
@@ -2007,6 +2009,7 @@ def register(app, ctx) -> None:
                 m.publish_targets.c.site_id == d.site_id, m.publish_targets.c.enabled.is_not(False))).all()
                 if publishing.fits_language(x, d.language)]  # Italian text never goes to the English site
             pubs = s.execute(select(m.publications.c.id, m.publications.c.status, m.publications.c.mode, m.publications.c.target_id,
+                                    m.publications.c.decision_note,
                                     m.publications.c.external_url, m.publications.c.withdrawn_at,
                                     m.publications.c.updated_at, m.publications.c.published_at, m.publications.c.error,
                                     m.publish_targets.c.name, m.publish_targets.c.kind)
@@ -2269,7 +2272,9 @@ def register(app, ctx) -> None:
         return done(f"/drafts/{draft_id}", msg + extra)
 
     def publish_now(c: auth.Caller, draft_id: int, target_id: int, mode: str, extra: str = ""):
-        """A director's publication: asked and approved in one step, sent by the worker."""
+        """A director's publication: asked and approved in one step, sent by the worker.
+        To a GitHub site it waits for «Pubblica le autorizzate», so the site
+        builds once for all of them (Francesco 2026-11-14)."""
         if waiting := menu_first(c, draft_id, target_id, mode, approve=True, extra=extra):
             return waiting
         try:
@@ -2279,8 +2284,25 @@ def register(app, ctx) -> None:
         except IntegrityError:
             return done(f"/drafts/{draft_id}", t("Questa pubblicazione è già stata chiesta.") + extra)
         publishing.decide(db, c.tenant_id, pub_id, True, c.name)
+        with db.tenant(c.tenant_id) as s:
+            kind = s.execute(select(m.publish_targets.c.kind).where(m.publish_targets.c.id == target_id)).scalar()
+        if kind == "github":
+            publishing.hold(db, c.tenant_id, pub_id)
+            return done(f"/drafts/{draft_id}", t("Autorizzata: va online con le altre quando premi «Pubblica le "
+                                                 "autorizzate», in un solo aggiornamento del sito.") + extra)
         ctx.run_publication(c.tenant_id, pub_id)
         return done(f"/drafts/{draft_id}", t("Pubblicazione partita: la segui nel riquadro Attività.") + extra)
+
+    @app.post("/ui/publications/release")
+    def ui_release(back: str = Form("/"), c: auth.Caller = Depends(ctx.need("owner"))):
+        """«Pubblica le autorizzate»: everything authorized goes out, one commit per repository."""
+        n = publishing.release(db, c.tenant_id, lambda first, others, site_id: queue.enqueue(
+            db, c.tenant_id, "publish", f"publication {first}",
+            {"publication_id": first, "site_id": site_id, **({"together": others} if others else {})}))
+        back = back if back.startswith("/") and not back.startswith("//") else "/"
+        if not n:
+            return done(back, t("Non c'è niente da pubblicare."))
+        return done(back, t("Pubblicazione partita per {n} articoli: la segui nel riquadro Attività.", n=n))
 
     @app.post("/ui/publications/{pub_id}/update")
     def ui_pub_update(pub_id: int, draft_id: int = Form(0), section: str = Form(""),
