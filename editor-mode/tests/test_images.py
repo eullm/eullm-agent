@@ -200,3 +200,30 @@ def test_covers_are_photographs_not_renders():
         system = images.system_for({"settings": {"cover_style": style}})
         assert "real photograph" in system and "no 3D render" in system and "could actually have shot" in system
         assert "saturated palette" not in system and "illustration," not in system.split("never an")[0]
+
+
+def test_covers_avoid_the_stock_scenes_and_the_sites_last_covers(db, tenant):
+    # Francesco 2026-11-14: meeting rooms, desks with laptops and hi-vis vests on cover after cover.
+    did, _ = approved_draft(db, tenant)
+    with respx.mock() as router:
+        fake_bfl(router)
+        route = router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps({
+            "prompt": "Empty conference room with a long wooden table", "alt": "Una sala riunioni"})))
+        images.make(db, tenant, did, imager(), CoreClient("http://core.test", "tok"))
+    first = json.loads(route.calls[0].request.content)["messages"]
+    assert "meeting or conference rooms" in first[0]["content"] and "Shot for this cover" in first[-1]["content"]
+    # Another article of the site sees that cover's scene, to take another one.
+    from sqlalchemy import insert, update
+    with db.tenant(tenant) as s:  # the cover now belongs to another article of the same site
+        row = dict(s.execute(select(m.drafts).where(m.drafts.c.id == did)).one()._mapping)
+        row.pop("id")
+        row["version"] = (row.get("version") or 1) + 100
+        other = s.execute(insert(m.drafts).values(**row).returning(m.drafts.c.id)).scalar_one()
+        s.execute(update(m.draft_images).values(draft_id=other))
+    with respx.mock() as router:
+        fake_bfl(router)
+        route = router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps({
+            "prompt": "A fibre cabinet on a street in Bari at dusk", "alt": "Un armadio della fibra"})))
+        images.make(db, tenant, did, imager(), CoreClient("http://core.test", "tok"))
+    second = json.loads(route.calls[0].request.content)["messages"][-1]["content"]
+    assert "last covers" in second and "Empty conference room with a long wooden table" in second

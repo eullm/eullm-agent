@@ -240,6 +240,28 @@ FOOD = (
 
 STYLES = ("impact", "editorial")
 
+# Covers that look all alike (Francesco 2026-11-14: «tavoli, computer, gilet gialli, sale riunioni a
+# gogo, sempre stesso legno, senza persone»): the stock scenes are named and kept out, the site's
+# last covers are shown so their scene is not taken again, and each cover gets its own kind of shot.
+CLICHES = (
+    "Avoid the stock scenes of news covers unless the article is really about them: empty meeting or "
+    "conference rooms, long wooden tables with chairs, wooden desks with a laptop or a computer screen, "
+    "hands typing, workers in hi-vis vests or hard hats, generic offices, a podium with microphones, a "
+    "smartphone held in a hand. Show what is specific to this story instead: its place (a street, a "
+    "landscape, a building, a lab, a port, a stadium, a field), its object or its people in action, seen "
+    "from behind, at a distance or out of focus. Use colour, weather and time of day that suit the story. "
+)
+SHOTS = (
+    "a wide establishing shot of the place where the story happens, outdoors",
+    "a close-up detail of the story's key object, macro lens, shallow depth of field",
+    "anonymous people in action, seen from behind or at a distance, in their real setting",
+    "an aerial or high-angle view of the place",
+    "a street-level documentary scene with movement and depth",
+    "a symbolic still life of one object that stands for the story, on a background that is not a desk",
+    "a night or blue-hour scene with artificial light",
+)
+RECENT_COVERS = 12
+
 
 def is_recipe(d) -> bool:
     return bool(((getattr(d, "seo", None) or {}).get("recipe") or {}).get("own"))
@@ -259,7 +281,7 @@ def system_for(profile: dict) -> str:
     return IMPACT + (HEADLINE if words else NO_TEXT)
 
 
-def describe(core, d, profile: dict) -> tuple[str, str]:
+def describe(core, d, profile: dict, recent: list[str] | None = None) -> tuple[str, str]:
     """The image prompt and its alternative text, from the article. Without a
     model, or when it fails, a plain prompt from the title."""
     style, words = style_of(profile)
@@ -281,13 +303,19 @@ def describe(core, d, profile: dict) -> tuple[str, str]:
         return plain, d.title
     # A recipe's cover shows the dish: its ingredients and steps are the description.
     lead = d.body_md[:3000] if style == "food" else d.body_md.split("\n## ", 1)[0][:1500]
+    variety = ""
+    if style != "food":
+        shot = SHOTS[(d.id or 0) % len(SHOTS)]
+        variety = (f"\nShot for this cover, unless it cannot show the story: {shot}."
+                   + ("\nThe site's last covers (do not repeat their scene, setting, props or colours):\n"
+                      + "\n".join(f"- {x[:220]}" for x in recent) if recent else ""))
     try:
-        res = core.chat([{"role": "system", "content": FOOD if style == "food" else system_for(profile)},
+        res = core.chat([{"role": "system", "content": FOOD if style == "food" else CLICHES + system_for(profile)},
                          {"role": "user", "content": (
             f"Site: {profile.get('name')} ({profile.get('domain')}); tone: "
             f"{(profile.get('style') or {}).get('tone') or 'not determined'}\n"
             f"Article language: {d.language or profile.get('language') or 'unknown'}\n"
-            f"Title: {d.title}\n\n{lead}")}])
+            f"Title: {d.title}\n\n{lead}{variety}")}])
         value = extract_json(res.content)
     except (CoreError, ValueError) as e:
         log.info("image prompt by the model failed, using the title: %s", e)
@@ -319,9 +347,13 @@ def make(db, tenant_id: str, draft_id: int, imager: Imager, core=None) -> str:
             profile = {**profile, "settings": {**(profile.get("settings") or {}), **(current.get("settings") or {})}}
         # The first cover and the free redraws are included; then credits.
         credits.need(s, credits.cover_cost(s, draft_id))
+        recent = list(s.execute(select(m.draft_images.c.prompt).join(
+            m.drafts, m.drafts.c.id == m.draft_images.c.draft_id).where(
+            m.drafts.c.site_id == d.site_id, m.drafts.c.id != draft_id, m.drafts.c.translation_of.is_(None))
+            .order_by(m.draft_images.c.created_at.desc()).limit(RECENT_COVERS)).scalars())
     step(N_("Il modello descrive l'immagine"))
     with usage.tagged(db, tenant_id, "image", site_id=d.site_id, ref=f"draft:{draft_id}"):
-        prompt, alt = describe(core, d, profile)
+        prompt, alt = describe(core, d, profile, recent)
     step(N_("Disegno l'immagine di copertina"))
     started = time.monotonic()
     with usage.tagged(db, tenant_id, "image", site_id=d.site_id, ref=f"draft:{draft_id}"):
