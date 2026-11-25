@@ -3041,5 +3041,15 @@
  "Scrivi il nome del canale e di cosa parla: il profilo si ricava da lì.": "Escribe el nombre del canal y de qué habla: el perfil sale de ahí.",
  "Da domattina {n} idee di video al giorno.": "Desde mañana por la mañana, {n} ideas de vídeo al día.",
  "Idee di video del mattino spente: le chiedi tu da un articolo o da un tema.": "Ideas de vídeo de la mañana desactivadas: pídelas tú desde un artículo o un tema.",
- "Approva prima il profilo: le idee partono dalla linea approvata.": "Aprueba primero el perfil: las ideas parten de la línea aprobada."
+ "Approva prima il profilo: le idee partono dalla linea approvata.": "Aprueba primero el perfil: las ideas parten de la línea aprobada.",
+ "Temi sui social": "Temas en las redes sociales",
+ "Cerco i temi del momento su Bluesky": "Busco los temas del momento en Bluesky",
+ "Cerco gli Short dei temi su YouTube": "Busco Shorts sobre los temas en YouTube",
+ "Chiave YouTube Data API (facoltativa)": "Clave de YouTube Data API (opcional)",
+ "Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.": "Gratuita desde Google Cloud (YouTube Data API v3): en cada instantánea de los temas busca los Shorts de las últimas 48 horas sobre los 8 primeros temas. Vacía: solo se usa Bluesky, que no pide clave.",
+ "Sui social": "En redes",
+ "Bluesky: «{t}», {n} post": "Bluesky: «{t}», {n} publicaciones",
+ "YouTube: {n} Short in 48 ore, {v} visualizzazioni l'ora": "YouTube: {n} Shorts en 48 horas, {v} visualizaciones por hora",
+ "il più visto": "el más visto",
+ "Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.": "Además de las noticias mira las redes: los temas de los que se habla en Bluesky y los que tienen Shorts en aumento en YouTube en las últimas 48 horas pasan primero."
 }

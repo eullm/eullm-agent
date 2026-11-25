@@ -3041,5 +3041,15 @@
  "Scrivi il nome del canale e di cosa parla: il profilo si ricava da lì.": "Write the channel's name and what it is about: the profile comes from there.",
  "Da domattina {n} idee di video al giorno.": "From tomorrow morning, {n} video ideas a day.",
  "Idee di video del mattino spente: le chiedi tu da un articolo o da un tema.": "Morning video ideas off: ask for them yourself from an article or a topic.",
- "Approva prima il profilo: le idee partono dalla linea approvata.": "First approve the profile: the ideas start from the approved line."
+ "Approva prima il profilo: le idee partono dalla linea approvata.": "First approve the profile: the ideas start from the approved line.",
+ "Temi sui social": "Topics on social networks",
+ "Cerco i temi del momento su Bluesky": "Looking for the topics of the moment on Bluesky",
+ "Cerco gli Short dei temi su YouTube": "Looking for Shorts on the topics on YouTube",
+ "Chiave YouTube Data API (facoltativa)": "YouTube Data API key (optional)",
+ "Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.": "Free from Google Cloud (YouTube Data API v3): at every topic snapshot it looks for the Shorts of the last 48 hours on the top 8 topics. Empty: only Bluesky is used, which needs no key.",
+ "Sui social": "On social",
+ "Bluesky: «{t}», {n} post": "Bluesky: “{t}”, {n} posts",
+ "YouTube: {n} Short in 48 ore, {v} visualizzazioni l'ora": "YouTube: {n} Shorts in 48 hours, {v} views an hour",
+ "il più visto": "the most seen",
+ "Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.": "Besides the news it looks at social networks: topics people talk about on Bluesky and those with growing Shorts on YouTube in the last 48 hours go first."
 }

@@ -20,6 +20,7 @@
     <button class="btn" type="submit">{{ _('Salva') }}</button>
   </form>
   <p class="hint">{{ _("All'ora del briefing il modello sceglie i temi più adatti a {domain}, prima quelli che stanno salendo e non sono ancora ovunque, e scrive un'idea di video per ognuno. Le idee sono gratis; si paga solo il video che fai girare. 0 le spegne.", domain=site.domain) }}</p>
+  <p class="hint">{{ _("Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.") }}</p>
   {% else %}
   <p class="hint">{{ _('Approva prima il profilo in Sito e profilo: le idee partono dalla linea approvata.') }}</p>
   {% endif %}

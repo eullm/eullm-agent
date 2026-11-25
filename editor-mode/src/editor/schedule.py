@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 
-from . import briefing, jobs, models as m, news_base, opportunity, proposals, readers, repo, rubrics, searchconsole, sources, tenant_data, trends
+from . import briefing, jobs, models as m, news_base, opportunity, proposals, readers, repo, rubrics, searchconsole, social, sources, tenant_data, trends
 from .i18n import N_
 from .ingest import collect_archive
 from .progress import step as progress
@@ -219,11 +219,21 @@ class Runner:
         with self.db.tenant(archive) as s:
             take = trends.due(s, now, tz)
         if take:
-            def keep():
-                with self.db.tenant(archive) as s:
-                    trends.snapshot(s, archive, now)
-            self.step(archive, "trend", done, failed, keep)
+            self.step(archive, "trend", done, failed, lambda: self.keep_trend(archive, client, now))
         return out
+
+    def keep_trend(self, archive: str, client, now: datetime) -> None:
+        """The snapshot of the moment, with what Bluesky and YouTube say about
+        its topics (social.py); without them when they do not answer."""
+        with self.db.tenant(archive) as s:
+            topics = trends.build(s, archive, now)
+        try:
+            social.enrich(self.db, archive, topics, client, self.core_for(archive),
+                          getattr(self.settings, "youtube_api_key", ""), now)
+        except Exception:  # noqa: BLE001 - the social networks never cost the snapshot
+            log.exception("social networks skipped")
+        with self.db.tenant(archive) as s:
+            trends.snapshot(s, archive, now, topics)
 
     def collect_now(self, tenant: str, now: datetime, done: list[str], failed: list[str]) -> dict:
         """A newsroom's collection on request: its sources are read now, then
@@ -236,11 +246,9 @@ class Runner:
         with self.http_factory() as client:
             out = self.collect(archive, client, now, done, failed, followed, take_trend=False)
 
-        def keep():
-            with self.db.tenant(archive) as s:
-                trends.snapshot(s, archive, now)
         progress(N_("Trend del momento"))
-        self.step(archive, "trend", done, failed, keep)
+        with self.http_factory() as client:
+            self.step(archive, "trend", done, failed, lambda: self.keep_trend(archive, client, now))
         for site_id, domain in sites:
             progress(N_("Opportunità dei temi per {domain}"), domain=domain)
             self.step(tenant, "opportunity", done, failed,
