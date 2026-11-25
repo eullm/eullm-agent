@@ -172,6 +172,7 @@ class Runner:
             self.autopilot(tenant, now, tz, done, failed)
             self.rounds(tenant, now, tz, conf["briefing_hour"], done, failed)
             self.evening(tenant, now, tz, done, failed)
+            self.video_round(tenant, now, tz, conf["briefing_hour"], done)
             if review_due(local, last_review):
                 self.step(tenant, "review", done, failed, lambda: self.review(tenant, client))
             with self.db.tenant(tenant) as s:
@@ -322,8 +323,9 @@ class Runner:
         p = m.editorial_profiles.c
         due = []
         with self.db.tenant(tenant) as s:
+            social = set(s.execute(select(m.sites.c.id).where(m.sites.c.kind == "social")).scalars())
             for r in s.execute(select(p.site_id, p.body).where(p.status == "approved")).all():
-                if autopilot.settings_of(r.body)["enabled"]:
+                if autopilot.settings_of(r.body)["enabled"] or r.site_id in social:  # a channel gets video ideas
                     continue
                 key = proposals.round_due(local, briefing_hour, ((r.body or {}).get("settings") or {}).get("round_last"))
                 if key is not None:
@@ -354,6 +356,30 @@ class Runner:
             enqueue(self.db, tenant, "evening", f"evening {site_id} {local.date().isoformat()}",
                     {"site_id": site_id, "tz": tz})
             done.append("evening")
+
+    def video_round(self, tenant: str, now: datetime, tz: str, briefing_hour: int, done: list[str]) -> None:
+        """The morning's ideas of social videos of each site or channel that
+        asks for them, once a day from the briefing hour, as a `video_round`
+        job (videos.py)."""
+        from . import videos
+        from .profile import _set_settings
+        from .queue import enqueue
+
+        if self.core_for(tenant) is None:
+            return
+        local = now.astimezone(ZoneInfo(tz))
+        p = m.editorial_profiles.c
+        with self.db.tenant(tenant) as s:
+            rows = s.execute(select(p.site_id, p.body, m.sites.c.kind).join(m.sites, m.sites.c.id == p.site_id)
+                             .where(p.status == "approved")).all()
+            due = [(r.site_id, videos.per_day(r.body, r.kind)) for r in rows
+                   if videos.round_due(r.body, r.kind, local, briefing_hour)]
+            for site_id, _ in due:
+                _set_settings(s, site_id, videos_last=local.date().isoformat())
+        for site_id, n in due:
+            enqueue(self.db, tenant, "video_round", f"videos {site_id} {local.date().isoformat()}",
+                    {"site_id": site_id, "n": n})
+            done.append("video_round")
 
     def review(self, tenant: str, client) -> None:
         """The weekly review: the sources of every site; for a site

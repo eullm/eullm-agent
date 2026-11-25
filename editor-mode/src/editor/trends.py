@@ -82,3 +82,47 @@ def today(s, archive: str, start: datetime) -> list:
 def latest(s, archive: str):
     t = m.trend_snapshots
     return s.execute(select(t).where(t.c.tenant_id == archive).order_by(t.c.taken_at.desc()).limit(1)).first()
+
+
+RISING_LOOKBACK = timedelta(hours=9)  # three snapshots back
+RISING_GAIN = 15.0  # Hype points gained in that time for a full "rising"
+EARLY_ITEMS = 8  # still few news: the wave has not broken yet
+
+
+def rising(s, archive: str, now: datetime | None = None) -> dict[int, dict]:
+    """The topics of the newest snapshot that are climbing, before they are
+    everywhere (Francesco, 2026-11-25: "cerca l'hype del momento o meglio
+    ancora lo anticipa"): each with `gain` (Hype points gained since about
+    nine hours ago; a topic that was not in the ranking then counts from
+    zero), `rising` (0-1: the gain against RISING_GAIN) and `early` (still
+    few news). Topics not climbing are left out."""
+    now = now or datetime.now(UTC)
+    t = m.trend_snapshots
+    snaps = s.execute(select(t.c.taken_at, t.c.topics).where(
+        t.c.tenant_id == archive, t.c.taken_at >= now - timedelta(hours=30))
+        .order_by(t.c.taken_at.desc())).all()
+    if not snaps:
+        return {}
+    newest = snaps[0]
+    newest_at = newest.taken_at if newest.taken_at.tzinfo else newest.taken_at.replace(tzinfo=UTC)
+    before = []
+    for x in snaps[1:]:
+        at = x.taken_at if x.taken_at.tzinfo else x.taken_at.replace(tzinfo=UTC)
+        if newest_at - at >= RISING_LOOKBACK - timedelta(minutes=30):
+            before = x.topics or []
+            break
+    else:
+        if len(snaps) > 1:
+            before = snaps[-1].topics or []  # the oldest of the day, when nine hours are not there yet
+        else:
+            return {}  # one snapshot only: nothing to compare with
+    then = {x["topic_id"]: float(x.get("hype") or 0) for x in before}
+    out = {}
+    for x in newest.topics or []:
+        gain = float(x.get("hype") or 0) - then.get(x["topic_id"], 0.0)
+        if gain <= 0:
+            continue
+        out[x["topic_id"]] = {"gain": round(gain, 1), "rising": round(min(1.0, gain / RISING_GAIN), 3),
+                              "early": int(x.get("items") or 0) <= EARLY_ITEMS, "new": x["topic_id"] not in then,
+                              "hype": float(x.get("hype") or 0)}
+    return out

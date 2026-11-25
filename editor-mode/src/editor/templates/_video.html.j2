@@ -9,6 +9,7 @@
     {% elif v.status in ('queued', 'making') %}<span class="chip amber">{{ _('Interrotto') }}</span>
     {% else %}<span class="chip">{{ _('Idea') }}</span>{% endif %}
   </div>
+  {% if v.gain or v.auto %}<p class="hint" style="margin: 2px 0;">{% if v.gain %}<span class="chip teal">{{ _('In salita') }}</span> {{ _('+{n} punti di Hype nelle ultime ore', n=v.gain|round|int) }}{% if v.hype %} · {{ _('Hype {n}', n=v.hype|round|int) }}{% endif %}{% elif v.hype %}{{ _('Hype {n}', n=v.hype|round|int) }}{% endif %}{% if v.auto %} · {{ _('proposta del mattino') }}{% endif %}</p>{% endif %}
   {% if v.status == 'ready' and v.has_file %}
   <video controls playsinline preload="metadata" src="/videos/{{ v.id }}/file" style="width: 100%; max-width: 280px; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; display: block; margin: 8px 0;"></video>
   {% elif v.status == 'ready' %}
@@ -28,6 +29,7 @@
       {% if v.status in ('idea', 'failed', 'queued', 'making') and vstate.on %}
       <form class="inline" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
       {% endif %}
+      {% if v.topic_id and not v.draft_id and site and site.kind != 'social' and vstate.can_ideas %}<form class="inline" method="post" action="/ui/videos/{{ v.id }}/article"><button class="btn sm" type="submit">{{ _("Scrivi anche l'articolo") }}</button></form>{% endif %}
       {% if v.status in ('idea', 'ready', 'failed') %}<form class="inline" method="post" action="/ui/videos/{{ v.id }}/delete"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
     {% endif %}
   </div>

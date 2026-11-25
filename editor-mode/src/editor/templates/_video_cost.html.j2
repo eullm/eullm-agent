@@ -1,0 +1,3 @@
+{# What a social video costs now: the plan's videos of the month, then credits. Needs `vstate`. #}
+{% set a = vstate.allowance %}
+<p class="hint">{% if a.included is not none and a.included > 0 %}{{ _('Video del piano questo mese: {used} su {n}.', used=a.used, n=a.included) }} {% endif %}{% if vstate.price %}{{ _('Ogni video costa {n} crediti, solo se riesce (te ne restano {left}).', n=vstate.price, left=vstate.credits.left) }}{% elif vstate.price is none %}{{ _('I video del piano di questo mese sono finiti: ne arrivano altri il mese prossimo, oppure scegli un piano con più video in Il mio piano.') }}{% elif a.included is not none and a.left %}{{ _('Un video si conta solo se riesce.') }}{% endif %}</p>

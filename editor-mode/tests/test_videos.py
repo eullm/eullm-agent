@@ -109,7 +109,7 @@ def test_a_model_without_vertical_videos_is_refused_before_paying(db, tenant):
 
 def test_a_refused_video_costs_nothing_and_can_be_tried_again(db, tenant):
     _, ids = with_ideas(db, tenant)
-    set_plan(db, tenant, credits_month=500)
+    set_plan(db, tenant, credits_month=500, max_videos_month=0)
     with respx.mock(assert_all_called=False) as router:
         catalog(router)
         service(router, final="failed")
@@ -123,7 +123,7 @@ def test_a_refused_video_costs_nothing_and_can_be_tried_again(db, tenant):
 
 def test_a_video_is_paid_in_credits_only_when_made(db, tenant):
     _, ids = with_ideas(db, tenant)
-    set_plan(db, tenant, credits_month=150)
+    set_plan(db, tenant, credits_month=150, max_videos_month=0)  # a plan of articles: videos in credits
     with db.tenant(tenant) as s:
         assert videos.price(s) == 100
     videos.ask(db, tenant, ids[0], "redattore")
@@ -216,3 +216,77 @@ def test_make_queues_the_job_with_a_video_service(db, tenant):
         status = s.execute(select(m.videos.c.status).where(m.videos.c.id == ids[0])).scalar()
     assert job.args["video_id"] == ids[0] and status == "queued"
     assert "Genera il video" not in c.get("/videos").text.split(f'id="video-{ids[0]}"')[1].split('class="video-idea"')[0]
+
+
+def test_a_social_plan_includes_videos_then_credits(db, tenant):
+    _, ids = with_ideas(db, tenant)
+    set_plan(db, tenant, credits_month=0, max_videos_month=1)
+    with db.tenant(tenant) as s:
+        assert videos.price(s) == 0 and videos.allowance(s)["left"] == 1
+    with respx.mock(assert_all_called=False) as router:
+        catalog(router)
+        service(router)
+        videos.make(db, tenant, ids[0], maker())
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos.c.included, m.videos.c.credits).where(m.videos.c.id == ids[0])).first()
+        assert row.included and row.credits == 0
+        assert videos.allowance(s) == {"included": 1, "used": 1, "left": 0}
+        assert videos.price_or_none(s) == 100  # credits on, none left
+    with pytest.raises(credits.NoCredits):
+        videos.ask(db, tenant, ids[1], "redattore")
+
+
+def test_rising_topics_come_first_in_the_morning(db, tenant):
+    from datetime import UTC, datetime, timedelta
+
+    from editor import repo, trends
+
+    archive = repo.archive_of(db, tenant)
+    now = datetime.now(UTC)
+    with db.tenant(archive) as s:
+        for hours, topics in ((10, [{"topic_id": 1, "hype": 50, "items": 20}, {"topic_id": 2, "hype": 10, "items": 2}]),
+                              (0, [{"topic_id": 1, "hype": 52, "items": 22}, {"topic_id": 2, "hype": 30, "items": 4},
+                                   {"topic_id": 3, "hype": 12, "items": 1}])):
+            s.execute(m.trend_snapshots.insert().values(tenant_id=archive, taken_at=now - timedelta(hours=hours),
+                                                        topics=topics))
+        up = trends.rising(s, archive, now)
+    assert up[2]["gain"] == 20 and up[2]["rising"] == 1 and up[2]["early"]
+    assert up[3]["new"] and up[1]["rising"] < up[2]["rising"]
+
+
+def test_a_social_channel_has_no_site_and_gets_its_profile_from_words(db, tenant):
+    c = logged_in(db, tenant, "owner")
+    r = c.post("/ui/channels", data={"name": "AI Today Shorts", "handle": "@aitoday.shorts",
+                                     "brief": "Novità di AI spiegate semplici", "language": "it"},
+               follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/site"
+    with db.tenant(tenant) as s:
+        site = s.execute(select(m.sites).where(m.sites.c.kind == "social")).first()
+        job = s.execute(select(m.jobs.c.kind, m.jobs.c.args).where(m.jobs.c.kind == "brief")).first()
+    assert site.domain == "@aitoday-shorts" and site.handle == "@aitoday.shorts" and site.name == "AI Today Shorts"
+    assert job.args["site_id"] == site.id and "no website" in job.args["auto"]["brief"]
+    assert videos.per_day(None, "social") == 3 and videos.per_day(None, "web") == 0
+    assert videos.per_day({"settings": {"videos_per_day": 5}}, "web") == 5
+
+
+def test_the_morning_round_writes_one_idea_per_topic(db, tenant, monkeypatch):
+
+    did, _ = approved_draft(db, tenant)
+    with db.tenant(tenant) as s:
+        site_id = s.execute(select(m.drafts.c.site_id).where(m.drafts.c.id == did)).scalar()
+        topic = s.execute(select(m.topics.c.id).limit(1)).scalar()
+    assert topic is not None
+    monkeypatch.setattr(videos, "pick_topics", lambda *a, **k: [{"topic_id": topic, "score": 90, "gain": 12.0,
+                                                                 "hype": 40.0}])
+    with respx.mock(assert_all_called=False) as router:
+        router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps(IDEAS)))
+        ids = videos.daily_round(db, tenant, site_id, CoreClient("http://core.test", "tok"), 1)
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == ids[0])).first()
+    assert len(ids) == 1 and row.auto and row.gain == 12.0 and row.topic_id == topic and row.draft_id is None
+    from datetime import datetime
+    body = {"settings": {"videos_per_day": 2}}
+    assert videos.round_due(body, "web", datetime(2026, 11, 25, 9), 8)
+    assert not videos.round_due(body | {"settings": {"videos_per_day": 2, "videos_last": "2026-11-25"}}, "web",
+                                datetime(2026, 11, 25, 9), 8)
+    assert not videos.round_due(body, "web", datetime(2026, 11, 25, 7), 8)

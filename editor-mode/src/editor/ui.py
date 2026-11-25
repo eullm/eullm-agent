@@ -288,7 +288,7 @@ def register(app, ctx) -> None:
         active = s.execute(select(j.kind, j.subject, j.args).where(
             j.kind.in_(("video", "video_ideas")), j.status.in_(("queued", "running")))).all()
         return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
-                "price": vids.price(s), "credits": credits.state(s),
+                "price": vids.price_or_none(s), "credits": credits.state(s), "allowance": vids.allowance(s),
                 "making": {(a.args or {}).get("video_id") for a in active if a.kind == "video"},
                 "ideas": {a.subject for a in active if a.kind == "video_ideas"}}
 
@@ -1337,6 +1337,37 @@ def register(app, ctx) -> None:
         choose_site(resp, sid)
         return resp
 
+    @app.post("/ui/channels")
+    def ui_add_channel(name: str = Form(...), handle: str = Form(""), brief: str = Form(""),
+                       language: str = Form("it"), c: auth.Caller = Depends(ctx.need("owner"))):
+        """A social channel without a blog (Instagram, TikTok, YouTube Shorts):
+        no site to read, its profile comes from the owner's words; then the
+        sources and every morning the video ideas (videos.py)."""
+        name, handle, brief = name.strip()[:100], handle.strip()[:200], brief.strip()[:4000]
+        if not name or not brief:
+            return done("/settings#h-sites", t("Scrivi il nome del canale e di cosa parla: il profilo si ricava da lì."))
+        tag = seo_slug(handle.rsplit("/", 1)[-1].lstrip("@") if handle else name, 40)
+        if not tag:
+            return done("/settings#h-sites", t("Scrivi il nome del canale e di cosa parla: il profilo si ricava da lì."))
+        language = language if language in autopilot.LANGS else "it"
+        try:
+            sid = ctx.add_site(c.tenant_id, f"@{tag}")
+        except trials.TrialUsed:
+            return done("/settings#h-sites", t("{domain} ha già avuto la prova gratuita in un'altra redazione: per lavorarci scegli un piano in Abbonamento.", domain=f"@{tag}"))
+        except quotas.QuotaExceeded:
+            return done("/settings#h-sites", t("Il piano non ha posto per un altro sito: scegline uno più grande in Abbonamento."))
+        with db.tenant(c.tenant_id) as s:
+            s.execute(update(m.sites).where(m.sites.c.id == sid).values(kind="social", handle=handle or None,
+                                                                        name=name, language=language))
+        cfg = autopilot.check_settings({"enabled": False, "brief": (
+            f"Social channel with no website, for Instagram Reels, TikTok and YouTube Shorts"
+            f"{' (' + handle + ')' if handle else ''}: {brief}")})
+        queue.enqueue(db, c.tenant_id, "brief", f"site {sid}", {"site_id": sid, "language": language, "auto": cfg})
+        resp = done("/site", t("Canale {name} aggiunto: il modello scrive il profilo dalla tua descrizione, poi lo "
+                               "approvi qui e cerco le fonti. Ogni mattina arrivano le idee per i video.", name=name))
+        choose_site(resp, sid)
+        return resp
+
     # --- Collega il sito ------------------------------------------------------------
 
     def connect_message(e: connect.ConnectError) -> str:
@@ -2276,9 +2307,21 @@ def register(app, ctx) -> None:
             sites, site = current_site(s, request)
             vstate = video_state(s)
             rows = vids.of_site(s, site.id) if site else []
+            body = prof.approved_profile(s, site.id) if site else None
+            per_day = vids.per_day(body.body if body else None, site.kind) if site else 0
             return render(request, "videos.html.j2", c, s, "videos", _sites=(sites, site), videos=rows,
+                          per_day=per_day, has_profile=body is not None, allowance=vids.allowance(s),
                           vstate=vstate, ideas_busy=bool(site) and any(
                               x.endswith(f" site {site.id}") for x in vstate["ideas"]))
+
+    @app.post("/ui/sites/{site_id}/videos-per-day")
+    def ui_videos_per_day(site_id: int, n: int = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
+        n = max(0, min(vids.MAX_PER_DAY, n))
+        with db.tenant(c.tenant_id) as s:
+            if not prof._set_settings(s, site_id, videos_per_day=n):
+                return done("/videos", t("Approva prima il profilo: le idee partono dalla linea approvata."))
+        return done("/videos", t("Da domattina {n} idee di video al giorno.", n=n) if n
+                    else t("Idee di video del mattino spente: le chiedi tu da un articolo o da un tema."))
 
     @app.post("/ui/drafts/{draft_id}/video-ideas")
     def ui_video_ideas(draft_id: int, c: auth.Caller = Depends(ctx.need("editor"))):
@@ -2315,17 +2358,32 @@ def register(app, ctx) -> None:
             return done(back, t("Video non configurati: serve una chiave di OpenRouter in Amministrazione › Impostazioni."))
         with db.tenant(c.tenant_id) as s:
             site_id = s.execute(select(m.videos.c.site_id).where(m.videos.c.id == video_id)).scalar()
-            cost, left = vids.price(s), credits.state(s).get("left", 0)
+            cost, left = vids.price_or_none(s), credits.state(s).get("left", 0)
         if site_id is None:
             raise HTTPException(404, "video not found")
         try:
             vids.ask(db, c.tenant_id, video_id, c.name)
         except credits.NoCredits:
+            if cost is None:
+                return done(back, t("I video del piano di questo mese sono finiti: ne arrivano altri il mese prossimo, "
+                                    "oppure scegli un piano con più video in Il mio piano."))
             return done(back, t("Crediti insufficienti: un video costa {n} crediti e ne restano {left}. Puoi "
                                 "aggiungerne in Il mio piano.", n=cost, left=left))
         ctx.run_video(c.tenant_id, site_id, video_id)
         return done(back, t("Video in preparazione: ci vogliono di solito da uno a cinque minuti. Lo segui nel "
                             "riquadro Attività."))
+
+    @app.post("/ui/videos/{video_id}/article")
+    def ui_video_article(video_id: int, c: auth.Caller = Depends(ctx.need("editor"))):
+        """From a video on a trend to the article on it: three titles to choose
+        from in the editorial plan, as «Proponimi tre titoli» does."""
+        with db.tenant(c.tenant_id) as s:
+            row = s.execute(select(m.videos.c.site_id, m.videos.c.topic_id).where(m.videos.c.id == video_id)).first()
+        if row is None or row.topic_id is None:
+            raise HTTPException(404, "video not found")
+        ctx.run_titles(c.tenant_id, row.site_id, row.topic_id)
+        return done("/trends#h-plan", t("Sto preparando tre titoli su questo tema: compaiono nel piano editoriale tra "
+                                        "qualche minuto, scegli quello da scrivere."))
 
     @app.post("/ui/videos/{video_id}/delete")
     def ui_video_delete(video_id: int, back: str = Form("/videos"), c: auth.Caller = Depends(ctx.need("editor"))):

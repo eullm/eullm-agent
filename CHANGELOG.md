@@ -29,6 +29,27 @@
   100 crediti, circa 1 €); un video rifiutato dal servizio non costa nulla.
   Il cliente vede crediti, mai euro di modello. Una redazione senza crediti
   (l'installazione locale) non paga.
+- **Un servizio a sé, anche senza blog** (Francesco, 25 novembre: "un
+  servizio scollato venduto a parte che si può integrare con gli articoli e
+  vice versa"). In Impostazioni › Siti, «Aggiungi un canale social, senza
+  blog»: nome, account facoltativo, lingua e di cosa parla; il profilo si
+  ricava da quella descrizione (come «Crea il profilo dal contesto»), poi si
+  approva e partono le fonti. Un canale non riceve proposte di articoli,
+  solo idee di video.
+- **L'hype prima che esploda**: oltre all'Hype del momento, i temi «in
+  salita» (trends.rising): i punti di Hype guadagnati nelle ultime nove ore,
+  dalle istantanee del trend, e se hanno ancora poche notizie. Ogni mattina,
+  all'ora del briefing, ogni sito o canale riceve N idee di video (canali 3,
+  siti 0 finché non le accendi in Video social › Idee ogni mattina), una per
+  tema, prima quelli che salgono e non sono ancora ovunque; mai lo stesso
+  tema due volte in una settimana.
+- **Video compresi nel piano**: nuovo limite «Video social al mese» in
+  /admin › Piani (e per redazione). Si usano prima i video del piano, poi i
+  crediti; i piani già esistenti ne hanno 0, quindi lì i video si pagano in
+  crediti. Un piano solo social è un piano con 0 articoli e N video.
+- **Dal video all'articolo**: su un'idea nata da un tema, «Scrivi anche
+  l'articolo» prepara tre titoli nel piano editoriale (solo per i siti, non
+  per i canali).
 - **Impostazioni › Video social**: chiave OpenRouter (vuota: quella delle
   copertine se è sk-or-), modello, risoluzione (720p) e durata (10 s);
   anche come EDITOR_VIDEO_* nel file .env.
@@ -62,6 +83,9 @@
   video realistici. Le scene non chiedono mai scritte, loghi o persone reali
   riconoscibili.
 - Migrazione 0050 (SQLite 0038): tabella editor.videos e prezzo 'video'.
+  Migrazione 0051 (SQLite 0039): sites.kind ('web' o 'social') e
+  sites.handle, plans/tenants.max_videos_month, videos.included, hype, gain,
+  auto.
 
 ## 0.38.1
 

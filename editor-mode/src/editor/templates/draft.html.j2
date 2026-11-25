@@ -288,7 +288,7 @@
       {% elif caller.can('editor') and vstate.can_ideas %}
       <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/video-ideas"><button class="btn sm" type="submit">{% if videos %}{{ _('Altre idee per i video') }}{% else %}{{ _('Proponi idee per i video') }}{% endif %}</button></form>
       {% endif %}
-      {% if vstate.price %}<p class="hint">{{ _('Ogni video costa {n} crediti, solo se riesce (te ne restano {left}).', n=vstate.price, left=vstate.credits.left) }}</p>{% endif %}
+      {% include "_video_cost.html.j2" %}
       <p class="hint">{{ _('Quando lo pubblichi, attiva l\'etichetta per i contenuti generati con l\'AI: Instagram, TikTok e YouTube la chiedono per i video realistici.') }}</p>
     </section>
     {% endif %}

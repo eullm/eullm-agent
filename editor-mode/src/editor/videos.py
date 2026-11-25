@@ -38,7 +38,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 
 from . import credits, models as m, usage
 from .core_client import CoreError
@@ -234,7 +234,7 @@ def _profile(s, site_id: int) -> dict:
 
 
 def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int | None = None,
-          site_id: int | None = None, n: int = IDEAS, seconds: int = 10) -> list[int]:
+          site_id: int | None = None, n: int = IDEAS, seconds: int = 10, extra: dict | None = None) -> list[int]:
     """Write `n` video ideas from an article (draft_id) or a trend (topic_id
     and the site); the unused ideas of the same article or trend are
     replaced. Returns their ids."""
@@ -284,7 +284,7 @@ def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int |
         for x in found:
             vid = s.execute(m.videos.insert().values(
                 tenant_id=tenant_id, site_id=site_id, draft_id=draft_id, topic_id=topic_id, language=language,
-                status="idea", **x).returning(v.id)).scalar_one()
+                status="idea", **(extra or {}), **x).returning(v.id)).scalar_one()
             created.append(vid)
     return created
 
@@ -301,14 +301,102 @@ def prompt_of(row) -> str:
     return out[:2500]
 
 
+# --- the morning round -----------------------------------------------------------------
+
+RECENT_DAYS = 7  # a topic that already had a video idea this week is not proposed again
+DEFAULT_PER_DAY = {"web": 0, "social": 3}
+MAX_PER_DAY = 10
+
+
+def per_day(body: dict | None, kind: str = "web") -> int:
+    """How many video ideas the site or channel gets every morning."""
+    st = (body or {}).get("settings") or {}
+    n = st.get("videos_per_day")
+    return max(0, min(MAX_PER_DAY, int(n))) if isinstance(n, int) and not isinstance(n, bool) \
+        else DEFAULT_PER_DAY.get(kind, 0)
+
+
+def round_due(body: dict | None, kind: str, local: datetime, briefing_hour: int) -> bool:
+    """Once a day, from the briefing hour, when the site asks for any."""
+    st = (body or {}).get("settings") or {}
+    return per_day(body, kind) > 0 and local.hour >= briefing_hour and st.get("videos_last") != local.date().isoformat()
+
+
+def pick_topics(db, tenant_id: str, site_id: int, n: int, now: datetime | None = None) -> list[dict]:
+    """The topics for the morning's video ideas: those that fit the site or
+    channel (Opportunity) and, first, those climbing before they are
+    everywhere (trends.rising); not those that had a video idea this week."""
+    from . import opportunity, repo, trends
+
+    now = now or datetime.now(UTC)
+    found = opportunity.score_site(db, tenant_id, site_id, now)
+    archive = repo.archive_of(db, tenant_id)
+    with db.tenant(tenant_id) as s:
+        up = trends.rising(s, archive, now)
+        v = m.videos.c
+        done = set(s.execute(select(v.topic_id).where(
+            v.site_id == site_id, v.topic_id.is_not(None),
+            v.created_at >= now - timedelta(days=RECENT_DAYS))).scalars())
+    ranked = []
+    for o in found:
+        if o.topic_id in done:
+            continue
+        r = up.get(o.topic_id) or {}
+        # Climbing, and still few news: the video comes out before the wave.
+        score = o.score + 40 * r.get("rising", 0) + (10 if r.get("early") and r else 0)
+        ranked.append({"topic_id": o.topic_id, "score": score, "gain": r.get("gain"),
+                       "hype": r.get("hype", round(100 * (o.components.get("hype") or 0), 1))})
+    ranked.sort(key=lambda x: -x["score"])
+    return ranked[:n]
+
+
+def daily_round(db, tenant_id: str, site_id: int, core, n: int, seconds: int = 10,
+                now: datetime | None = None) -> list[int]:
+    """The morning's video ideas of a site or channel: one idea for each of
+    the `n` best topics. Returns their ids."""
+    created = []
+    for x in pick_topics(db, tenant_id, site_id, n, now):
+        try:
+            created += ideas(db, tenant_id, core, topic_id=x["topic_id"], site_id=site_id, n=1, seconds=seconds,
+                             extra={"auto": True, "gain": x["gain"], "hype": x["hype"]})
+        except (CoreError, LookupError) as e:
+            log.warning("video idea for topic %s failed: %s", x["topic_id"], e)
+    return created
+
+
 # --- the video -------------------------------------------------------------------------
 
 
+def allowance(s, now: datetime | None = None) -> dict:
+    """The month's videos of the plan: included (None: no limit), used, left."""
+    tid = s.info["tenant_id"]
+    limit = s.execute(select(m.tenants.c.max_videos_month).where(m.tenants.c.tenant_id == tid)).scalar()
+    if limit is None:
+        return {"included": None, "used": 0, "left": None}
+    v = m.videos.c
+    used = s.execute(select(func.count()).select_from(m.videos).where(
+        v.included.is_(True), v.made_at >= credits.month_start(s, now))).scalar() or 0
+    return {"included": limit, "used": used, "left": max(0, limit - used)}
+
+
 def price(s) -> int:
-    """What a video costs the newsroom now; 0 when it does not use credits."""
-    if s.execute(select(m.tenants.c.credits_month).where(m.tenants.c.tenant_id == s.info["tenant_id"])).scalar() is None:
+    """What the next video costs the newsroom in credits: 0 while the month's
+    videos of the plan last, or when the newsroom does not use credits."""
+    a = allowance(s)
+    if a["included"] is None or a["left"]:
         return 0
+    tid = s.info["tenant_id"]
+    if s.execute(select(m.tenants.c.credits_month).where(m.tenants.c.tenant_id == tid)).scalar() is None:
+        raise credits.NoCredits("no videos left in the plan and no credits")
     return credits.price(s, "video")
+
+
+def price_or_none(s) -> int | None:
+    """The price, or None when the plan's videos are used up and the newsroom has no credits."""
+    try:
+        return price(s)
+    except credits.NoCredits:
+        return None
 
 
 def ask(db, tenant_id: str, video_id: int, by: str) -> None:
@@ -364,14 +452,17 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
         cost = float(cost) if isinstance(cost, (int, float)) else None
         usage.record(maker.model, None, cost, int((time.monotonic() - started) * 1000))
     with db.tenant(tenant_id) as s:
-        try:
-            paid = credits.spend(s, "video", f"video:{video_id}")
-        except credits.NoCredits:  # credits used elsewhere while it was made: it is already paid for
-            log.warning("video %s made without credits left", video_id)
-            paid = 0
+        credits.lock(s, f"editor-quota:{tenant_id}")
+        a = allowance(s)
+        included, paid = a["included"] is not None and a["left"] > 0, 0
+        if a["included"] is not None and not included:
+            try:
+                paid = credits.spend(s, "video", f"video:{video_id}")
+            except credits.NoCredits:  # credits used elsewhere while it was made: it is already paid for
+                log.warning("video %s made without credits left", video_id)
         s.execute(update(m.videos).where(v.id == video_id).values(
             status="ready", content=content, mime=mime_of(content), size_bytes=len(content), cost=cost,
-            credits=paid, made_at=datetime.now(UTC), error=None))
+            credits=paid, included=included, made_at=datetime.now(UTC), error=None))
     forget_old(db, tenant_id)
     return {"video_id": video_id, "site_id": row.site_id, "title": row.title, "ready": True}
 
@@ -403,7 +494,7 @@ def _listed():
     v = m.videos.c
     return (v.id, v.site_id, v.draft_id, v.topic_id, v.language, v.title, v.hook, v.scene, v.voiceover, v.caption,
             v.hashtags, v.status, v.model, v.seconds, v.resolution, v.credits, v.error, v.size_bytes, v.created_at,
-            v.made_at, (v.content.is_not(None)).label("has_file"))
+            v.made_at, v.included, v.hype, v.gain, v.auto, (v.content.is_not(None)).label("has_file"))
 
 
 def post_text(v) -> str:

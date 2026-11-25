@@ -102,6 +102,10 @@ def test_copies_of_a_cover_become_pointers_on_upgrade(pg_urls):
     try:
         migrate.upgrade(url, "0047")
         with psycopg.connect(url, autocommit=True) as conn:
+            # Today's code reads columns added after 0047 (0051): added now as that migration does.
+            conn.execute("ALTER TABLE editor.tenants ADD COLUMN max_videos_month integer")
+            conn.execute("ALTER TABLE editor.sites ADD COLUMN kind text NOT NULL DEFAULT 'web'")
+            conn.execute("ALTER TABLE editor.sites ADD COLUMN handle text")
             conn.execute("ALTER ROLE editor_app WITH LOGIN PASSWORD 'editor_app_test'")
             conn.execute(f'GRANT CONNECT ON DATABASE "{name}" TO editor_app')
         app = pg_urls[1].rsplit("/", 1)[0] + "/" + name

@@ -91,6 +91,7 @@ tenants = Table(
     Column("max_users", Integer),  # people with access to the newsroom, the director included
     Column("credits_alert", Text),  # last alert sent: "YYYY-MM:80" or "YYYY-MM:100"
     Column("extra_languages", JSONB),  # languages bought beyond the plan, by site: {"<site id>": n}
+    Column("max_videos_month", Integer),  # social videos included every month (videos.py); null: no limit
 )
 
 sites = Table(
@@ -106,6 +107,8 @@ sites = Table(
     Column("gsc_status", Text),  # the last check or reading: "ok" or what went wrong
     Column("gsc_checked_at", _ts()),
     Column("feedback", Boolean, nullable=False, default=False),  # readers may write to the newsroom (readers.py)
+    Column("kind", Text, nullable=False, default="web"),  # web: a site with articles; social: a channel, no blog
+    Column("handle", Text),  # the social channel's account (@name or its address)
 )
 
 sources = Table(
@@ -526,6 +529,10 @@ videos = Table(
     Column("created_at", _ts()),
     Column("made_at", _ts()),
     Column("made_by", Text),
+    Column("included", Boolean, nullable=False, default=False),  # one of the month's videos of the plan
+    Column("hype", REAL),  # the trend's Hype when proposed
+    Column("gain", REAL),  # Hype points it gained in the last hours: rising before it is everywhere
+    Column("auto", Boolean, nullable=False, default=False),  # proposed by the morning round
 )
 
 feeds = Table(
@@ -764,6 +771,7 @@ plans = Table(
     Column("credits_month", Integer),
     Column("evening", Boolean, nullable=False),
     Column("max_users", Integer),  # accesses included: people in the newsroom, the director included
+    Column("max_videos_month", Integer),  # social videos included every month
 )
 
 subscriptions = Table(

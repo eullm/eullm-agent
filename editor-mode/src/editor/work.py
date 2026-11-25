@@ -255,6 +255,12 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         return {"site_id": args.get("site_id"), "draft_id": args.get("draft_id"), "ideas": len(ids),
                 "title": title or ""}
 
+    def video_round(tenant: str, subject: str, args: dict) -> dict:
+        seconds = videomaker.seconds if videomaker is not None else 10
+        ids = videos.daily_round(db, tenant, args["site_id"], need(core_for(tenant), "model (Core)"),
+                                 args.get("n") or 3, seconds)
+        return {"site_id": args["site_id"], "ideas": len(ids)}
+
     def video(tenant: str, subject: str, args: dict) -> dict:
         return videos.make(db, tenant, args["video_id"], need(videomaker, "video service (EDITOR_VIDEO_API_KEY)"))
 
@@ -338,4 +344,5 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
             "deliver": deliver, "auto": auto, "brief": brief, "evening": evening,
-            "request": request, "wpmenu": wpmenu, "video_ideas": video_ideas, "video": video}
+            "request": request, "wpmenu": wpmenu, "video_ideas": video_ideas, "video": video,
+            "video_round": video_round}
