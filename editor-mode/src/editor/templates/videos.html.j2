@@ -1,0 +1,51 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ _('Video social') }}{% endblock %}
+{% block main %}
+<header class="head">
+  <div>
+    <span class="kicker">{{ _('Video social') }}{% if site %} · {{ site.domain }}{% endif %}</span>
+    <h1>{{ _('Video per Instagram, TikTok e YouTube Shorts') }}</h1>
+    <p class="lead">{{ _('Dagli articoli e dai temi del momento, idee per clip verticali con voce e suono. Scegli l\'idea, il modello video la gira in qualche minuto, tu scarichi il video e lo pubblichi con il testo pronto. Nulla viene pubblicato da qui.') }}</p>
+  </div>
+</header>
+{% if not vstate.on %}
+<p class="notice">{{ _('I video non sono ancora attivi su questo server: l\'amministratore deve mettere una chiave di OpenRouter in Amministrazione › Impostazioni › Video social. Le idee si possono già scrivere.') }}</p>
+{% endif %}
+{% if site and caller.can('owner') %}
+<section class="card pad" aria-labelledby="h-videos-day">
+  <h2 id="h-videos-day">{{ _('Idee ogni mattina') }}</h2>
+  {% if has_profile %}
+  <form method="post" action="/ui/sites/{{ site.id }}/videos-per-day" class="row" style="gap: 8px; flex-wrap: wrap; align-items: end;">
+    <label class="field">{{ _('Idee di video al giorno') }}<input name="n" type="number" min="0" max="10" value="{{ per_day }}" style="max-width: 90px;"></label>
+    <button class="btn" type="submit">{{ _('Salva') }}</button>
+  </form>
+  <p class="hint">{{ _("All'ora del briefing il modello sceglie i temi più adatti a {domain}, prima quelli che stanno salendo e non sono ancora ovunque, e scrive un'idea di video per ognuno. Le idee sono gratis; si paga solo il video che fai girare. 0 le spegne.", domain=site.domain) }}</p>
+  {% else %}
+  <p class="hint">{{ _('Approva prima il profilo in Sito e profilo: le idee partono dalla linea approvata.') }}</p>
+  {% endif %}
+</section>
+{% endif %}
+<section class="card pad" aria-labelledby="h-videos">
+  <h2 id="h-videos">{{ _('Idee e video') }}</h2>
+  {% if ideas_busy %}<p><span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Idee in scrittura') }}</span></p>{% endif %}
+  {% for v in videos %}
+  <p class="hint" style="margin: 12px 0 0;">{% if v.draft_id %}{{ _('Dall\'articolo') }} <a href="/drafts/{{ v.draft_id }}">{{ v.article or ('#' ~ v.draft_id) }}</a>{% elif v.topic %}{{ _('Dal tema del momento «{topic}»', topic=v.topic) }}{% endif %}</p>
+  {% with back='/videos#video-' ~ v.id %}{% include "_video.html.j2" %}{% endwith %}
+  {% else %}
+  <p class="empty">{{ _('Ancora nessuna idea. Chiedile dalla pagina di un articolo (riquadro «Video per i social») o da un tema in Trend e piano («Idee per i video»).') }}</p>
+  {% endfor %}
+  {% include "_video_cost.html.j2" %}
+  <p class="hint">{{ _('Quando lo pubblichi, attiva l\'etichetta per i contenuti generati con l\'AI: Instagram, TikTok e YouTube la chiedono per i video realistici.') }} {{ _('I file restano qui 30 giorni, i testi sempre.') }}</p>
+</section>
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var label = b.textContent;
+    navigator.clipboard.writeText(document.getElementById(b.dataset.copy).value).then(function () {
+      b.textContent = {{ _('Copiato')|string|tojson }};
+      setTimeout(function () { b.textContent = label; }, 1500);
+    });
+  });
+});
+</script>
+{% endblock %}

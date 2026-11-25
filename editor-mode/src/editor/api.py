@@ -102,14 +102,15 @@ def normalise_domain(value: str) -> str:
 
 
 def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gateway=None, imager=None,
-               updates_dir: str = "") -> FastAPI:
+               updates_dir: str = "", videomaker=None) -> FastAPI:
     """admin: the owner connection, for accounts and the operator (by
     default the database's own `admin_url`, else `db`); mail: (to,
     subject, text) -> None, for invites (None: links are shown instead);
     public_url: the address people open, for the links in invites;
     gateway: online payments (gateway.Mollie), None for bank transfers;
     imager: the cover images service (images.Imager), None for no images;
-    updates_dir: the folder shared with the host for updates (updates.py)."""
+    updates_dir: the folder shared with the host for updates (updates.py);
+    videomaker: the social videos service (videos.OpenRouterVideo), None for none."""
     app = FastAPI(title="EuLLM Agent · Editor Mode", docs_url=None, redoc_url=None)
     if admin is None:
         from .db import Database
@@ -244,6 +245,14 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
         with db.tenant(tenant) as s:
             site_id = s.execute(select(m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).scalar()
         queue.enqueue(db, tenant, "image", f"draft {draft_id}", {"draft_id": draft_id, "site_id": site_id})
+
+    def run_video_ideas(tenant: str, site_id: int, draft_id: int | None = None, topic_id: int | None = None):
+        subject = f"draft {draft_id}" if draft_id else f"topic {topic_id} site {site_id}"
+        queue.enqueue(db, tenant, "video_ideas", subject,
+                      {"site_id": site_id, "draft_id": draft_id, "topic_id": topic_id})
+
+    def run_video(tenant: str, site_id: int, video_id: int):
+        queue.enqueue(db, tenant, "video", f"video {video_id}", {"site_id": site_id, "video_id": video_id})
 
     def run_delivery(tenant: str, draft_id: int) -> bool:
         """Email the approved article to the newsroom's email recipients, if it has any."""
@@ -615,6 +624,7 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
                                      run_proposals=run_proposals, run_titles=run_titles, run_collect=run_collect,
                                      run_publication=run_publication, run_translation=run_translation,
                                      run_translations=run_translations, run_image=run_image, imager=imager,
+                                     run_video_ideas=run_video_ideas, run_video=run_video, videomaker=videomaker,
                                      run_delivery=run_delivery, gateway=gateway))
     readers.register(app, db, admin, pages, mail, public_url)
     console.register(app, SimpleNamespace(db=db, admin=admin, pages=pages, core=core, mail=mail,
@@ -638,10 +648,10 @@ def default_app() -> FastAPI:
     from . import gateway
 
     st = runtime.settings()
-    from . import appsettings, images
+    from . import appsettings, images, videos
 
     # A change in /admin › Impostazioni restarts the dashboard with the new values.
     appsettings.watch(runtime.admin_database(), appsettings.restart_self)
     return create_app(runtime.database(), runtime.core(), runtime.admin_database(),
                       accounts.smtp_mailer(st), st.public_url, gateway.from_settings(st), images.from_settings(st),
-                      st.updates_dir)
+                      st.updates_dir, videos.from_settings(st))

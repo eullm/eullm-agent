@@ -26,6 +26,9 @@ KINDS = {
     "draft": N_("Scrittura della bozza"),
     "translate": N_("Traduzione dell'articolo"),
     "image": N_("Immagine di copertina"),
+    "video_ideas": N_("Idee per i video social"),
+    "video": N_("Video per i social"),
+    "video_round": N_("Idee video del mattino"),
     "deliver": N_("Invio dell'articolo per email"),
     "publish": N_("Pubblicazione"),
     "change": N_("Articolo sul sito"),
@@ -226,6 +229,17 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
             out.append(t("L'articolo è già online: per mettere anche lì la nuova copertina premi «Aggiorna sul sito» "
                          "nella sua pagina (e in quella di ogni traduzione pubblicata)."))
         return out, f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts", t("Vedi l'immagine")
+    if kind == "video_ideas":
+        where = f"/drafts/{r['draft_id']}#h-video" if r.get("draft_id") else "/videos"
+        return [t("{n} idee per i video pronte: scegli quella da girare.", n=r.get("ideas", 0))], where, t("Vedi le idee")
+    if kind == "video_round":
+        return [t("{n} idee per i video pronte: scegli quella da girare.", n=r.get("ideas", 0))], "/videos", t("Vedi le idee")
+    if kind == "video":
+        if r.get("failed"):
+            return [t("Il servizio video non ha fatto la clip «{title}»: nessun credito usato. Puoi riprovare o "
+                      "scegliere un'altra idea.", title=r.get("title", ""))], "/videos", t("Video social")
+        return [t("Video pronto: «{title}». Scaricalo e pubblicalo su Instagram, TikTok o YouTube Shorts.",
+                  title=r.get("title", ""))], "/videos", t("Scarica il video")
     if kind == "deliver":
         link = f"/drafts/{r['draft_id']}" if r.get("draft_id") else "/drafts"
         if not r.get("sent"):
@@ -311,7 +325,7 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
             or getattr(pub_of.get(args.get("publication_id")), "title", None) \
             or ((args.get("text") or "")[:120] if r.kind == "request" else None)
         item = {"id": r.id, "what": t(KINDS[r.kind]), "where": where, "status": r.status, "step": step,
-                "title": title if r.kind in ("draft", "auto", "translate", "image", "request", "publish", "change") else None,
+                "title": title if r.kind in ("draft", "auto", "translate", "image", "request", "publish", "change", "video") else None,
                 "lines": [], "href": None, "link": None, "warn": None,
                 # The hour it ended, or since when it waits or runs: the compact box's last column.
                 "at": _aware(r.finished_at or r.started_at or r.run_after, now).astimezone(tz).strftime("%H:%M")}

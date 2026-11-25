@@ -175,9 +175,9 @@ def test_the_console_edits_prices_packs_and_credits(db, admin):
     with admin.engine.connect() as conn:
         old = credits.prices(conn)
     try:
-        c.post("/admin/credits/prices", data={"article": "30", "translation": "12", "image": "4"})
+        c.post("/admin/credits/prices", data={"article": "30", "translation": "12", "image": "4", "video": "150"})
         with admin.engine.connect() as conn:
-            assert credits.prices(conn) == {"article": 30, "translation": 12, "image": 4}
+            assert credits.prices(conn) == {"article": 30, "translation": 12, "image": 4, "video": 150}
     finally:
         credits.set_prices(admin, old)
     c.post(f"/admin/newsrooms/{tid}/credits", data={"credits": "200", "amount": "", "note": "regalo"})

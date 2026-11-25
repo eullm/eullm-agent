@@ -52,6 +52,12 @@ class Settings:
     images_url: str = ""
     images_model: str = ""
     images_quality: str = "medium"
+    # Videos for the social networks (videos.py), made through OpenRouter's
+    # video API. Empty key: the images' key when it is an OpenRouter one.
+    video_api_key: str = ""
+    video_model: str = ""
+    video_resolution: str = "720p"
+    video_seconds: int = 10
     # A folder shared with the host for updates from the console (updates.py,
     # deploy/server/update.sh); empty: the console only says how to update.
     updates_dir: str = ""
@@ -91,5 +97,9 @@ class Settings:
             images_url=env.get("EDITOR_IMAGES_URL", "").strip().rstrip("/"),
             images_model=env.get("EDITOR_IMAGES_MODEL", "").strip(),
             images_quality=get("EDITOR_IMAGES_QUALITY", cls.images_quality).lower(),
+            video_api_key=env.get("EDITOR_VIDEO_API_KEY", "").strip(),
+            video_model=env.get("EDITOR_VIDEO_MODEL", "").strip(),
+            video_resolution=get("EDITOR_VIDEO_RESOLUTION", cls.video_resolution).lower(),
+            video_seconds=int(get("EDITOR_VIDEO_SECONDS", cls.video_seconds)),
             updates_dir=env.get("EDITOR_UPDATES_DIR", "").strip(),
         )

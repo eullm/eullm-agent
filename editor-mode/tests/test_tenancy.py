@@ -62,6 +62,8 @@ def populate(db, tenant, monkeypatch):
     with db.tenant(tenant) as s:  # a cover image
         s.execute(text("INSERT INTO editor.draft_images (tenant_id, draft_id, token, prompt, model, mime, content) "
                        "VALUES (:t, :d, 'tok-x', 'p', 'flux', 'image/jpeg', :c)"), {"t": tenant, "d": did, "c": b"jpg"})
+        s.execute(text("INSERT INTO editor.videos (tenant_id, site_id, draft_id, title, scene) "  # a social video idea
+                       "VALUES (:t, :s, :d, 'idea', 'scene')"), {"t": tenant, "s": site_id, "d": did})
     from editor import delivery  # the site's feed
     delivery.feed_token(db, tenant, site_id)
     with db.tenant(tenant) as s:  # Search Console numbers and a weekly report

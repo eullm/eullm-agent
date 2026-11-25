@@ -1,5 +1,92 @@
 # Changelog
 
+## 0.39.0
+
+### Added
+
+- **Video per i social** (Francesco, 25 novembre: "video generati via
+  OpenRouter, gli si propongono al cliente uno o più … poi li pubblicano
+  loro", anche gli Short di YouTube). Dalla pagina di un articolo (riquadro
+  «Video per i social») o da un tema del momento in Trend e piano («Idee per
+  i video») il modello scrive tre idee di clip verticali 9:16 per Instagram
+  Reels, TikTok e YouTube Shorts: titolo, cosa succede nel primo secondo,
+  la scena per il modello video, le parole della voce narrante, il testo del
+  post e gli hashtag, nella lingua dell'articolo. Le idee sono gratis (circa
+  un centesimo di modello). Il video vero si gira solo per l'idea scelta,
+  con «Genera il video»: OpenRouter, API video asincrona, audio compreso,
+  durata e risoluzione adattate a quello che il modello sa fare. Poi
+  «Scarica il video» (MP4) e «Copia il testo del post»: nulla viene
+  pubblicato da Redazia. Nuova voce di menu «Video social» con tutte le idee
+  e i video del sito.
+- **Prezzi misurati il 25 novembre** sull'elenco live di OpenRouter
+  (/api/v1/videos/models): un video verticale con audio costa tra 0,20 e
+  0,70 $, non pochi centesimi. Predefinito x-ai/grok-imagine-video-1.5-lite:
+  0,02 $/s a 480p, 0,03 $/s a 720p (10 secondi a 720p: 0,30 $). Il costo
+  vero di ogni video, come lo dice OpenRouter, va in Consumi alla voce
+  «Video social».
+- **Crediti video**: ogni video riuscito costa i crediti della nuova voce
+  «Video per i social» del listino (/admin › Piani e crediti, predefinito
+  100 crediti, circa 1 €); un video rifiutato dal servizio non costa nulla.
+  Il cliente vede crediti, mai euro di modello. Una redazione senza crediti
+  (l'installazione locale) non paga.
+- **Un servizio a sé, anche senza blog** (Francesco, 25 novembre: "un
+  servizio scollato venduto a parte che si può integrare con gli articoli e
+  vice versa"). In Impostazioni › Siti, «Aggiungi un canale social, senza
+  blog»: nome, account facoltativo, lingua e di cosa parla; il profilo si
+  ricava da quella descrizione (come «Crea il profilo dal contesto»), poi si
+  approva e partono le fonti. Un canale non riceve proposte di articoli,
+  solo idee di video.
+- **L'hype prima che esploda**: oltre all'Hype del momento, i temi «in
+  salita» (trends.rising): i punti di Hype guadagnati nelle ultime nove ore,
+  dalle istantanee del trend, e se hanno ancora poche notizie. Ogni mattina,
+  all'ora del briefing, ogni sito o canale riceve N idee di video (canali 3,
+  siti 0 finché non le accendi in Video social › Idee ogni mattina), una per
+  tema, prima quelli che salgono e non sono ancora ovunque; mai lo stesso
+  tema due volte in una settimana.
+- **Video compresi nel piano**: nuovo limite «Video social al mese» in
+  /admin › Piani (e per redazione). Si usano prima i video del piano, poi i
+  crediti; i piani già esistenti ne hanno 0, quindi lì i video si pagano in
+  crediti. Un piano solo social è un piano con 0 articoli e N video.
+- **Dal video all'articolo**: su un'idea nata da un tema, «Scrivi anche
+  l'articolo» prepara tre titoli nel piano editoriale (solo per i siti, non
+  per i canali).
+- **Impostazioni › Video social**: chiave OpenRouter (vuota: quella delle
+  copertine se è sk-or-), modello, risoluzione (720p) e durata (10 s);
+  anche come EDITOR_VIDEO_* nel file .env.
+
+### Fixed (correzioni di Gabriele, #313-#330 e #332, mergiate dopo la 0.38.1)
+
+- Rapporto settimanale senza le pubblicazioni ritirate (#313); testate
+  contate col nome della fonte del sito (#314); output dei programmi
+  tagliato dopo la conversione UTF-8 (#315); schema Bearer accettato in
+  maiuscolo o minuscolo (#316); segno del menu WordPress tolto solo dopo la
+  pubblicazione riuscita (#317) e destinazioni WordPress disattivate saltate
+  (#325); suffissi possessivi tolti dai nomi propri (#318); arrotondamento
+  per eccesso delle proposte senza scadenza (#319); niente /v1 doppio nel
+  rilevamento del motore (#320) e commento di detect_engine ripristinato
+  (#327); URL vuoto del database amministratore trattato come assente
+  (#322); freschezza delle fonti calcolata anche sulle frazioni di giorno
+  (#323); copertina esterna senza immagine registrata (#324); argomenti
+  mancanti degli strumenti OpenAI letti come oggetto vuoto (#326); importi
+  negativi di Mollie corretti (#328); testo dei commenti di Hacker News
+  (#329) e contenuto del feed quando il riassunto di un post è solo rumore
+  (#330); test dei siti giù indipendente dall'età dei fixture (#332).
+
+### Notes
+
+- Un lavoro video interrotto (worker riavviato) aspetta lo stesso lavoro di
+  OpenRouter invece di pagarne un secondo. I file dei video restano 30
+  giorni nel database, poi si cancellano e restano i testi; l'esportazione
+  della redazione non contiene i file.
+- La pagina ricorda di attivare l'etichetta per i contenuti generati con
+  l'AI quando si pubblica: Instagram, TikTok e YouTube la chiedono per i
+  video realistici. Le scene non chiedono mai scritte, loghi o persone reali
+  riconoscibili.
+- Migrazione 0050 (SQLite 0038): tabella editor.videos e prezzo 'video'.
+  Migrazione 0051 (SQLite 0039): sites.kind ('web' o 'social') e
+  sites.handle, plans/tenants.max_videos_month, videos.included, hype, gain,
+  auto.
+
 ## 0.38.1
 
 ### Added

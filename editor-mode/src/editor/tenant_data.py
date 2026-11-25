@@ -30,7 +30,7 @@ from . import models as m
 # Children before parents, the tenant last.
 DELETE_ORDER = [
     "publications", "publish_targets", "feeds",
-    "draft_images", "draft_claim_sources", "draft_claims", "drafts",
+    "videos", "draft_images", "draft_claim_sources", "draft_claims", "drafts",
     "proposal_citations", "proposals", "opportunity_scores",
     "reader_messages", "feedback", "profile_reviews", "editorial_profiles", "site_analyses", "site_posts",
     "briefings", "weekly_reports", "recipients", "search_stats",
@@ -67,7 +67,8 @@ def export(db, tenant_id: str, images: bool = True) -> dict:
         for name in reversed(DELETE_ORDER):
             table = m.metadata.tables[f"editor.{name}"]
             cols = [c for c in table.c if c.name not in WITHHELD.get(name, ())
-                    and (images or (name, c.name) != ("draft_images", "content"))]
+                    and (images or (name, c.name) != ("draft_images", "content"))
+                    and (name, c.name) != ("videos", "content")]  # clips of megabytes: downloaded from /videos
             order = list(table.primary_key.columns)
             rows = s.execute(select(*cols).where(table.c.tenant_id == tenant_id).order_by(*order)).all()
             out["tables"][name] = [{k: _plain(v) for k, v in r._mapping.items()} for r in rows]

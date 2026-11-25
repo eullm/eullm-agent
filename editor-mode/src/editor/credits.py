@@ -6,7 +6,9 @@ copied from the plan). They pay for what the plan does not include:
 - an article written after the month's articles of the plan are used up;
 - a translation after the same quota (translations count as articles);
 - a cover drawn again after the free ones: every article has its cover and
-  FREE_REDRAWS new ones included, then each costs the image price.
+  FREE_REDRAWS new ones included, then each costs the image price;
+- a video for the social networks (videos.py): never in the plan, every
+  video made costs the video price.
 
 The month's credits are used first and do not carry over; packs bought in
 the Piano page (Mollie) or recorded by the operator (bank transfer, a gift,
@@ -35,8 +37,10 @@ from .quotas import QuotaExceeded, _zone, lock
 
 log = logging.getLogger(__name__)
 
-ACTIONS = ("article", "translation", "image")
-DEFAULT_PRICES = {"article": 100, "translation": 10, "image": 5}  # 2026-11-08: 1 credit is about 1 cent
+ACTIONS = ("article", "translation", "image", "video")
+# 2026-11-08: 1 credit is about 1 cent. A video for the social networks
+# (2026-11-25): about 1 euro, against 0.20-0.45 USD of model.
+DEFAULT_PRICES = {"article": 100, "translation": 10, "image": 5, "video": 100}
 FREE_REDRAWS = 2  # covers drawn again for free, after the first one
 ALERTS = (80, 100)
 

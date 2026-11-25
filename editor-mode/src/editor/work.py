@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
-from . import autopilot, delivery, drafts, evening as ev, images, menus, models as m, picks, profile as prof, proposals, quotas, sources, translate as tr
+from . import autopilot, delivery, drafts, evening as ev, images, menus, models as m, picks, profile as prof, proposals, quotas, sources, translate as tr, videos
 from .i18n import N_
 from .progress import step
 from .queue import Handlers, enqueue
@@ -18,12 +18,13 @@ log = logging.getLogger(__name__)
 
 
 def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imager=None, mail=None,
-             public_url: str = "") -> Handlers:
+             public_url: str = "", videomaker=None) -> Handlers:
     """http_factory: () -> httpx.Client reading the web through the Core;
     core: CoreClient for the model; runner: schedule.Runner for the tick;
     imager: images.Imager for the cover images (None: drafts have none);
     mail: delivery.smtp_sender for the approved articles (None: no SMTP);
-    public_url: the dashboard's address, for the image links in the emails.
+    public_url: the dashboard's address, for the image links in the emails;
+    videomaker: videos.OpenRouterVideo for the social videos (None: none).
     Work that needs a missing piece fails with a message instead of
     pretending to have run."""
 
@@ -243,6 +244,26 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
         return {"draft_id": args["draft_id"], "title": d.title if d else "", "site_id": d.site_id if d else None,
                 "online": online}
 
+    def video_ideas(tenant: str, subject: str, args: dict) -> dict:
+        seconds = videomaker.seconds if videomaker is not None else 10
+        ids = videos.ideas(db, tenant, need(core_for(tenant), "model (Core)"), draft_id=args.get("draft_id"),
+                           topic_id=args.get("topic_id"), site_id=args.get("site_id"), seconds=seconds)
+        title = None
+        if args.get("draft_id"):
+            with db.tenant(tenant) as s:
+                title = s.execute(select(m.drafts.c.title).where(m.drafts.c.id == args["draft_id"])).scalar()
+        return {"site_id": args.get("site_id"), "draft_id": args.get("draft_id"), "ideas": len(ids),
+                "title": title or ""}
+
+    def video_round(tenant: str, subject: str, args: dict) -> dict:
+        seconds = videomaker.seconds if videomaker is not None else 10
+        ids = videos.daily_round(db, tenant, args["site_id"], need(core_for(tenant), "model (Core)"),
+                                 args.get("n") or 3, seconds)
+        return {"site_id": args["site_id"], "ideas": len(ids)}
+
+    def video(tenant: str, subject: str, args: dict) -> dict:
+        return videos.make(db, tenant, args["video_id"], need(videomaker, "video service (EDITOR_VIDEO_API_KEY)"))
+
     def translation(tenant: str, subject: str, args: dict) -> dict:
         did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"),
                            pay=not args.get("auto"))
@@ -323,4 +344,5 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             "proposals": propose, "titles": titles, "archive": archive,
             "collect": collect, "translate": translation, "image": image,
             "deliver": deliver, "auto": auto, "brief": brief, "evening": evening,
-            "request": request, "wpmenu": wpmenu}
+            "request": request, "wpmenu": wpmenu, "video_ideas": video_ideas, "video": video,
+            "video_round": video_round}

@@ -51,6 +51,17 @@
     <div><button class="btn" type="submit">{{ _('Analizza il sito') }}</button></div>
   </form>
   <p class="hint">{{ _("L'analisi parte in coda; quando finisce il profilo arriva da approvare in Sito e profilo.") }}</p>
+  <details class="act" id="h-channel">
+    <summary>{{ _('Aggiungi un canale social, senza blog') }}</summary>
+    <form method="post" action="/ui/channels" class="form-grid">
+      <label class="field">{{ _('Nome del canale') }}<input name="name" required maxlength="100"></label>
+      <label class="field">{{ _('Account (facoltativo)') }}<input name="handle" maxlength="200" placeholder="@nome"></label>
+      <label class="field">{{ _('Lingua') }}<select name="language">{% for k in ('it', 'en', 'de', 'fr', 'es') %}<option value="{{ k }}">{{ k|langname }}</option>{% endfor %}</select></label>
+      <label class="field" style="grid-column: 1 / -1;">{{ _('Di cosa parla, per chi e con che tono') }}<textarea name="brief" rows="4" required maxlength="4000" placeholder="{{ _('Per esempio: novità di intelligenza artificiale spiegate semplici, per professionisti curiosi, tono diretto e un po\' ironico.') }}"></textarea></label>
+      <div><button class="btn" type="submit">{{ _('Aggiungi il canale') }}</button></div>
+    </form>
+    <p class="hint">{{ _('Per chi vuole solo i video per Instagram, TikTok e YouTube Shorts: niente sito da analizzare, il profilo si ricava da queste righe. Ogni mattina arrivano idee di video sui temi che stanno salendo, da girare con un clic.') }}</p>
+  </details>
 </section>
 {% endif %}
 
