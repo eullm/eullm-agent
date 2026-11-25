@@ -67,8 +67,9 @@ def runner() -> Runner:
 
 def handlers():
     """What the worker runs for each kind of queued job."""
-    from . import delivery, images, work
+    from . import delivery, images, videos, work
 
     st = settings()
     return work.handlers(database(), http, core(), Publisher(public_url=st.public_url), runner(),
-                         images.from_settings(st), delivery.smtp_sender(st), st.public_url)
+                         images.from_settings(st), delivery.smtp_sender(st), st.public_url,
+                         videomaker=videos.from_settings(st))

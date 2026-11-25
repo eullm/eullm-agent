@@ -41,6 +41,8 @@ PURPOSES = {
     "draft": N_("Scrittura delle bozze"),
     "translate": N_("Traduzioni"),
     "image": N_("Immagini di copertina"),
+    "video_ideas": N_("Idee per i video social"),
+    "video": N_("Video social"),
     "profile": N_("Profilo dal contesto"),
     "editor_check": N_("Caporedattore AI"),
     "primary_source": N_("Ricerca delle fonti primarie"),
@@ -51,7 +53,7 @@ PURPOSES = {
 
 # Steps whose model the console can choose (images use their own service).
 ROUTABLE = ("site_profile", "profile", "source_discovery", "topic_label", "proposal", "draft", "translate",
-            "editor_check", "auto_fix", "primary_source", "evening", "precheck")
+            "editor_check", "auto_fix", "primary_source", "evening", "precheck", "video_ideas")
 ROUTES_TTL = 60.0
 _routes_cache: dict = {"db": None, "at": 0.0, "routes": {}}
 

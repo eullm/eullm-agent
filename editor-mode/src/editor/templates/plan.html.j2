@@ -44,6 +44,7 @@
   <div class="list-row"><span>{{ _('Un articolo oltre quelli del piano') }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.article) }}</span></div>
   <div class="list-row"><span>{{ _('Una traduzione oltre gli articoli del piano') }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.translation) }}</span></div>
   <div class="list-row"><span>{{ _('Una copertina rifatta, dopo le {n} gratuite di ogni articolo', n=free_redraws) }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.image) }}</span></div>
+  <div class="list-row"><span>{{ _('Un video per i social (Instagram, TikTok, YouTube Shorts), solo se riesce') }}</span><span class="num">{{ _('{n} crediti', n=credit_prices.video) }}</span></div>
   <p class="hint">{{ _('La redazione automatica resta negli articoli del piano: i crediti li spendi solo tu, quando chiedi qualcosa in più.') }}</p>
 
   {% if packs and room and not room.reseller %}
@@ -64,7 +65,7 @@
 
   {% if moves %}
   <h3>{{ _('Ultimi movimenti') }}</h3>
-  {% set reasons = {'article': _('Articolo oltre il piano'), 'translation': _('Traduzione oltre il piano'), 'image': _('Copertina rifatta'), 'pack': _('Pacchetto'), 'grant': _('Crediti aggiunti')} %}
+  {% set reasons = {'article': _('Articolo oltre il piano'), 'translation': _('Traduzione oltre il piano'), 'image': _('Copertina rifatta'), 'video': _('Video per i social'), 'pack': _('Pacchetto'), 'grant': _('Crediti aggiunti')} %}
   {% for x in moves %}
   <div class="list-row"><span>{{ reasons.get(x.reason, x.reason) }}{% if x.ref and x.ref.startswith('draft:') %} · <a href="/drafts/{{ x.ref[6:] }}">{{ _('bozza') }}</a>{% endif %}{% if x.note and x.reason in ('pack', 'grant') %} <small class="hint">{{ x.note }}</small>{% endif %} <small class="hint">{{ x.at.strftime('%d/%m') if x.at else '' }}</small></span><span class="num">{{ '+' if x.delta > 0 else '' }}{{ x.delta }}</span></div>
   {% endfor %}

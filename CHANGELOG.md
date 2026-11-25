@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.39.0
+
+### Added
+
+- **Video per i social** (Francesco, 25 novembre: "video generati via
+  OpenRouter, gli si propongono al cliente uno o più … poi li pubblicano
+  loro", anche gli Short di YouTube). Dalla pagina di un articolo (riquadro
+  «Video per i social») o da un tema del momento in Trend e piano («Idee per
+  i video») il modello scrive tre idee di clip verticali 9:16 per Instagram
+  Reels, TikTok e YouTube Shorts: titolo, cosa succede nel primo secondo,
+  la scena per il modello video, le parole della voce narrante, il testo del
+  post e gli hashtag, nella lingua dell'articolo. Le idee sono gratis (circa
+  un centesimo di modello). Il video vero si gira solo per l'idea scelta,
+  con «Genera il video»: OpenRouter, API video asincrona, audio compreso,
+  durata e risoluzione adattate a quello che il modello sa fare. Poi
+  «Scarica il video» (MP4) e «Copia il testo del post»: nulla viene
+  pubblicato da Redazia. Nuova voce di menu «Video social» con tutte le idee
+  e i video del sito.
+- **Prezzi misurati il 25 novembre** sull'elenco live di OpenRouter
+  (/api/v1/videos/models): un video verticale con audio costa tra 0,20 e
+  0,70 $, non pochi centesimi. Predefinito x-ai/grok-imagine-video-1.5-lite:
+  0,02 $/s a 480p, 0,03 $/s a 720p (10 secondi a 720p: 0,30 $). Il costo
+  vero di ogni video, come lo dice OpenRouter, va in Consumi alla voce
+  «Video social».
+- **Crediti video**: ogni video riuscito costa i crediti della nuova voce
+  «Video per i social» del listino (/admin › Piani e crediti, predefinito
+  100 crediti, circa 1 €); un video rifiutato dal servizio non costa nulla.
+  Il cliente vede crediti, mai euro di modello. Una redazione senza crediti
+  (l'installazione locale) non paga.
+- **Impostazioni › Video social**: chiave OpenRouter (vuota: quella delle
+  copertine se è sk-or-), modello, risoluzione (720p) e durata (10 s);
+  anche come EDITOR_VIDEO_* nel file .env.
+
+### Notes
+
+- Un lavoro video interrotto (worker riavviato) aspetta lo stesso lavoro di
+  OpenRouter invece di pagarne un secondo. I file dei video restano 30
+  giorni nel database, poi si cancellano e restano i testi; l'esportazione
+  della redazione non contiene i file.
+- La pagina ricorda di attivare l'etichetta per i contenuti generati con
+  l'AI quando si pubblica: Instagram, TikTok e YouTube la chiedono per i
+  video realistici. Le scene non chiedono mai scritte, loghi o persone reali
+  riconoscibili.
+- Migrazione 0050 (SQLite 0038): tabella editor.videos e prezzo 'video'.
+
 ## 0.38.1
 
 ### Added

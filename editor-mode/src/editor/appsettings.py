@@ -68,6 +68,9 @@ GROUPS = (
     ("payments", N_("Pagamenti"), N_("Pagamenti online con Mollie. Senza chiave i piani si pagano con bonifico e si "
                                      "registrano da Clienti.")),
     ("images", N_("Copertine"), N_("Le immagini disegnate per ogni articolo. Senza chiave le bozze non hanno immagine.")),
+    ("video", N_("Video social"), N_("I video verticali con audio per Instagram, TikTok e YouTube Shorts, fatti "
+                                     "con un modello video di OpenRouter quando un redattore li chiede. La "
+                                     "redazione li scarica e li pubblica da sé.")),
     ("gsc", N_("Google Search Console"), N_("Un solo account di servizio Google per tutte le redazioni: ogni cliente "
                                             "aggiunge la sua email alla propria proprietà, con permesso Limitato.")),
     ("telegram", N_("Telegram"), N_("Il bot che manda il briefing a chi lo riceve su Telegram.")),
@@ -99,6 +102,16 @@ FIELDS = (
           hint=N_("Vuoto: quello predefinito del provider.")),
     Field("EDITOR_IMAGES_QUALITY", "images", N_("Qualità"), kind="select", default="medium",
           choices=(("low", N_("bassa")), ("medium", N_("media")), ("high", N_("alta")))),
+    Field("EDITOR_VIDEO_API_KEY", "video", N_("Chiave OpenRouter dei video"), secret=True,
+          hint=N_("Vuota: la chiave delle copertine, se è di OpenRouter (sk-or-…).")),
+    Field("EDITOR_VIDEO_MODEL", "video", N_("Modello video (facoltativo)"),
+          placeholder="x-ai/grok-imagine-video-1.5-lite",
+          hint=N_("Vuoto: x-ai/grok-imagine-video-1.5-lite, circa 3 centesimi di dollaro al secondo a 720p, "
+                  "audio compreso. Deve accettare il formato 9:16.")),
+    Field("EDITOR_VIDEO_RESOLUTION", "video", N_("Risoluzione"), kind="select", default="720p",
+          choices=(("480p", "480p"), ("720p", "720p"), ("1080p", "1080p"))),
+    Field("EDITOR_VIDEO_SECONDS", "video", N_("Durata in secondi"), kind="number", default="10",
+          hint=N_("Da 4 a 15: il modello usa la durata più vicina che sa fare.")),
     Field("EDITOR_GSC_KEY", "gsc", N_("Chiave JSON dell'account di servizio"), secret=True, kind="textarea",
           hint=N_("Incolla il file JSON scaricato da Google Cloud (API Search Console attiva).")),
     Field("EDITOR_TELEGRAM_TOKEN", "telegram", N_("Token del bot"), secret=True, hint=N_("Da @BotFather.")),
@@ -245,6 +258,12 @@ def _check(f: Field, value: str) -> str:
             ZoneInfo(value)
         except Exception:
             raise Invalid(N_("{label}: fuso orario sconosciuto (per esempio Europe/Rome).")) from None
+    if f.name == "EDITOR_VIDEO_SECONDS" and not 4 <= int(value) <= 15:
+        raise Invalid(N_("{label}: da 4 a 15 secondi."))
+    if f.name == "EDITOR_VIDEO_API_KEY" and not value.startswith("sk-or-"):
+        raise Invalid(N_("{label}: la chiave di OpenRouter inizia con sk-or-."))
+    if f.name == "EDITOR_VIDEO_MODEL" and "/" not in value:
+        raise Invalid(N_("{label}: il nome di un modello di OpenRouter, per esempio x-ai/grok-imagine-video-1.5-lite."))
     if f.name == "EDITOR_MOLLIE_API_KEY" and not value.startswith(("test_", "live_")):
         raise Invalid(N_("{label}: la chiave di Mollie inizia con test_ o live_."))
     if f.name == "EDITOR_GSC_KEY":

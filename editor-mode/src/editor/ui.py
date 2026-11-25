@@ -24,7 +24,8 @@ from sqlalchemy import and_, bindparam, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from . import connect, evergreen, menus, opportunity as oppo, queue, ratelimit, readers, rubrics
-from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, weekly
+from .seo import slugify as seo_slug
+from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, videos as vids, weekly
 from .i18n import N_, t
 from .markdown import to_html
 
@@ -250,6 +251,7 @@ def register(app, ctx) -> None:
     env.filters["plural"] = plural
     env.filters["langname"] = language_name
     env.filters["flag"] = drafts.flag_text
+    env.filters["video_post"] = vids.post_text
     env.globals["draft_state"] = draft_state
 
     def viewer(request: Request) -> auth.Caller:
@@ -278,6 +280,17 @@ def register(app, ctx) -> None:
         wanted = request.cookies.get(SITE_COOKIE)
         chosen = next((x for x in sites if str(x.id) == wanted), sites[0] if sites else None)
         return sites, chosen
+
+    def video_state(s) -> dict:
+        """The social videos: whether they can be made, what one costs, and
+        the ideas and clips being prepared now."""
+        j = m.jobs.c
+        active = s.execute(select(j.kind, j.subject, j.args).where(
+            j.kind.in_(("video", "video_ideas")), j.status.in_(("queued", "running")))).all()
+        return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
+                "price": vids.price(s), "credits": credits.state(s),
+                "making": {(a.args or {}).get("video_id") for a in active if a.kind == "video"},
+                "ideas": {a.subject for a in active if a.kind == "video_ideas"}}
 
     def whole(request: Request) -> bool:
         """Is the Desk showing every site ("Tutti i siti" in the menu)?"""
@@ -1919,6 +1932,7 @@ def register(app, ctx) -> None:
             hour = s.execute(select(m.tenants.c.briefing_hour)).scalar()
             body = prof.approved_profile(s, site.id)
             return render(request, "trends.html.j2", c, s, "trends", _sites=(sites, site), topics=topics,
+                          video_ideas=ctx.core is not None,
                           auto_site=bool(body is not None and autopilot.settings_of(body.body)["enabled"]),
                           dots=dots, plan=plan, explained=explained, briefing_hour=hour, can_draft=ctx.core is not None,
                           writing=draft_jobs(s, [p.id for p in plan if p.status == "accepted" and not p.draft_id]),
@@ -2137,7 +2151,10 @@ def register(app, ctx) -> None:
                                           .where(m.drafts.c.id.in_(course_ids or [0]))).all()}
             site_sections = autopilot.sections_of(autopilot.settings_of(s.execute(select(m.editorial_profiles.c.body).where(
                 m.editorial_profiles.c.site_id == d.site_id, m.editorial_profiles.c.status == "approved")).scalar()))
+            vstate = video_state(s)
             return render(request, "draft.html.j2", c, s, "drafts", _sites=(sites, site), d=d, sections=sections,
+                          videos=vids.of_draft(s, d.id), vstate=vstate,
+                          ideas_busy=f"draft {d.id}" in vstate["ideas"],
                           site_sections=site_sections, courses=courses,
                           original=original, translations=[x for x in family if x.translation_of],
                           wanted=wanted, translating=translating, langs=tr.LANGUAGES, can_translate=ctx.core is not None,
@@ -2250,6 +2267,84 @@ def register(app, ctx) -> None:
         for i in ids:
             images.remove(db, c.tenant_id, i)
         return done(f"/drafts/{draft_id}", t("Immagine tolta: l'articolo esce senza copertina."))
+
+    # --- videos for the social networks (videos.py) ------------------------------------
+
+    @app.get("/videos", response_class=HTMLResponse)
+    def videos_view(request: Request, c: auth.Caller = Depends(viewer)):
+        with db.tenant(c.tenant_id) as s:
+            sites, site = current_site(s, request)
+            vstate = video_state(s)
+            rows = vids.of_site(s, site.id) if site else []
+            return render(request, "videos.html.j2", c, s, "videos", _sites=(sites, site), videos=rows,
+                          vstate=vstate, ideas_busy=bool(site) and any(
+                              x.endswith(f" site {site.id}") for x in vstate["ideas"]))
+
+    @app.post("/ui/drafts/{draft_id}/video-ideas")
+    def ui_video_ideas(draft_id: int, c: auth.Caller = Depends(ctx.need("editor"))):
+        if ctx.core is None:
+            return done(f"/drafts/{draft_id}", t("Nessun Core configurato: per le idee dei video serve un modello."))
+        with db.tenant(c.tenant_id) as s:
+            site_id = s.execute(select(m.drafts.c.site_id).where(m.drafts.c.id == draft_id)).scalar()
+        if site_id is None:
+            raise HTTPException(404, "draft not found")
+        ctx.run_video_ideas(c.tenant_id, site_id, draft_id=draft_id)
+        return done(f"/drafts/{draft_id}#h-video", t("Sto scrivendo le idee per i video: compaiono qui tra un minuto."))
+
+    @app.post("/ui/trends/{topic_id}/video-ideas")
+    def ui_trend_video_ideas(request: Request, topic_id: int, c: auth.Caller = Depends(ctx.need("editor"))):
+        if ctx.core is None:
+            return done("/trends#moment", t("Nessun Core configurato: per le idee dei video serve un modello."))
+        with db.tenant(c.tenant_id) as s:
+            _, site = current_site(s, request)
+            if site is None:
+                return done("/trends", t("Aggiungi prima un sito."))
+            if s.execute(select(m.topics.c.id).where(m.topics.c.id == topic_id)).scalar() is None:
+                raise HTTPException(404, "topic not found")
+        ctx.run_video_ideas(c.tenant_id, site.id, topic_id=topic_id)
+        return done("/videos", t("Sto scrivendo le idee per i video su questo tema: compaiono qui tra un minuto."))
+
+    def video_back(back: str) -> str:
+        """Back to the page the button was on: only a path of this dashboard."""
+        return back if back.startswith("/") and not back.startswith(("//", "/\\")) else "/videos"
+
+    @app.post("/ui/videos/{video_id}/make")
+    def ui_video_make(video_id: int, back: str = Form("/videos"), c: auth.Caller = Depends(ctx.need("editor"))):
+        back = video_back(back)
+        if getattr(ctx, "videomaker", None) is None:
+            return done(back, t("Video non configurati: serve una chiave di OpenRouter in Amministrazione › Impostazioni."))
+        with db.tenant(c.tenant_id) as s:
+            site_id = s.execute(select(m.videos.c.site_id).where(m.videos.c.id == video_id)).scalar()
+            cost, left = vids.price(s), credits.state(s).get("left", 0)
+        if site_id is None:
+            raise HTTPException(404, "video not found")
+        try:
+            vids.ask(db, c.tenant_id, video_id, c.name)
+        except credits.NoCredits:
+            return done(back, t("Crediti insufficienti: un video costa {n} crediti e ne restano {left}. Puoi "
+                                "aggiungerne in Il mio piano.", n=cost, left=left))
+        ctx.run_video(c.tenant_id, site_id, video_id)
+        return done(back, t("Video in preparazione: ci vogliono di solito da uno a cinque minuti. Lo segui nel "
+                            "riquadro Attività."))
+
+    @app.post("/ui/videos/{video_id}/delete")
+    def ui_video_delete(video_id: int, back: str = Form("/videos"), c: auth.Caller = Depends(ctx.need("editor"))):
+        back = video_back(back)
+        if not vids.remove(db, c.tenant_id, video_id):
+            return done(back, t("Questo video è in preparazione: si può togliere quando è pronto."))
+        return done(back, t("Tolto."))
+
+    @app.get("/videos/{video_id}/file")
+    def video_file(video_id: int, download: int = 0, c: auth.Caller = Depends(viewer)):
+        with db.tenant(c.tenant_id) as s:
+            row = vids.content(s, video_id)
+        if row is None or not row.content:
+            raise HTTPException(404, "video not found")
+        data = bytes(row.content)
+        name = (seo_slug(row.title, 60) or f"video-{video_id}") + ".mp4"
+        disposition = f'attachment; filename="{name}"' if download else "inline"
+        return Response(data, media_type=vids.mime_of(data),
+                        headers={"Content-Disposition": disposition, "Cache-Control": "private, max-age=3600"})
 
     @app.post("/ui/drafts/{draft_id}/translate")
     def ui_translate(draft_id: int, language: str = Form(...), c: auth.Caller = Depends(ctx.need("editor"))):

@@ -612,10 +612,10 @@ def register(app, ctx, operator, own, no_reseller, send, need_console, page, bac
 
     @app.post("/admin/credits/prices")
     def ui_credit_prices(article: str = Form(""), translation: str = Form(""), image: str = Form(""),
-                         s=Depends(need_console)):
+                         video: str = Form(""), s=Depends(need_console)):
         try:
-            values = {k: _int(v) for k, v in (("article", article), ("translation", translation), ("image", image))
-                      if v.strip()}
+            values = {k: _int(v) for k, v in (("article", article), ("translation", translation), ("image", image),
+                                              ("video", video)) if v.strip()}
             credits.set_prices(admin, values)
         except ValueError as e:
             return back(t("Listino non salvato: {error}.",

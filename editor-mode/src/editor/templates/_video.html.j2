@@ -1,0 +1,34 @@
+{# One social video: its idea and, once made, the clip. Needs `v`, `vstate` and `back`. #}
+{% set busy = v.id in vstate.making %}
+<div class="video-idea" id="video-{{ v.id }}">
+  <div class="row" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+    <strong>{{ v.title }}</strong>
+    {% if v.status == 'ready' %}<span class="chip green">{{ _('Pronto') }}</span>
+    {% elif busy %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('In preparazione') }}</span>
+    {% elif v.status == 'failed' %}<span class="chip amber">{{ _('Non riuscito') }}</span>
+    {% elif v.status in ('queued', 'making') %}<span class="chip amber">{{ _('Interrotto') }}</span>
+    {% else %}<span class="chip">{{ _('Idea') }}</span>{% endif %}
+  </div>
+  {% if v.status == 'ready' and v.has_file %}
+  <video controls playsinline preload="metadata" src="/videos/{{ v.id }}/file" style="width: 100%; max-width: 280px; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; display: block; margin: 8px 0;"></video>
+  {% elif v.status == 'ready' %}
+  <p class="hint">{{ _('Il file è stato cancellato dopo 30 giorni: restano i testi del post.') }}</p>
+  {% endif %}
+  {% if v.hook %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Primo secondo') }}</span> {{ v.hook }}</p>{% endif %}
+  {% if v.voiceover %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Voce') }}</span> «{{ v.voiceover }}»</p>{% endif %}
+  <details class="mini"><summary>{{ _('Scena per il modello video') }}</summary><p class="hint" lang="en">{{ v.scene }}</p></details>
+  {% set post = v|video_post %}
+  <p style="margin: 4px 0; white-space: pre-line;"><span class="kicker">{{ _('Testo del post') }}</span> {{ post }}</p>
+  <textarea id="post-{{ v.id }}" hidden readonly>{{ post }}</textarea>
+  {% if v.status == 'failed' and v.error %}<p class="hint">{{ _('Il servizio video ha risposto: {error}', error=v.error[:200]) }}</p>{% endif %}
+  <div class="row" style="flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+    <button class="btn sm" type="button" data-copy="post-{{ v.id }}">{{ _('Copia il testo del post') }}</button>
+    {% if v.status == 'ready' and v.has_file %}<a class="btn sm pri" href="/videos/{{ v.id }}/file?download=1" download>{{ _('Scarica il video') }}</a>{% endif %}
+    {% if caller.can('editor') and not busy %}
+      {% if v.status in ('idea', 'failed', 'queued', 'making') and vstate.on %}
+      <form class="inline" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
+      {% endif %}
+      {% if v.status in ('idea', 'ready', 'failed') %}<form class="inline" method="post" action="/ui/videos/{{ v.id }}/delete"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
+    {% endif %}
+  </div>
+</div>

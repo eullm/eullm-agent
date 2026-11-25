@@ -279,6 +279,20 @@
     </section>
     {% endif %}
 
+    {% if vstate.on or videos %}
+    <section class="card pad" aria-labelledby="h-video">
+      <h2 id="h-video">{{ _('Video per i social') }}</h2>
+      <p class="hint">{{ _('Clip verticali con voce e suono per Instagram Reels, TikTok e YouTube Shorts, fatte da un modello video. Prima le idee, gratis; il video si gira solo per l\'idea che scegli. Lo scarichi e lo pubblichi tu.') }}</p>
+      {% for v in videos %}{% with back='/drafts/' ~ d.id ~ '#video-' ~ v.id %}{% include "_video.html.j2" %}{% endwith %}{% endfor %}
+      {% if ideas_busy %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Idee in scrittura') }}</span>
+      {% elif caller.can('editor') and vstate.can_ideas %}
+      <form class="inline" method="post" action="/ui/drafts/{{ d.id }}/video-ideas"><button class="btn sm" type="submit">{% if videos %}{{ _('Altre idee per i video') }}{% else %}{{ _('Proponi idee per i video') }}{% endif %}</button></form>
+      {% endif %}
+      {% if vstate.price %}<p class="hint">{{ _('Ogni video costa {n} crediti, solo se riesce (te ne restano {left}).', n=vstate.price, left=vstate.credits.left) }}</p>{% endif %}
+      <p class="hint">{{ _('Quando lo pubblichi, attiva l\'etichetta per i contenuti generati con l\'AI: Instagram, TikTok e YouTube la chiedono per i video realistici.') }}</p>
+    </section>
+    {% endif %}
+
     <section class="card pad" aria-labelledby="h-langs">
       <h2 id="h-langs">{{ _('Lingue') }}</h2>
       {% if original %}

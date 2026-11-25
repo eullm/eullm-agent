@@ -41,6 +41,7 @@
     </div>
     {% if caller.can('editor') %}
     <form class="inline" method="post" action="/ui/trends/{{ x.topic_id }}/titles"><button class="btn" type="submit">{% if x.titles %}{{ _('Altri titoli') }}{% else %}{{ _('Proponimi tre titoli') }}{% endif %}</button></form>
+    {% if video_ideas %}<form class="inline" method="post" action="/ui/trends/{{ x.topic_id }}/video-ideas"><button class="btn" type="submit">{{ _('Idee per i video') }}</button></form>{% endif %}
     {% endif %}
   </div>
   {% else %}

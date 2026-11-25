@@ -495,6 +495,39 @@ draft_images = Table(
     Column("same_as", BigInteger),
 )
 
+# Videos for the social networks (videos.py): an idea written from an
+# article or a trend, then, when asked, the clip itself (vertical, with audio).
+videos = Table(
+    "videos",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    _tenant(),
+    Column("site_id", BigInteger, nullable=False),
+    Column("draft_id", BigInteger),
+    Column("topic_id", BigInteger),
+    Column("language", Text),
+    Column("title", Text, nullable=False),
+    Column("hook", Text, nullable=False, default=""),
+    Column("scene", Text, nullable=False),
+    Column("voiceover", Text, nullable=False, default=""),
+    Column("caption", Text, nullable=False, default=""),
+    Column("hashtags", JSONB, nullable=False, default=list),
+    Column("status", Text, nullable=False, default="idea"),  # idea, queued, making, ready, failed
+    Column("model", Text),
+    Column("job_ref", Text),  # the video service's job, to wait for it again after a restart
+    Column("seconds", Integer),
+    Column("resolution", Text),
+    Column("cost", Float),  # USD, as the service reports it
+    Column("credits", Integer),
+    Column("error", Text),
+    Column("mime", Text),
+    Column("content", LargeBinary),  # emptied after videos.KEEP_DAYS
+    Column("size_bytes", Integer),
+    Column("created_at", _ts()),
+    Column("made_at", _ts()),
+    Column("made_by", Text),
+)
+
 feeds = Table(
     "feeds",
     metadata,

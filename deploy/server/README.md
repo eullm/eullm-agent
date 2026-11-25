@@ -222,6 +222,16 @@ ends without a payment. Its data stay, and its owner can still sign in to
   in) or plain editorial photos. The cost of each image is in Consumi. A
   `compose.yaml` written before 0.17.0 needs the `EDITOR_IMAGES_*` lines of
   [compose.yaml](compose.yaml) under `x-editor-env`.
+- **Social videos**: with an OpenRouter key (`EDITOR_VIDEO_API_KEY`, or
+  the covers' `sk-or-` key) an editor can ask, from an article or a trend of
+  the moment, for ideas of vertical videos (9:16, with voice and sound) and
+  then make the one they like with OpenRouter's video API (default
+  `x-ai/grok-imagine-video-1.5-lite`, about 0.30 $ for 10 seconds at 720p;
+  `EDITOR_VIDEO_MODEL`, `EDITOR_VIDEO_RESOLUTION`, `EDITOR_VIDEO_SECONDS`).
+  Nothing is posted: the newsroom downloads the MP4 from /videos with the
+  caption and hashtags to paste. Each video costs the credits of
+  "Video per i social" in /admin › Piani e crediti; the files are kept 30
+  days in the database.
 - **What happens by itself** (every hour, in the worker): an email to the
   owner two days before the trial ends; the hold when the trial ends, or
   three days after a paid period ends without a renewal.
