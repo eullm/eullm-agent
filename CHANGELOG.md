@@ -33,6 +33,24 @@
   copertine se è sk-or-), modello, risoluzione (720p) e durata (10 s);
   anche come EDITOR_VIDEO_* nel file .env.
 
+### Fixed (correzioni di Gabriele, #313-#330 e #332, mergiate dopo la 0.38.1)
+
+- Rapporto settimanale senza le pubblicazioni ritirate (#313); testate
+  contate col nome della fonte del sito (#314); output dei programmi
+  tagliato dopo la conversione UTF-8 (#315); schema Bearer accettato in
+  maiuscolo o minuscolo (#316); segno del menu WordPress tolto solo dopo la
+  pubblicazione riuscita (#317) e destinazioni WordPress disattivate saltate
+  (#325); suffissi possessivi tolti dai nomi propri (#318); arrotondamento
+  per eccesso delle proposte senza scadenza (#319); niente /v1 doppio nel
+  rilevamento del motore (#320) e commento di detect_engine ripristinato
+  (#327); URL vuoto del database amministratore trattato come assente
+  (#322); freschezza delle fonti calcolata anche sulle frazioni di giorno
+  (#323); copertina esterna senza immagine registrata (#324); argomenti
+  mancanti degli strumenti OpenAI letti come oggetto vuoto (#326); importi
+  negativi di Mollie corretti (#328); testo dei commenti di Hacker News
+  (#329) e contenuto del feed quando il riassunto di un post è solo rumore
+  (#330); test dei siti giù indipendente dall'età dei fixture (#332).
+
 ### Notes
 
 - Un lavoro video interrotto (worker riavviato) aspetta lo stesso lavoro di
