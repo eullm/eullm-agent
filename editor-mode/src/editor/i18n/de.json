@@ -3041,5 +3041,15 @@
  "Scrivi il nome del canale e di cosa parla: il profilo si ricava da lì.": "Schreiben Sie den Namen des Kanals und worum es geht: Das Profil entsteht daraus.",
  "Da domattina {n} idee di video al giorno.": "Ab morgen früh {n} Videoideen pro Tag.",
  "Idee di video del mattino spente: le chiedi tu da un articolo o da un tema.": "Videoideen am Morgen ausgeschaltet: Fordern Sie sie selbst bei einem Artikel oder Thema an.",
- "Approva prima il profilo: le idee partono dalla linea approvata.": "Genehmigen Sie zuerst das Profil: Die Ideen gehen von der genehmigten Linie aus."
+ "Approva prima il profilo: le idee partono dalla linea approvata.": "Genehmigen Sie zuerst das Profil: Die Ideen gehen von der genehmigten Linie aus.",
+ "Temi sui social": "Themen in sozialen Netzwerken",
+ "Cerco i temi del momento su Bluesky": "Ich suche die aktuellen Themen auf Bluesky",
+ "Cerco gli Short dei temi su YouTube": "Ich suche Shorts zu den Themen auf YouTube",
+ "Chiave YouTube Data API (facoltativa)": "YouTube-Data-API-Schlüssel (optional)",
+ "Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.": "Kostenlos über Google Cloud (YouTube Data API v3): Bei jeder Themenaufnahme sucht sie die Shorts der letzten 48 Stunden zu den 8 wichtigsten Themen. Leer: Es wird nur Bluesky verwendet, das keinen Schlüssel braucht.",
+ "Sui social": "In Social Media",
+ "Bluesky: «{t}», {n} post": "Bluesky: „{t}“, {n} Beiträge",
+ "YouTube: {n} Short in 48 ore, {v} visualizzazioni l'ora": "YouTube: {n} Shorts in 48 Stunden, {v} Aufrufe pro Stunde",
+ "il più visto": "das meistgesehene",
+ "Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.": "Neben den Nachrichten schaut es auf die sozialen Netzwerke: Themen, über die auf Bluesky gesprochen wird, und solche mit wachsenden Shorts auf YouTube in den letzten 48 Stunden kommen zuerst."
 }

@@ -37,8 +37,18 @@ def due(s, now: datetime, tz: str) -> bool:
     return last is None or last < slot_start(now, tz)
 
 
-def snapshot(s, archive: str, now: datetime | None = None) -> int:
-    """Keep the topics of the archive rising most right now, by Hype Score."""
+def snapshot(s, archive: str, now: datetime | None = None, topics: list[dict] | None = None) -> int:
+    """Keep the topics of the archive rising most right now, by Hype Score
+    (`topics`: those already built, with what the social networks say)."""
+    now = now or datetime.now(UTC)
+    out = build(s, archive, now) if topics is None else topics
+    return s.execute(insert(m.trend_snapshots).values(tenant_id=archive, taken_at=now, topics=out)
+                     .returning(m.trend_snapshots.c.id)).scalar_one()
+
+
+def build(s, archive: str, now: datetime | None = None) -> list[dict]:
+    """The topics of the archive rising most right now, by Hype Score, with
+    their latest news: what a snapshot keeps."""
     now = now or datetime.now(UTC)
     ts = m.trend_scores
     latest = (select(ts.c.topic_id, func.max(ts.c.computed_at).label("at"))
@@ -68,8 +78,7 @@ def snapshot(s, archive: str, now: datetime | None = None) -> int:
                     "items": len(news), "sources": len({n.source_id for n in news}),
                     "section": counted.most_common(1)[0][0] if counted else None,
                     "news": [{"id": n.id, "title": n.title, "url": n.url} for n in news[:3]]})
-    return s.execute(insert(m.trend_snapshots).values(tenant_id=archive, taken_at=now, topics=out)
-                     .returning(m.trend_snapshots.c.id)).scalar_one()
+    return out
 
 
 def today(s, archive: str, start: datetime) -> list:
@@ -95,7 +104,8 @@ def rising(s, archive: str, now: datetime | None = None) -> dict[int, dict]:
     ancora lo anticipa"): each with `gain` (Hype points gained since about
     nine hours ago; a topic that was not in the ranking then counts from
     zero), `rising` (0-1: the gain against RISING_GAIN) and `early` (still
-    few news). Topics not climbing are left out."""
+    few news), and `social` when the social networks talk about it (see
+    social.py). Topics neither climbing nor on the social networks are left out."""
     now = now or datetime.now(UTC)
     t = m.trend_snapshots
     snaps = s.execute(select(t.c.taken_at, t.c.topics).where(
@@ -125,4 +135,12 @@ def rising(s, archive: str, now: datetime | None = None) -> dict[int, dict]:
         out[x["topic_id"]] = {"gain": round(gain, 1), "rising": round(min(1.0, gain / RISING_GAIN), 3),
                               "early": int(x.get("items") or 0) <= EARLY_ITEMS, "new": x["topic_id"] not in then,
                               "hype": float(x.get("hype") or 0)}
+    # Heating up on the social networks counts even before the news climb.
+    for x in newest.topics or []:
+        social = x.get("social") or {}
+        if social.get("heat"):
+            r = out.setdefault(x["topic_id"], {"gain": 0.0, "rising": 0.0, "new": x["topic_id"] not in then,
+                                              "early": int(x.get("items") or 0) <= EARLY_ITEMS,
+                                              "hype": float(x.get("hype") or 0)})
+            r["social"] = social
     return out

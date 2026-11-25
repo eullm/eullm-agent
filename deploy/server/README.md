@@ -232,6 +232,12 @@ ends without a payment. Its data stay, and its owner can still sign in to
   caption and hashtags to paste. Each video costs the credits of
   "Video per i social" in /admin › Piani e crediti; the files are kept 30
   days in the database.
+  The topics for the morning's video ideas also weigh what the social
+  networks say: Bluesky's trends (public, no key) and, with a free
+  YouTube Data API v3 key (`EDITOR_YOUTUBE_API_KEY`), the Shorts of the
+  last 48 hours on the top 8 topics of every trend snapshot (about 6,400
+  of the 10,000 free daily units). HeyGen Video
+  (`heygen/heygen-video-1`) works too: 768p is used for 720p.
 - **What happens by itself** (every hour, in the worker): an email to the
   owner two days before the trial ends; the hold when the trial ends, or
   three days after a paid period ends without a renewal.

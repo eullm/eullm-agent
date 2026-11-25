@@ -37,10 +37,10 @@ def maker(**kw):
 
 
 def catalog(router, model=videos.DEFAULT_MODEL, durations=(1, 5, 10, 15), sizes=("480p", "720p"),
-            ratios=("16:9", "9:16")):
+            ratios=("16:9", "9:16"), audio=True):
     return router.get(f"{OR}/videos/models").mock(return_value=httpx.Response(200, json={"data": [{
         "id": model, "supported_durations": list(durations), "supported_resolutions": list(sizes),
-        "supported_aspect_ratios": list(ratios), "generate_audio": True}]}))
+        "supported_aspect_ratios": list(ratios), "generate_audio": audio}]}))
 
 
 def service(router, final="completed", cost=0.3):
@@ -96,6 +96,18 @@ def test_the_video_is_vertical_with_audio_and_fits_the_model(db, tenant):
         cost = s.execute(text("SELECT model, cost FROM editor.llm_usage WHERE purpose = 'video'")).first()
     assert row.status == "ready" and bytes(row.content) == MP4 and row.job_ref == "job1" and row.seconds == 8
     assert cost.model == videos.DEFAULT_MODEL and abs(cost.cost - 0.3) < 1e-9
+
+
+def test_heygen_gets_its_nearest_resolution_and_no_audio_switch(db, tenant):
+    did, ids = with_ideas(db, tenant)
+    with respx.mock(assert_all_called=False) as router:
+        catalog(router, model="heygen/heygen-video-1", durations=tuple(range(5, 31)),
+                sizes=("480p", "768p", "1080p", "2K"), audio=False)  # its sound is always on
+        submit, _, _ = service(router, cost=0.36)
+        out = videos.make(db, tenant, ids[0], maker(model="heygen/heygen-video-1", resolution="720p"))
+    body = json.loads(submit.calls[0].request.content)
+    assert out["ready"] and body["resolution"] == "768p" and body["duration"] == 10
+    assert "generate_audio" not in body and body["aspect_ratio"] == "9:16"
 
 
 def test_a_model_without_vertical_videos_is_refused_before_paying(db, tenant):

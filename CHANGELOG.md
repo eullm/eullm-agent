@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.39.1
+
+### Added
+
+- **Tendenze dai social** (Francesco, 25 novembre: "deve fare anche
+  ricerche sui social direttamente"; scelto "Bluesky e YouTube, ufficiali").
+  A ogni istantanea dei temi (ogni 3 ore) l'archivio legge le tendenze di
+  Bluesky (API pubblica, senza chiave) e il modello dice quale tendenza è la
+  stessa storia di quale tema, in qualunque lingua (passo «Temi sui social»
+  nei Consumi, instradabile). Con una chiave gratuita YouTube Data API v3
+  (`EDITOR_YOUTUBE_API_KEY`, anche in /admin › Impostazioni › Video social)
+  cerca gli Short delle ultime 48 ore sugli 8 temi in cima, ordinati per
+  visualizzazioni: quanti sono, visualizzazioni l'ora, il più visto (circa
+  6.400 delle 10.000 unità gratuite al giorno). Ogni tema riceve un
+  «calore social» da 0 a 1 che nella scelta mattutina dei video vale fino a
+  30 punti, anche per i temi che nelle notizie non salgono ancora. La
+  scheda dell'idea e il trend del momento mostrano «Sui social» con i
+  numeri e i link; il modello che scrive l'idea sa di cosa si parla su
+  Bluesky e qual è lo Short più visto. TikTok e Instagram non hanno API per
+  le tendenze (la Research API di TikTok è solo per università, il Creative
+  Center non si può raccogliere): non vengono letti. Una rete che non
+  risponde viene saltata, l'istantanea non si perde mai. Migrazione 0052
+  (sqlite 0040): `videos.social`.
+
+### Fixed
+
+- **HeyGen Video e altri modelli senza 720p**: si usa la risoluzione più
+  vicina a quella chiesta (768p per HeyGen, prima scendeva a 480p) e
+  l'opzione audio si manda solo ai modelli che la prevedono (HeyGen fa
+  sempre l'audio e non ha l'interruttore). 768p tra le scelte in
+  Impostazioni › Video social.
+
 ## 0.39.0
 
 ### Added

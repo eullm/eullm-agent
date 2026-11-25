@@ -109,9 +109,12 @@ FIELDS = (
           hint=N_("Vuoto: x-ai/grok-imagine-video-1.5-lite, circa 3 centesimi di dollaro al secondo a 720p, "
                   "audio compreso. Deve accettare il formato 9:16.")),
     Field("EDITOR_VIDEO_RESOLUTION", "video", N_("Risoluzione"), kind="select", default="720p",
-          choices=(("480p", "480p"), ("720p", "720p"), ("1080p", "1080p"))),
+          choices=(("480p", "480p"), ("720p", "720p"), ("768p", "768p"), ("1080p", "1080p"))),
     Field("EDITOR_VIDEO_SECONDS", "video", N_("Durata in secondi"), kind="number", default="10",
           hint=N_("Da 4 a 15: il modello usa la durata più vicina che sa fare.")),
+    Field("EDITOR_YOUTUBE_API_KEY", "video", N_("Chiave YouTube Data API (facoltativa)"), secret=True,
+          hint=N_("Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short "
+                  "delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.")),
     Field("EDITOR_GSC_KEY", "gsc", N_("Chiave JSON dell'account di servizio"), secret=True, kind="textarea",
           hint=N_("Incolla il file JSON scaricato da Google Cloud (API Search Console attiva).")),
     Field("EDITOR_TELEGRAM_TOKEN", "telegram", N_("Token del bot"), secret=True, hint=N_("Da @BotFather.")),

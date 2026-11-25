@@ -62,6 +62,23 @@ class VideoError(RuntimeError):
     """The service refused or could not make the video: not retried."""
 
 
+def _height(size: str) -> int:
+    size = size.strip().lower()
+    if size.endswith("p") and size[:-1].isdigit():
+        return int(size[:-1])
+    return {"1k": 1080, "2k": 1440, "4k": 2160}.get(size, 0)
+
+
+def _nearest_size(wanted: str, sizes: list[str]) -> str:
+    """The resolution the model has that is closest to the wanted one, the
+    lower one on a tie (HeyGen Video has 768p, not 720p)."""
+    h = _height(wanted)
+    known = [x for x in sizes if _height(x)]
+    if not h or not known:
+        return sizes[0]
+    return min(known, key=lambda x: (abs(_height(x) - h), _height(x)))
+
+
 class OpenRouterVideo:
     """OpenRouter's video API: POST /videos, poll the job, download its content."""
 
@@ -107,12 +124,12 @@ class OpenRouterVideo:
         resolution = self.resolution
         sizes = info.get("supported_resolutions") or []
         if sizes and resolution not in sizes:
-            order = ["360p", "480p", "720p", "768p", "1080p", "1K", "2K", "4K"]
-            below = [x for x in sizes if x in order and order.index(x) <= order.index(resolution)] \
-                if resolution in order else []
-            resolution = (below or sizes)[-1 if below else 0]
-        return {"model": self.model, "prompt": prompt, "duration": seconds, "resolution": resolution,
-                "aspect_ratio": ASPECT, "generate_audio": True}
+            resolution = _nearest_size(resolution, sizes)
+        body = {"model": self.model, "prompt": prompt, "duration": seconds, "resolution": resolution,
+                "aspect_ratio": ASPECT}
+        if info.get("generate_audio") is not False:  # False: the model makes its sound itself, no switch
+            body["generate_audio"] = True
+        return body
 
     def submit(self, body: dict) -> str:
         r = self.http.post(f"{self.url}/videos", headers=self._headers(), json=body)
@@ -263,6 +280,13 @@ def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int |
             material = f"Topic of the moment: {label}\n\nLatest news on it:\n" + "\n".join(
                 f"- {it.title} ({it.source}): {(it.summary or '')[:300]}" for it in items)
             ref = f"topic:{topic_id}"
+            social = (extra or {}).get("social") or {}
+            talk = [f"On Bluesky: \"{b['label']}\" ({b.get('posts') or 0} posts)" for b in social.get("bluesky") or []]
+            top = (social.get("youtube") or {}).get("top")
+            if top:
+                talk.append(f"Most seen YouTube Short of the last 48 hours: \"{top['title']}\" ({top['views']} views)")
+            if talk:
+                material += "\n\nWhat people say on the social networks right now:\n" + "\n".join(f"- {x}" for x in talk)
         domain = s.execute(select(m.sites.c.domain).where(m.sites.c.id == site_id)).scalar() or ""
     if core is None:
         raise CoreError("a model is needed for the video ideas")
@@ -343,8 +367,12 @@ def pick_topics(db, tenant_id: str, site_id: int, n: int, now: datetime | None =
             continue
         r = up.get(o.topic_id) or {}
         # Climbing, and still few news: the video comes out before the wave.
-        score = o.score + 40 * r.get("rising", 0) + (10 if r.get("early") and r else 0)
-        ranked.append({"topic_id": o.topic_id, "score": score, "gain": r.get("gain"),
+        # Talked about on Bluesky or with Shorts climbing on YouTube (social.py):
+        # the people are already there.
+        social = r.get("social") or None
+        score = (o.score + 40 * r.get("rising", 0) + (10 if r.get("early") and r else 0)
+                 + 30 * ((social or {}).get("heat") or 0))
+        ranked.append({"topic_id": o.topic_id, "score": score, "gain": r.get("gain") or None, "social": social,
                        "hype": r.get("hype", round(100 * (o.components.get("hype") or 0), 1))})
     ranked.sort(key=lambda x: -x["score"])
     return ranked[:n]
@@ -358,7 +386,7 @@ def daily_round(db, tenant_id: str, site_id: int, core, n: int, seconds: int = 1
     for x in pick_topics(db, tenant_id, site_id, n, now):
         try:
             created += ideas(db, tenant_id, core, topic_id=x["topic_id"], site_id=site_id, n=1, seconds=seconds,
-                             extra={"auto": True, "gain": x["gain"], "hype": x["hype"]})
+                             extra={"auto": True, "gain": x["gain"], "hype": x["hype"], "social": x.get("social")})
         except (CoreError, LookupError) as e:
             log.warning("video idea for topic %s failed: %s", x["topic_id"], e)
     return created
@@ -494,7 +522,7 @@ def _listed():
     v = m.videos.c
     return (v.id, v.site_id, v.draft_id, v.topic_id, v.language, v.title, v.hook, v.scene, v.voiceover, v.caption,
             v.hashtags, v.status, v.model, v.seconds, v.resolution, v.credits, v.error, v.size_bytes, v.created_at,
-            v.made_at, v.included, v.hype, v.gain, v.auto, (v.content.is_not(None)).label("has_file"))
+            v.made_at, v.included, v.hype, v.gain, v.auto, v.social, (v.content.is_not(None)).label("has_file"))
 
 
 def post_text(v) -> str:

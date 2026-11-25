@@ -10,6 +10,11 @@
     {% else %}<span class="chip">{{ _('Idea') }}</span>{% endif %}
   </div>
   {% if v.gain or v.auto %}<p class="hint" style="margin: 2px 0;">{% if v.gain %}<span class="chip teal">{{ _('In salita') }}</span> {{ _('+{n} punti di Hype nelle ultime ore', n=v.gain|round|int) }}{% if v.hype %} · {{ _('Hype {n}', n=v.hype|round|int) }}{% endif %}{% elif v.hype %}{{ _('Hype {n}', n=v.hype|round|int) }}{% endif %}{% if v.auto %} · {{ _('proposta del mattino') }}{% endif %}</p>{% endif %}
+  {% if v.social %}{% set sb = v.social.get('bluesky') or [] %}{% set yt = v.social.get('youtube') or {} %}
+  <p class="hint" style="margin: 2px 0;"><span class="chip blue">{{ _('Sui social') }}</span>
+    {% for b in sb[:2] %}{% if b.url %}<a href="{{ b.url }}" rel="noopener" target="_blank">{% endif %}{{ _('Bluesky: «{t}», {n} post', t=b.label, n=b.posts|default(0)) }}{% if b.url %}</a>{% endif %}{% if not loop.last or yt %} · {% endif %}{% endfor %}
+    {% if yt %}{{ _("YouTube: {n} Short in 48 ore, {v} visualizzazioni l'ora", n=yt.videos, v=yt.per_hour) }}{% if yt.top %} · <a href="{{ yt.top.url }}" rel="noopener" target="_blank">{{ _('il più visto') }}</a>{% endif %}{% endif %}</p>
+  {% endif %}
   {% if v.status == 'ready' and v.has_file %}
   <video controls playsinline preload="metadata" src="/videos/{{ v.id }}/file" style="width: 100%; max-width: 280px; aspect-ratio: 9 / 16; background: #000; border-radius: 8px; display: block; margin: 8px 0;"></video>
   {% elif v.status == 'ready' %}

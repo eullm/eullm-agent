@@ -533,6 +533,7 @@ videos = Table(
     Column("hype", REAL),  # the trend's Hype when proposed
     Column("gain", REAL),  # Hype points it gained in the last hours: rising before it is everywhere
     Column("auto", Boolean, nullable=False, default=False),  # proposed by the morning round
+    Column("social", JSONB),  # what Bluesky and YouTube said about the trend (social.py)
 )
 
 feeds = Table(
