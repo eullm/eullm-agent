@@ -111,7 +111,8 @@ FIELDS = (
     Field("EDITOR_VIDEO_RESOLUTION", "video", N_("Risoluzione"), kind="select", default="720p",
           choices=(("480p", "480p"), ("720p", "720p"), ("768p", "768p"), ("1080p", "1080p"))),
     Field("EDITOR_VIDEO_SECONDS", "video", N_("Durata in secondi"), kind="number", default="10",
-          hint=N_("Da 4 a 15: il modello usa la durata più vicina che sa fare.")),
+          hint=N_("Da 4 a 30: il modello usa la durata più vicina che sa fare (Grok fino a 15, HeyGen Video e Wan "
+                  "fino a 30). Il prezzo in crediti vale ogni 10 secondi.")),
     Field("EDITOR_YOUTUBE_API_KEY", "video", N_("Chiave YouTube Data API (facoltativa)"), secret=True,
           hint=N_("Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short "
                   "delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.")),
@@ -261,8 +262,8 @@ def _check(f: Field, value: str) -> str:
             ZoneInfo(value)
         except Exception:
             raise Invalid(N_("{label}: fuso orario sconosciuto (per esempio Europe/Rome).")) from None
-    if f.name == "EDITOR_VIDEO_SECONDS" and not 4 <= int(value) <= 15:
-        raise Invalid(N_("{label}: da 4 a 15 secondi."))
+    if f.name == "EDITOR_VIDEO_SECONDS" and not 4 <= int(value) <= 30:
+        raise Invalid(N_("{label}: da 4 a 30 secondi."))
     if f.name == "EDITOR_VIDEO_API_KEY" and not value.startswith("sk-or-"):
         raise Invalid(N_("{label}: la chiave di OpenRouter inizia con sk-or-."))
     if f.name == "EDITOR_VIDEO_MODEL" and "/" not in value:

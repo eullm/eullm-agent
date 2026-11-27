@@ -245,7 +245,8 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                 "online": online}
 
     def video_ideas(tenant: str, subject: str, args: dict) -> dict:
-        seconds = videomaker.seconds if videomaker is not None else 10
+        seconds = videos.site_seconds(db, tenant, args.get("site_id"),
+                                      videomaker.seconds if videomaker is not None else 10)
         ids = videos.ideas(db, tenant, need(core_for(tenant), "model (Core)"), draft_id=args.get("draft_id"),
                            topic_id=args.get("topic_id"), site_id=args.get("site_id"), seconds=seconds)
         title = None
@@ -256,10 +257,15 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                 "title": title or ""}
 
     def video_round(tenant: str, subject: str, args: dict) -> dict:
-        seconds = videomaker.seconds if videomaker is not None else 10
+        seconds = videos.site_seconds(db, tenant, args["site_id"],
+                                      videomaker.seconds if videomaker is not None else 10)
         ids = videos.daily_round(db, tenant, args["site_id"], need(core_for(tenant), "model (Core)"),
                                  args.get("n") or 3, seconds)
         return {"site_id": args["site_id"], "ideas": len(ids)}
+
+    def video_language(tenant: str, subject: str, args: dict) -> dict:
+        return videos.relanguage(db, tenant, args["video_id"], need(core_for(tenant), "model (Core)"),
+                                 args["language"])
 
     def video(tenant: str, subject: str, args: dict) -> dict:
         return videos.make(db, tenant, args["video_id"], need(videomaker, "video service (EDITOR_VIDEO_API_KEY)"))
@@ -345,4 +351,4 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
             "collect": collect, "translate": translation, "image": image,
             "deliver": deliver, "auto": auto, "brief": brief, "evening": evening,
             "request": request, "wpmenu": wpmenu, "video_ideas": video_ideas, "video": video,
-            "video_round": video_round}
+            "video_round": video_round, "video_language": video_language}

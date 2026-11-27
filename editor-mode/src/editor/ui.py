@@ -54,6 +54,9 @@ FORMATS = {
     "how-to": N_("guida"), "tutorial": N_("guida"), "interview": N_("intervista"), "review": N_("recensione"),
     "explainer": N_("spiegazione"), "recipe": N_("ricetta"), "menu": N_("menù"), "comparison": N_("confronto"), "data": N_("dati"),
 }
+# The languages of the social videos (Francesco, 2026-11-27: "deve scegliere anche la lingua").
+VIDEO_LANGUAGES = {"it": N_("italiano"), "en": N_("inglese"), "de": N_("tedesco"), "fr": N_("francese"),
+                   "es": N_("spagnolo")}
 KINDS = {"rss": "RSS", "hackernews": "HN", "github": "GitHub", "huggingface": "Hugging Face", "arxiv": "arXiv"}
 TARGET_KINDS = {"wordpress": "WordPress", "github": N_("GitHub (repo del sito)"), "webhook": "Webhook",
                 "telegram_channel": N_("Canale Telegram")}
@@ -281,6 +284,17 @@ def register(app, ctx) -> None:
         chosen = next((x for x in sites if str(x.id) == wanted), sites[0] if sites else None)
         return sites, chosen
 
+    def video_seconds() -> int:
+        maker = getattr(ctx, "videomaker", None)
+        return maker.seconds if maker is not None else 10
+
+    def video_choices(s) -> list[dict]:
+        """The lengths a person can pick for a video, with their price in credits."""
+        maker = getattr(ctx, "videomaker", None)
+        if maker is None:
+            return []
+        return [{"seconds": x, "price": vids.price_or_none(s, x, maker)} for x in maker.choices()]
+
     def video_state(s) -> dict:
         """The social videos: whether they can be made, what one costs, and
         the ideas and clips being prepared now."""
@@ -288,7 +302,9 @@ def register(app, ctx) -> None:
         active = s.execute(select(j.kind, j.subject, j.args).where(
             j.kind.in_(("video", "video_ideas")), j.status.in_(("queued", "running")))).all()
         return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
-                "price": vids.price_or_none(s), "credits": credits.state(s), "allowance": vids.allowance(s),
+                "price": vids.price_or_none(s, video_seconds(), getattr(ctx, "videomaker", None)),
+                "choices": video_choices(s), "languages": VIDEO_LANGUAGES,
+                "credits": credits.state(s), "allowance": vids.allowance(s),
                 "making": {(a.args or {}).get("video_id") for a in active if a.kind == "video"},
                 "ideas": {a.subject for a in active if a.kind == "video_ideas"}}
 
@@ -2309,16 +2325,24 @@ def register(app, ctx) -> None:
             rows = vids.of_site(s, site.id) if site else []
             body = prof.approved_profile(s, site.id) if site else None
             per_day = vids.per_day(body.body if body else None, site.kind) if site else 0
+            seconds = vids.seconds_of(body.body if body else None, video_seconds())
+            language = vids.language_of(body.body if body else None)
             return render(request, "videos.html.j2", c, s, "videos", _sites=(sites, site), videos=rows,
-                          per_day=per_day, has_profile=body is not None, allowance=vids.allowance(s),
+                          per_day=per_day, seconds=seconds, language=language, has_profile=body is not None, allowance=vids.allowance(s),
                           vstate=vstate, ideas_busy=bool(site) and any(
                               x.endswith(f" site {site.id}") for x in vstate["ideas"]))
 
     @app.post("/ui/sites/{site_id}/videos-per-day")
-    def ui_videos_per_day(site_id: int, n: int = Form(...), c: auth.Caller = Depends(ctx.need("owner"))):
+    def ui_videos_per_day(site_id: int, n: int = Form(...), seconds: int | None = Form(None),
+                          language: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
         n = max(0, min(vids.MAX_PER_DAY, n))
+        more = {}
+        if seconds:
+            more["videos_seconds"] = max(4, min(vids.MAX_SECONDS, seconds))
+        if language in VIDEO_LANGUAGES:
+            more["videos_language"] = language
         with db.tenant(c.tenant_id) as s:
-            if not prof._set_settings(s, site_id, videos_per_day=n):
+            if not prof._set_settings(s, site_id, videos_per_day=n, **more):
                 return done("/videos", t("Approva prima il profilo: le idee partono dalla linea approvata."))
         return done("/videos", t("Da domattina {n} idee di video al giorno.", n=n) if n
                     else t("Idee di video del mattino spente: le chiedi tu da un articolo o da un tema."))
@@ -2352,17 +2376,23 @@ def register(app, ctx) -> None:
         return back if back.startswith("/") and not back.startswith(("//", "/\\")) else "/videos"
 
     @app.post("/ui/videos/{video_id}/make")
-    def ui_video_make(video_id: int, back: str = Form("/videos"), c: auth.Caller = Depends(ctx.need("editor"))):
+    def ui_video_make(video_id: int, back: str = Form("/videos"), seconds: int | None = Form(None),
+                      c: auth.Caller = Depends(ctx.need("editor"))):
         back = video_back(back)
-        if getattr(ctx, "videomaker", None) is None:
+        maker = getattr(ctx, "videomaker", None)
+        if maker is None:
             return done(back, t("Video non configurati: serve una chiave di OpenRouter in Amministrazione › Impostazioni."))
         with db.tenant(c.tenant_id) as s:
-            site_id = s.execute(select(m.videos.c.site_id).where(m.videos.c.id == video_id)).scalar()
-            cost, left = vids.price_or_none(s), credits.state(s).get("left", 0)
-        if site_id is None:
-            raise HTTPException(404, "video not found")
+            row = s.execute(select(m.videos.c.site_id, m.videos.c.seconds).where(m.videos.c.id == video_id)).first()
+            if row is None:
+                raise HTTPException(404, "video not found")
+            site_id = row.site_id
+            # The length the person picked (Francesco, 2026-11-27: "farei decidere al cliente quanti secondi
+            # vuole"), as the model makes it; else the idea's.
+            seconds = maker.fit_seconds(max(4, min(vids.MAX_SECONDS, seconds or row.seconds or maker.seconds)))
+            cost, left = vids.price_or_none(s, seconds, maker), credits.state(s).get("left", 0)
         try:
-            vids.ask(db, c.tenant_id, video_id, c.name)
+            vids.ask(db, c.tenant_id, video_id, c.name, seconds, maker)
         except credits.NoCredits:
             if cost is None:
                 return done(back, t("I video del piano di questo mese sono finiti: ne arrivano altri il mese prossimo, "
@@ -2372,6 +2402,23 @@ def register(app, ctx) -> None:
         ctx.run_video(c.tenant_id, site_id, video_id)
         return done(back, t("Video in preparazione: ci vogliono di solito da uno a cinque minuti. Lo segui nel "
                             "riquadro Attività."))
+
+    @app.post("/ui/videos/{video_id}/language")
+    def ui_video_language(video_id: int, language: str = Form(...), back: str = Form("/videos"),
+                          c: auth.Caller = Depends(ctx.need("editor"))):
+        """The same idea in another language, next to the first (free, like the ideas)."""
+        back = video_back(back)
+        if ctx.core is None:
+            return done(back, t("Nessun Core configurato: per le idee dei video serve un modello."))
+        if language not in VIDEO_LANGUAGES:
+            raise HTTPException(400, "unknown language")
+        with db.tenant(c.tenant_id) as s:
+            site_id = s.execute(select(m.videos.c.site_id).where(m.videos.c.id == video_id)).scalar()
+        if site_id is None:
+            raise HTTPException(404, "video not found")
+        ctx.run_video_language(c.tenant_id, site_id, video_id, language)
+        return done(back, t("Riscrivo l'idea in {language}: compare qui tra un minuto.",
+                            language=t(VIDEO_LANGUAGES[language])))
 
     @app.post("/ui/videos/{video_id}/article")
     def ui_video_article(video_id: int, c: auth.Caller = Depends(ctx.need("editor"))):

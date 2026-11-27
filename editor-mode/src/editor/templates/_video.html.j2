@@ -20,6 +20,7 @@
   {% elif v.status == 'ready' %}
   <p class="hint">{{ _('Il file è stato cancellato dopo 30 giorni: restano i testi del post.') }}</p>
   {% endif %}
+  <p class="hint" style="margin: 2px 0;">{{ _(vstate.languages.get((v.language or 'it')[:2], v.language or '')) }}{% if v.seconds %} · {{ _('voce scritta per {n} secondi', n=v.seconds) }}{% endif %}</p>
   {% if v.hook %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Primo secondo') }}</span> {{ v.hook }}</p>{% endif %}
   {% if v.voiceover %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Voce') }}</span> «{{ v.voiceover }}»</p>{% endif %}
   <details class="mini"><summary>{{ _('Scena per il modello video') }}</summary><p class="hint" lang="en">{{ v.scene }}</p></details>
@@ -32,7 +33,19 @@
     {% if v.status == 'ready' and v.has_file %}<a class="btn sm pri" href="/videos/{{ v.id }}/file?download=1" download>{{ _('Scarica il video') }}</a>{% endif %}
     {% if caller.can('editor') and not busy %}
       {% if v.status in ('idea', 'failed', 'queued', 'making') and vstate.on %}
-      <form class="inline" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
+      <form class="inline row" style="gap: 6px;" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}">
+        {% if vstate.choices %}<label class="sr" for="sec-{{ v.id }}">{{ _('Durata') }}</label>
+        <select id="sec-{{ v.id }}" name="seconds" class="sm" title="{{ _('Durata del video e prezzo') }}">
+          {% set want = v.seconds or vstate.choices[0].seconds %}
+          {% for ch in vstate.choices %}<option value="{{ ch.seconds }}"{% if ch.seconds == want or (loop.last and want > ch.seconds) %} selected{% endif %}>{{ _('{n} secondi', n=ch.seconds) }}{% if ch.price %} · {{ _('{n} crediti', n=ch.price) }}{% endif %}</option>{% endfor %}
+        </select>{% endif %}
+        <button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price and not vstate.choices %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
+      {% endif %}
+      {% if v.status == 'idea' and vstate.can_ideas %}
+      <form class="inline row" style="gap: 6px;" method="post" action="/ui/videos/{{ v.id }}/language"><input type="hidden" name="back" value="{{ back }}">
+        <label class="sr" for="lang-{{ v.id }}">{{ _('Lingua') }}</label>
+        <select id="lang-{{ v.id }}" name="language" class="sm">{% for code, name in vstate.languages.items() if code != (v.language or '')[:2] %}<option value="{{ code }}">{{ _(name) }}</option>{% endfor %}</select>
+        <button class="btn sm" type="submit">{{ _('Rifai in questa lingua') }}</button></form>
       {% endif %}
       {% if v.topic_id and not v.draft_id and site and site.kind != 'social' and vstate.can_ideas %}<form class="inline" method="post" action="/ui/videos/{{ v.id }}/article"><button class="btn sm" type="submit">{{ _("Scrivi anche l'articolo") }}</button></form>{% endif %}
       {% if v.status in ('idea', 'ready', 'failed') %}<form class="inline" method="post" action="/ui/videos/{{ v.id }}/delete"><input type="hidden" name="back" value="{{ back }}"><button class="btn sm" type="submit">{{ _('Togli') }}</button></form>{% endif %}
