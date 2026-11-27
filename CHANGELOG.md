@@ -9,9 +9,21 @@
   messaggio utile"). In Impostazioni › Video social la durata va da 4 a 30
   secondi: HeyGen Video, Wan 3.0 e Seedance 2.5 arrivano a 30, Grok Lite si
   ferma a 15 e usa la durata più vicina. Il prezzo in crediti di «Video per
-  i social» vale ora ogni 10 secondi (un video da 30 secondi costa tre
-  volte); il listino in /admin › Piani e crediti lo dice. Un video compreso
-  nel piano resta uno, qualunque sia la durata.
+  i social» vale per 10 secondi; un video più lungo costa in proporzione a
+  quanto costa davvero al modello (dal listino OpenRouter: HeyGen Video
+  oltre i 15 secondi costa più del doppio al secondo, quindi 30 secondi a
+  480p valgono 6,75 volte 10 secondi; senza listino, ogni 10 secondi). Un
+  video compreso nel piano resta uno, qualunque sia la durata.
+- **Il cliente sceglie durata e lingua** (Francesco: "farei decidere al
+  cliente quanti secondi vuole con il costo in token", "deve scegliere anche
+  la lingua"). Accanto a «Genera il video» un menu con le durate che il
+  modello sa fare (10, 15, 20, 30 secondi) e il prezzo in crediti di
+  ognuna. In Video social › Idee ogni mattina si scelgono la durata e la
+  lingua dei video del sito o canale: le idee sono scritte per quella
+  durata (la voce dura quanto il video) e in quella lingua. Su ogni idea
+  «Rifai in questa lingua» riscrive titolo, voce, testo del post e hashtag
+  in italiano, inglese, tedesco, francese o spagnolo come nuova idea
+  accanto alla prima (gratis come le idee, job `video_language`).
 
 ## 0.39.1
 

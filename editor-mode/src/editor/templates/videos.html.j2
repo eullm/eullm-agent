@@ -17,9 +17,12 @@
   {% if has_profile %}
   <form method="post" action="/ui/sites/{{ site.id }}/videos-per-day" class="row" style="gap: 8px; flex-wrap: wrap; align-items: end;">
     <label class="field">{{ _('Idee di video al giorno') }}<input name="n" type="number" min="0" max="10" value="{{ per_day }}" style="max-width: 90px;"></label>
+    <label class="field">{{ _('Durata dei video') }}<select name="seconds">{% for x in (vstate.choices|map(attribute='seconds')|list or [10, 15, 20, 30]) %}<option value="{{ x }}"{% if x == seconds %} selected{% endif %}>{{ _('{n} secondi', n=x) }}</option>{% endfor %}</select></label>
+    <label class="field">{{ _('Lingua dei video') }}<select name="language">{% for code, name in vstate.languages.items() %}<option value="{{ code }}"{% if code == language %} selected{% endif %}>{{ _(name) }}</option>{% endfor %}</select></label>
     <button class="btn" type="submit">{{ _('Salva') }}</button>
   </form>
   <p class="hint">{{ _("All'ora del briefing il modello sceglie i temi più adatti a {domain}, prima quelli che stanno salendo e non sono ancora ovunque, e scrive un'idea di video per ognuno. Le idee sono gratis; si paga solo il video che fai girare. 0 le spegne.", domain=site.domain) }}</p>
+  <p class="hint">{{ _("Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.") }}</p>
   <p class="hint">{{ _("Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.") }}</p>
   {% else %}
   <p class="hint">{{ _('Approva prima il profilo in Sito e profilo: le idee partono dalla linea approvata.') }}</p>

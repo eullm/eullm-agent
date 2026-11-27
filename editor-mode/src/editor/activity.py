@@ -28,6 +28,7 @@ KINDS = {
     "image": N_("Immagine di copertina"),
     "video_ideas": N_("Idee per i video social"),
     "video": N_("Video per i social"),
+    "video_language": N_("Idea video in un'altra lingua"),
     "video_round": N_("Idee video del mattino"),
     "deliver": N_("Invio dell'articolo per email"),
     "publish": N_("Pubblicazione"),
@@ -234,6 +235,9 @@ def _result(kind: str, r: dict, site_id, humanize: Callable[[str], str]) -> tupl
         return [t("{n} idee per i video pronte: scegli quella da girare.", n=r.get("ideas", 0))], where, t("Vedi le idee")
     if kind == "video_round":
         return [t("{n} idee per i video pronte: scegli quella da girare.", n=r.get("ideas", 0))], "/videos", t("Vedi le idee")
+    if kind == "video_language":
+        return [t("L'idea «{title}» è pronta nella nuova lingua.", title=r.get("title", ""))], "/videos", \
+            t("Vedi le idee")
     if kind == "video":
         if r.get("failed"):
             return [t("Il servizio video non ha fatto la clip «{title}»: nessun credito usato. Puoi riprovare o "

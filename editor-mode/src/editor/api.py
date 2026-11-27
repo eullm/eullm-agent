@@ -254,6 +254,10 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
     def run_video(tenant: str, site_id: int, video_id: int):
         queue.enqueue(db, tenant, "video", f"video {video_id}", {"site_id": site_id, "video_id": video_id})
 
+    def run_video_language(tenant: str, site_id: int, video_id: int, language: str):
+        queue.enqueue(db, tenant, "video_language", f"video {video_id} {language}",
+                      {"site_id": site_id, "video_id": video_id, "language": language})
+
     def run_delivery(tenant: str, draft_id: int) -> bool:
         """Email the approved article to the newsroom's email recipients, if it has any."""
         with db.tenant(tenant) as s:
@@ -624,7 +628,8 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
                                      run_proposals=run_proposals, run_titles=run_titles, run_collect=run_collect,
                                      run_publication=run_publication, run_translation=run_translation,
                                      run_translations=run_translations, run_image=run_image, imager=imager,
-                                     run_video_ideas=run_video_ideas, run_video=run_video, videomaker=videomaker,
+                                     run_video_ideas=run_video_ideas, run_video=run_video, run_video_language=run_video_language,
+                                     videomaker=videomaker,
                                      run_delivery=run_delivery, gateway=gateway))
     readers.register(app, db, admin, pages, mail, public_url)
     console.register(app, SimpleNamespace(db=db, admin=admin, pages=pages, core=core, mail=mail,

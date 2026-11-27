@@ -33,6 +33,7 @@ the caption are given as text to paste.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
@@ -51,6 +52,9 @@ log = logging.getLogger(__name__)
 
 OPENROUTER = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "x-ai/grok-imagine-video-1.5-lite"
+CHOICES = (10, 15, 20, 30)  # the durations offered to the newsroom
+MAX_SECONDS = 30
+LONG_SECONDS = 15  # over it some models (HeyGen Video) cost more per second
 ASPECT = "9:16"  # Reels, TikTok and Shorts are vertical
 KEEP_DAYS = 30  # the clip's bytes; the idea, its texts and its cost stay
 MAX_BYTES = 200 * 1024 * 1024
@@ -104,7 +108,7 @@ class OpenRouterVideo:
         if self._catalog is None or now - self._catalog[0] > CATALOG_TTL:
             info = {}
             try:
-                r = self.http.get(f"{self.url}/videos/models")
+                r = self.http.get(f"{self.url}/videos/models", timeout=10)
                 if r.status_code < 400:
                     info = next((x for x in (r.json().get("data") or []) if x.get("id") == self.model), {}) or {}
             except (httpx.HTTPError, ValueError):
@@ -112,20 +116,51 @@ class OpenRouterVideo:
             self._catalog = (now, info)
         return self._catalog[1]
 
-    def request(self, prompt: str) -> dict:
+    def fit_seconds(self, seconds: int | None = None) -> int:
+        """The duration the model makes nearest to the one asked."""
+        seconds = int(seconds or self.seconds)
+        info = self.model_info()
+        durations = [d for d in (info.get("supported_durations") or []) if isinstance(d, int) and d > 0]
+        if durations and seconds not in durations:
+            seconds = min(durations, key=lambda d: (abs(d - seconds), d))
+        return seconds
+
+    def fit_resolution(self) -> str:
+        sizes = self.model_info().get("supported_resolutions") or []
+        return _nearest_size(self.resolution, sizes) if sizes and self.resolution not in sizes else self.resolution
+
+    def choices(self) -> list[int]:
+        """The durations a person can pick: 10, 15, 20, 30 seconds as the
+        model makes them, up to MAX_SECONDS."""
+        out = []
+        for c in CHOICES:
+            x = self.fit_seconds(c)
+            if x not in out and x <= MAX_SECONDS:
+                out.append(x)
+        return sorted(out)
+
+    def cost(self, seconds: int) -> float | None:
+        """What the clip costs on OpenRouter (USD), from the catalog's prices
+        per second; a longer tier where the model has one (HeyGen Video over
+        15 seconds). None when the model is priced otherwise (tokens)."""
+        skus = self.model_info().get("pricing_skus") or {}
+        res = self.fit_resolution()
+        rate = skus.get(f"duration_seconds_{res}") or skus.get("duration_seconds")
+        if seconds > LONG_SECONDS:
+            rate = skus.get(f"long_duration_seconds_{res}") or rate
+        try:
+            return float(rate) * seconds if rate is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def request(self, prompt: str, seconds: int | None = None) -> dict:
         """The body of the request, fitted to what the model accepts."""
         info = self.model_info()
         ratios = info.get("supported_aspect_ratios")
         if ratios and ASPECT not in ratios:
             raise VideoError(f"{self.model} does not make vertical {ASPECT} videos")
-        seconds = self.seconds
-        durations = [d for d in (info.get("supported_durations") or []) if isinstance(d, int) and d > 0]
-        if durations and seconds not in durations:
-            seconds = min(durations, key=lambda d: (abs(d - seconds), d))
-        resolution = self.resolution
-        sizes = info.get("supported_resolutions") or []
-        if sizes and resolution not in sizes:
-            resolution = _nearest_size(resolution, sizes)
+        seconds = self.fit_seconds(seconds)
+        resolution = self.fit_resolution()
         body = {"model": self.model, "prompt": prompt, "duration": seconds, "resolution": resolution,
                 "aspect_ratio": ASPECT}
         if info.get("generate_audio") is not False:  # False: the model makes its sound itself, no switch
@@ -252,7 +287,8 @@ def _profile(s, site_id: int) -> dict:
 
 
 def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int | None = None,
-          site_id: int | None = None, n: int = IDEAS, seconds: int = 10, extra: dict | None = None) -> list[int]:
+          site_id: int | None = None, n: int = IDEAS, seconds: int = 10, extra: dict | None = None,
+          language: str | None = None) -> list[int]:
     """Write `n` video ideas from an article (draft_id) or a trend (topic_id
     and the site); the unused ideas of the same article or trend are
     replaced. Returns their ids."""
@@ -265,7 +301,7 @@ def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int |
                 raise LookupError(draft_id)
             site_id = d.site_id
             prof = _profile(s, site_id)
-            language = d.language or prof.get("language") or "it"
+            language = language or language_of(prof, d.language)
             what = "article"
             lead = d.body_md.split("\n## ", 1)[0][:2500]
             material = f"Title: {d.title}\n{d.subtitle or ''}\n\n{lead}"
@@ -275,7 +311,7 @@ def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int |
             if label is None or site_id is None:
                 raise LookupError(topic_id)
             prof = _profile(s, site_id)
-            language = prof.get("language") or "it"
+            language = language or language_of(prof)
             what = "news topic"
             items = _items_for(s, topic_id, site_id, limit=8)
             material = f"Topic of the moment: {label}\n\nLatest news on it:\n" + "\n".join(
@@ -309,9 +345,54 @@ def ideas(db, tenant_id: str, core, draft_id: int | None = None, topic_id: int |
         for x in found:
             vid = s.execute(m.videos.insert().values(
                 tenant_id=tenant_id, site_id=site_id, draft_id=draft_id, topic_id=topic_id, language=language,
-                status="idea", **(extra or {}), **x).returning(v.id)).scalar_one()
+                status="idea", seconds=seconds, **(extra or {}), **x).returning(v.id)).scalar_one()
             created.append(vid)
     return created
+
+
+RELANGUAGE = (
+    "You rewrite the texts of a short vertical video for the social networks in {language}: same idea, same "
+    "facts, natural for native speakers (not a word-for-word translation). The voiceover stays at most {words} "
+    "words. Hashtags: the ones people use in {language}, without #. Reply with JSON only: {{\"title\": ..., "
+    "\"hook\": ..., \"voiceover\": ..., \"caption\": ..., \"hashtags\": [...]}}.")
+
+
+def relanguage(db, tenant_id: str, video_id: int, core, language: str) -> dict:
+    """The same idea in another language: a new idea next to the first, its
+    texts rewritten (the scene for the video model stays in English)."""
+    language = _lang_code(language) or "it"
+    with db.tenant(tenant_id) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == video_id)).first()
+    if row is None:
+        raise LookupError(video_id)
+    if core is None:
+        raise CoreError("a model is needed for the video ideas")
+    words = max(10, int((row.seconds or 10) * WORDS_PER_SECOND))
+
+    def check(value):
+        if not isinstance(value, dict):
+            raise ValueError("an object is needed")
+        out = {k: _clean(value.get(k), lim) for k, lim in (
+            ("title", 120), ("hook", 300), ("voiceover", 600), ("caption", 1000))}
+        if not out["title"] or not out["voiceover"]:
+            raise ValueError("title and voiceover are needed")
+        tags = value.get("hashtags") or []
+        if isinstance(tags, str):
+            tags = tags.replace(",", " ").split()
+        out["hashtags"] = [t for t in (_clean(t, 40).lstrip("#").replace(" ", "") for t in tags[:8]) if t]
+        return out
+
+    user = json.dumps({k: getattr(row, k) for k in ("title", "hook", "voiceover", "caption", "hashtags")},
+                      ensure_ascii=False)
+    step(N_("Il modello riscrive l'idea in un'altra lingua"))
+    with usage.tagged(db, tenant_id, "video_ideas", site_id=row.site_id, ref=f"video:{video_id}"):
+        found, _calls = core.chat_json(RELANGUAGE.format(language=LANGUAGES[language], words=words), user, check)
+    keep = {k: getattr(row, k) for k in ("site_id", "draft_id", "topic_id", "scene", "seconds", "hype", "gain",
+                                          "auto", "social")}
+    with db.tenant(tenant_id) as s:
+        vid = s.execute(m.videos.insert().values(tenant_id=tenant_id, language=language, status="idea", **keep,
+                                                 **found).returning(m.videos.c.id)).scalar_one()
+    return {"video_id": vid, "site_id": row.site_id, "language": language, "title": found["title"]}
 
 
 def prompt_of(row) -> str:
@@ -339,6 +420,35 @@ def per_day(body: dict | None, kind: str = "web") -> int:
     n = st.get("videos_per_day")
     return max(0, min(MAX_PER_DAY, int(n))) if isinstance(n, int) and not isinstance(n, bool) \
         else DEFAULT_PER_DAY.get(kind, 0)
+
+
+def _lang_code(x) -> str | None:
+    x = x.get("value") if isinstance(x, dict) else x
+    x = str(x or "").strip().lower()[:2]
+    return x if x in LANGUAGES else None
+
+
+def language_of(body: dict | None, fallback: str | None = None) -> str:
+    """The language of the site's or channel's videos (Video social › Idee
+    ogni mattina; Francesco, 2026-11-27: "deve scegliere anche la lingua"),
+    else the article's, else the profile's, else Italian."""
+    body = body or {}
+    return (_lang_code((body.get("settings") or {}).get("videos_language")) or _lang_code(fallback)
+            or _lang_code(body.get("language")) or "it")
+
+
+def seconds_of(body: dict | None, default: int = 10) -> int:
+    """The length of the site's or channel's videos (Video social › Idee ogni
+    mattina), else the server's (Impostazioni › Video social)."""
+    n = ((body or {}).get("settings") or {}).get("videos_seconds")
+    return max(4, min(MAX_SECONDS, n)) if isinstance(n, int) and not isinstance(n, bool) else default
+
+
+def site_seconds(db, tenant_id: str, site_id: int | None, default: int = 10) -> int:
+    if site_id is None:
+        return default
+    with db.tenant(tenant_id) as s:
+        return seconds_of(_profile(s, site_id), default)
 
 
 def round_due(body: dict | None, kind: str, local: datetime, briefing_hour: int) -> bool:
@@ -411,12 +521,22 @@ def allowance(s, now: datetime | None = None) -> dict:
 UNIT_SECONDS = 10  # the credit price of "Video per i social" is for every 10 seconds
 
 
-def units(seconds: int | None) -> int:
-    """10-second blocks of a clip: a 30-second video costs three times a 10-second one."""
-    return max(1, math.ceil((seconds or UNIT_SECONDS) / UNIT_SECONDS))
+def units(seconds: int | None, maker: OpenRouterVideo | None = None) -> float:
+    """How many times the price of a 10-second video: what the clip costs
+    against 10 seconds of the same model (so a model dearer over 15 seconds
+    costs more), or the 10-second blocks when the model's price is not known."""
+    seconds = seconds or UNIT_SECONDS
+    if maker is not None:
+        try:
+            long_, base = maker.cost(seconds), maker.cost(UNIT_SECONDS)
+        except Exception:  # noqa: BLE001 - the catalog not reachable: the blocks
+            long_ = base = None
+        if long_ and base:
+            return max(1.0, long_ / base)
+    return float(max(1, math.ceil(seconds / UNIT_SECONDS)))
 
 
-def price(s, seconds: int | None = None) -> int:
+def price(s, seconds: int | None = None, maker: OpenRouterVideo | None = None) -> int:
     """What the next video costs the newsroom in credits: 0 while the month's
     videos of the plan last, or when the newsroom does not use credits;
     otherwise the price of "Video per i social" for every 10 seconds
@@ -427,27 +547,29 @@ def price(s, seconds: int | None = None) -> int:
     tid = s.info["tenant_id"]
     if s.execute(select(m.tenants.c.credits_month).where(m.tenants.c.tenant_id == tid)).scalar() is None:
         raise credits.NoCredits("no videos left in the plan and no credits")
-    return credits.price(s, "video") * units(seconds)
+    return round(credits.price(s, "video") * units(seconds, maker))
 
 
-def price_or_none(s, seconds: int | None = None) -> int | None:
+def price_or_none(s, seconds: int | None = None, maker: OpenRouterVideo | None = None) -> int | None:
     """The price, or None when the plan's videos are used up and the newsroom has no credits."""
     try:
-        return price(s, seconds)
+        return price(s, seconds, maker)
     except credits.NoCredits:
         return None
 
 
-def ask(db, tenant_id: str, video_id: int, by: str, seconds: int | None = None) -> None:
+def ask(db, tenant_id: str, video_id: int, by: str, seconds: int | None = None,
+        maker: OpenRouterVideo | None = None) -> None:
     """A person wants the video: check the credits and mark it queued."""
     with db.tenant(tenant_id) as s:
         row = s.execute(select(m.videos.c.status).where(m.videos.c.id == video_id)).first()
         if row is None:
             raise LookupError(video_id)
-        credits.need(s, price(s, seconds))
+        credits.need(s, price(s, seconds, maker))
         if row.status in ("idea", "failed"):
             s.execute(update(m.videos).where(m.videos.c.id == video_id).values(
-                status="queued", error=None, made_by=by[:200] if by else None))
+                status="queued", error=None, made_by=by[:200] if by else None,
+                **({"seconds": int(seconds)} if seconds else {})))
 
 
 def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
@@ -461,7 +583,7 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
         if row.status == "ready":
             return {"video_id": video_id, "site_id": row.site_id, "title": row.title, "ready": True}
         if not row.job_ref:
-            credits.need(s, price(s, maker.seconds))  # nothing asked to the service yet: checked again
+            credits.need(s, price(s, row.seconds or maker.seconds, maker))  # nothing asked yet: checked again
     started = time.monotonic()
     ref = row.job_ref
     secs = row.seconds or maker.seconds
@@ -470,7 +592,7 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
                       ref=f"draft:{row.draft_id}" if row.draft_id else f"topic:{row.topic_id}"):
         try:
             if not ref:
-                body = maker.request(prompt_of(row))
+                body = maker.request(prompt_of(row), row.seconds or maker.seconds)
                 step(N_("Il modello video gira la clip"))
                 ref = maker.submit(body)
                 secs = body["duration"]
@@ -499,7 +621,7 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
         if a["included"] is not None and not included:
             try:
                 paid = credits.spend(s, "video", f"video:{video_id}",
-                                     credits=credits.price(s, "video") * units(secs))
+                                     credits=round(credits.price(s, "video") * units(secs, maker)))
             except credits.NoCredits:  # credits used elsewhere while it was made: it is already paid for
                 log.warning("video %s made without credits left", video_id)
         s.execute(update(m.videos).where(v.id == video_id).values(

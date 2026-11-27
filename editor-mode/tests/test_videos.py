@@ -37,10 +37,14 @@ def maker(**kw):
 
 
 def catalog(router, model=videos.DEFAULT_MODEL, durations=(1, 5, 10, 15), sizes=("480p", "720p"),
-            ratios=("16:9", "9:16"), audio=True):
+            ratios=("16:9", "9:16"), audio=True, skus=None):
     return router.get(f"{OR}/videos/models").mock(return_value=httpx.Response(200, json={"data": [{
         "id": model, "supported_durations": list(durations), "supported_resolutions": list(sizes),
-        "supported_aspect_ratios": list(ratios), "generate_audio": audio}]}))
+        "supported_aspect_ratios": list(ratios), "generate_audio": audio, "pricing_skus": skus or {}}]}))
+
+
+HEYGEN_SKUS = {"duration_seconds_480p": "0.02", "duration_seconds_768p": "0.036",
+               "long_duration_seconds_480p": "0.045", "long_duration_seconds_768p": "0.075"}
 
 
 def service(router, final="completed", cost=0.3):
@@ -151,21 +155,43 @@ def test_a_video_is_paid_in_credits_only_when_made(db, tenant):
         videos.ask(db, tenant, ids[1], "redattore")
 
 
-def test_a_longer_video_costs_the_price_of_every_10_seconds(db, tenant):
+def test_the_person_picks_the_length_and_pays_what_the_model_costs(db, tenant):
     _, ids = with_ideas(db, tenant)
-    set_plan(db, tenant, credits_month=500, max_videos_month=0)
-    with db.tenant(tenant) as s:
+    set_plan(db, tenant, credits_month=1000, max_videos_month=0)
+    with db.tenant(tenant) as s:  # model price unknown: every 10 seconds
         assert videos.price(s, 30) == 300 and videos.price(s, 25) == 300 and videos.price(s, 8) == 100
-    videos.ask(db, tenant, ids[0], "redattore", 30)
     with respx.mock(assert_all_called=False) as router:
         catalog(router, model="heygen/heygen-video-1", durations=tuple(range(5, 31)), sizes=("480p", "768p"),
-                audio=False)
+                audio=False, skus=HEYGEN_SKUS)
         submit, _, _ = service(router, cost=1.35)
-        videos.make(db, tenant, ids[0], maker(model="heygen/heygen-video-1", seconds=30, resolution="480p"))
+        mk = maker(model="heygen/heygen-video-1", seconds=10, resolution="480p")
+        assert mk.choices() == [10, 15, 20, 30]
+        with db.tenant(tenant) as s:  # 0.20 $ for 10 s, 0.30 $ for 15, 1.35 $ for 30 (over 15 s it costs more)
+            assert [videos.price(s, x, mk) for x in (10, 15, 30)] == [100, 150, 675]
+        videos.ask(db, tenant, ids[0], "redattore", 30, mk)
+        videos.make(db, tenant, ids[0], mk)
     assert json.loads(submit.calls[0].request.content)["duration"] == 30
     with db.tenant(tenant) as s:
-        assert credits.state(s)["month_used"] == 300
-        assert s.execute(select(m.videos.c.credits).where(m.videos.c.id == ids[0])).scalar() == 300
+        assert credits.state(s)["month_used"] == 675
+        row = s.execute(select(m.videos.c.credits, m.videos.c.seconds).where(m.videos.c.id == ids[0])).first()
+    assert row.credits == 675 and row.seconds == 30
+
+
+def test_an_idea_in_another_language_stays_next_to_the_first(db, tenant):
+    _, ids = with_ideas(db, tenant)
+    redo = {"title": "Fiber reaches Bari", "hook": "A manhole opens", "voiceover": "In Bari fiber reaches every "
+            "district.", "caption": "Fiber in Bari: what changes.", "hashtags": ["#Bari", "fiber"]}
+    with respx.mock(assert_all_called=False) as router:
+        router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps(redo)))
+        out = videos.relanguage(db, tenant, ids[0], CoreClient("http://core.test", "tok"), "en")
+    with db.tenant(tenant) as s:
+        first = s.execute(select(m.videos).where(m.videos.c.id == ids[0])).first()
+        new = s.execute(select(m.videos).where(m.videos.c.id == out["video_id"])).first()
+    assert new.language == "en" and new.title == "Fiber reaches Bari" and new.hashtags == ["Bari", "fiber"]
+    assert new.scene == first.scene and new.status == "idea" and first.language == "it"
+    assert videos.language_of({"settings": {"videos_language": "de"}, "language": "it"}) == "de"
+    assert videos.language_of({"language": {"value": "en"}}) == "en" and videos.language_of(None, "fr") == "fr"
+    assert videos.seconds_of({"settings": {"videos_seconds": 99}}) == 30 and videos.seconds_of(None, 15) == 15
 
 
 def test_a_restarted_worker_waits_for_the_same_job(db, tenant):
@@ -236,15 +262,23 @@ def test_make_queues_the_job_with_a_video_service(db, tenant):
 
     _, ids = with_ideas(db, tenant)
     token = auth.create_token(db, tenant, "editor-user", "editor")
-    c = TestClient(create_app(db, videomaker=maker()))
-    c.post("/login", data={"token": token})
-    assert c.post(f"/ui/videos/{ids[0]}/make", data={"back": "https://evil.example"},
-                  follow_redirects=False).headers["location"] == "/videos"
-    with db.tenant(tenant) as s:
-        job = s.execute(select(m.jobs.c.kind, m.jobs.c.args).where(m.jobs.c.kind == "video")).first()
-        status = s.execute(select(m.videos.c.status).where(m.videos.c.id == ids[0])).scalar()
-    assert job.args["video_id"] == ids[0] and status == "queued"
-    assert "Genera il video" not in c.get("/videos").text.split(f'id="video-{ids[0]}"')[1].split('class="video-idea"')[0]
+    with respx.mock(assert_all_called=False) as router:
+        catalog(router, model="heygen/heygen-video-1", durations=tuple(range(5, 31)), sizes=("480p",), audio=False,
+                skus=HEYGEN_SKUS)
+        c = TestClient(create_app(db, videomaker=maker(model="heygen/heygen-video-1", resolution="480p")))
+        c.post("/login", data={"token": token})
+        page = c.get("/videos").text
+        assert '<option value="30">30 secondi</option>' in page, page[page.find("sec-"):page.find("sec-") + 900]
+        assert "Rifai in questa lingua" not in page  # no model in this app
+        assert c.post(f"/ui/videos/{ids[0]}/make", data={"back": "https://evil.example", "seconds": "20"},
+                      follow_redirects=False).headers["location"] == "/videos"
+        with db.tenant(tenant) as s:
+            job = s.execute(select(m.jobs.c.kind, m.jobs.c.args).where(m.jobs.c.kind == "video")).first()
+            row = s.execute(select(m.videos.c.status, m.videos.c.seconds).where(m.videos.c.id == ids[0])).first()
+        assert job.args["video_id"] == ids[0] and row.status == "queued" and row.seconds == 20
+        assert "Genera il video" not in c.get("/videos").text.split(f'id="video-{ids[0]}"')[1].split('class="video-idea"')[0]
+        r = c.post(f"/ui/videos/{ids[1]}/language", data={"language": "en"}, follow_redirects=False)
+        assert r.status_code == 303  # no model in this app: a message
 
 
 def test_a_social_plan_includes_videos_then_credits(db, tenant):
