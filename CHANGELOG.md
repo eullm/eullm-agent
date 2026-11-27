@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.39.2
+
+### Changed
+
+- **Video fino a 30 secondi** (Francesco, 27 novembre: "un video di 10
+  secondi è troppo poco dovrebbe essere almeno 20/30 sec per dare un
+  messaggio utile"). In Impostazioni › Video social la durata va da 4 a 30
+  secondi: HeyGen Video, Wan 3.0 e Seedance 2.5 arrivano a 30, Grok Lite si
+  ferma a 15 e usa la durata più vicina. Il prezzo in crediti di «Video per
+  i social» vale ora ogni 10 secondi (un video da 30 secondi costa tre
+  volte); il listino in /admin › Piani e crediti lo dice. Un video compreso
+  nel piano resta uno, qualunque sia la durata.
+
 ## 0.39.1
 
 ### Added

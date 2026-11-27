@@ -34,6 +34,7 @@ the caption are given as text to paste.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -407,33 +408,43 @@ def allowance(s, now: datetime | None = None) -> dict:
     return {"included": limit, "used": used, "left": max(0, limit - used)}
 
 
-def price(s) -> int:
+UNIT_SECONDS = 10  # the credit price of "Video per i social" is for every 10 seconds
+
+
+def units(seconds: int | None) -> int:
+    """10-second blocks of a clip: a 30-second video costs three times a 10-second one."""
+    return max(1, math.ceil((seconds or UNIT_SECONDS) / UNIT_SECONDS))
+
+
+def price(s, seconds: int | None = None) -> int:
     """What the next video costs the newsroom in credits: 0 while the month's
-    videos of the plan last, or when the newsroom does not use credits."""
+    videos of the plan last, or when the newsroom does not use credits;
+    otherwise the price of "Video per i social" for every 10 seconds
+    (Francesco, 2026-11-27: "almeno 20/30 sec per dare un messaggio utile")."""
     a = allowance(s)
     if a["included"] is None or a["left"]:
         return 0
     tid = s.info["tenant_id"]
     if s.execute(select(m.tenants.c.credits_month).where(m.tenants.c.tenant_id == tid)).scalar() is None:
         raise credits.NoCredits("no videos left in the plan and no credits")
-    return credits.price(s, "video")
+    return credits.price(s, "video") * units(seconds)
 
 
-def price_or_none(s) -> int | None:
+def price_or_none(s, seconds: int | None = None) -> int | None:
     """The price, or None when the plan's videos are used up and the newsroom has no credits."""
     try:
-        return price(s)
+        return price(s, seconds)
     except credits.NoCredits:
         return None
 
 
-def ask(db, tenant_id: str, video_id: int, by: str) -> None:
+def ask(db, tenant_id: str, video_id: int, by: str, seconds: int | None = None) -> None:
     """A person wants the video: check the credits and mark it queued."""
     with db.tenant(tenant_id) as s:
         row = s.execute(select(m.videos.c.status).where(m.videos.c.id == video_id)).first()
         if row is None:
             raise LookupError(video_id)
-        credits.need(s, price(s))
+        credits.need(s, price(s, seconds))
         if row.status in ("idea", "failed"):
             s.execute(update(m.videos).where(m.videos.c.id == video_id).values(
                 status="queued", error=None, made_by=by[:200] if by else None))
@@ -450,9 +461,10 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
         if row.status == "ready":
             return {"video_id": video_id, "site_id": row.site_id, "title": row.title, "ready": True}
         if not row.job_ref:
-            credits.need(s, price(s))  # nothing asked to the service yet: checked again
+            credits.need(s, price(s, maker.seconds))  # nothing asked to the service yet: checked again
     started = time.monotonic()
     ref = row.job_ref
+    secs = row.seconds or maker.seconds
     job = None
     with usage.tagged(db, tenant_id, "video", site_id=row.site_id,
                       ref=f"draft:{row.draft_id}" if row.draft_id else f"topic:{row.topic_id}"):
@@ -461,6 +473,7 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
                 body = maker.request(prompt_of(row))
                 step(N_("Il modello video gira la clip"))
                 ref = maker.submit(body)
+                secs = body["duration"]
                 with db.tenant(tenant_id) as s:
                     s.execute(update(m.videos).where(v.id == video_id).values(
                         status="making", job_ref=ref, model=maker.model, seconds=body["duration"],
@@ -485,7 +498,8 @@ def make(db, tenant_id: str, video_id: int, maker: OpenRouterVideo) -> dict:
         included, paid = a["included"] is not None and a["left"] > 0, 0
         if a["included"] is not None and not included:
             try:
-                paid = credits.spend(s, "video", f"video:{video_id}")
+                paid = credits.spend(s, "video", f"video:{video_id}",
+                                     credits=credits.price(s, "video") * units(secs))
             except credits.NoCredits:  # credits used elsewhere while it was made: it is already paid for
                 log.warning("video %s made without credits left", video_id)
         s.execute(update(m.videos).where(v.id == video_id).values(

@@ -151,6 +151,23 @@ def test_a_video_is_paid_in_credits_only_when_made(db, tenant):
         videos.ask(db, tenant, ids[1], "redattore")
 
 
+def test_a_longer_video_costs_the_price_of_every_10_seconds(db, tenant):
+    _, ids = with_ideas(db, tenant)
+    set_plan(db, tenant, credits_month=500, max_videos_month=0)
+    with db.tenant(tenant) as s:
+        assert videos.price(s, 30) == 300 and videos.price(s, 25) == 300 and videos.price(s, 8) == 100
+    videos.ask(db, tenant, ids[0], "redattore", 30)
+    with respx.mock(assert_all_called=False) as router:
+        catalog(router, model="heygen/heygen-video-1", durations=tuple(range(5, 31)), sizes=("480p", "768p"),
+                audio=False)
+        submit, _, _ = service(router, cost=1.35)
+        videos.make(db, tenant, ids[0], maker(model="heygen/heygen-video-1", seconds=30, resolution="480p"))
+    assert json.loads(submit.calls[0].request.content)["duration"] == 30
+    with db.tenant(tenant) as s:
+        assert credits.state(s)["month_used"] == 300
+        assert s.execute(select(m.videos.c.credits).where(m.videos.c.id == ids[0])).scalar() == 300
+
+
 def test_a_restarted_worker_waits_for_the_same_job(db, tenant):
     _, ids = with_ideas(db, tenant)
     with respx.mock(assert_all_called=False) as router:

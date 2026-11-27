@@ -3001,8 +3001,6 @@
  "Durata in secondi": "Dauer in Sekunden",
  "Vuota: la chiave delle copertine, se è di OpenRouter (sk-or-…).": "Leer: der Schlüssel der Titelbilder, wenn er von OpenRouter ist (sk-or-…).",
  "Vuoto: x-ai/grok-imagine-video-1.5-lite, circa 3 centesimi di dollaro al secondo a 720p, audio compreso. Deve accettare il formato 9:16.": "Leer: x-ai/grok-imagine-video-1.5-lite, etwa 3 US-Cent pro Sekunde bei 720p, Ton inklusive. Es muss das Format 9:16 unterstützen.",
- "Da 4 a 15: il modello usa la durata più vicina che sa fare.": "Von 4 bis 15: Das Modell nimmt die nächstliegende Dauer, die es kann.",
- "{label}: da 4 a 15 secondi.": "{label}: von 4 bis 15 Sekunden.",
  "{label}: la chiave di OpenRouter inizia con sk-or-.": "{label}: Ein OpenRouter-Schlüssel beginnt mit sk-or-.",
  "{label}: il nome di un modello di OpenRouter, per esempio x-ai/grok-imagine-video-1.5-lite.": "{label}: der Name eines OpenRouter-Modells, zum Beispiel x-ai/grok-imagine-video-1.5-lite.",
  "Sto scrivendo le idee per i video: compaiono qui tra un minuto.": "Die Videoideen werden geschrieben: Sie erscheinen hier in einer Minute.",
@@ -3051,5 +3049,8 @@
  "Bluesky: «{t}», {n} post": "Bluesky: „{t}“, {n} Beiträge",
  "YouTube: {n} Short in 48 ore, {v} visualizzazioni l'ora": "YouTube: {n} Shorts in 48 Stunden, {v} Aufrufe pro Stunde",
  "il più visto": "das meistgesehene",
- "Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.": "Neben den Nachrichten schaut es auf die sozialen Netzwerke: Themen, über die auf Bluesky gesprochen wird, und solche mit wachsenden Shorts auf YouTube in den letzten 48 Stunden kommen zuerst."
+ "Oltre alle notizie guarda i social: i temi di cui si parla su Bluesky e quelli con Short in crescita su YouTube nelle ultime 48 ore passano avanti.": "Neben den Nachrichten schaut es auf die sozialen Netzwerke: Themen, über die auf Bluesky gesprochen wird, und solche mit wachsenden Shorts auf YouTube in den letzten 48 Stunden kommen zuerst.",
+ "Da 4 a 30: il modello usa la durata più vicina che sa fare (Grok fino a 15, HeyGen Video e Wan fino a 30). Il prezzo in crediti vale ogni 10 secondi.": "Von 4 bis 30: Das Modell nimmt die nächstliegende Dauer, die es kann (Grok bis 15, HeyGen Video und Wan bis 30). Der Preis in Credits gilt je 10 Sekunden.",
+ "{label}: da 4 a 30 secondi.": "{label}: von 4 bis 30 Sekunden.",
+ "Video per i social, ogni 10 secondi": "Social-Video, je 10 Sekunden"
 }

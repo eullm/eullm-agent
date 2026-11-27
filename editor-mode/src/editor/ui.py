@@ -281,6 +281,10 @@ def register(app, ctx) -> None:
         chosen = next((x for x in sites if str(x.id) == wanted), sites[0] if sites else None)
         return sites, chosen
 
+    def video_seconds() -> int:
+        maker = getattr(ctx, "videomaker", None)
+        return maker.seconds if maker is not None else 10
+
     def video_state(s) -> dict:
         """The social videos: whether they can be made, what one costs, and
         the ideas and clips being prepared now."""
@@ -288,7 +292,7 @@ def register(app, ctx) -> None:
         active = s.execute(select(j.kind, j.subject, j.args).where(
             j.kind.in_(("video", "video_ideas")), j.status.in_(("queued", "running")))).all()
         return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
-                "price": vids.price_or_none(s), "credits": credits.state(s), "allowance": vids.allowance(s),
+                "price": vids.price_or_none(s, video_seconds()), "credits": credits.state(s), "allowance": vids.allowance(s),
                 "making": {(a.args or {}).get("video_id") for a in active if a.kind == "video"},
                 "ideas": {a.subject for a in active if a.kind == "video_ideas"}}
 
@@ -2358,11 +2362,11 @@ def register(app, ctx) -> None:
             return done(back, t("Video non configurati: serve una chiave di OpenRouter in Amministrazione › Impostazioni."))
         with db.tenant(c.tenant_id) as s:
             site_id = s.execute(select(m.videos.c.site_id).where(m.videos.c.id == video_id)).scalar()
-            cost, left = vids.price_or_none(s), credits.state(s).get("left", 0)
+            cost, left = vids.price_or_none(s, video_seconds()), credits.state(s).get("left", 0)
         if site_id is None:
             raise HTTPException(404, "video not found")
         try:
-            vids.ask(db, c.tenant_id, video_id, c.name)
+            vids.ask(db, c.tenant_id, video_id, c.name, video_seconds())
         except credits.NoCredits:
             if cost is None:
                 return done(back, t("I video del piano di questo mese sono finiti: ne arrivano altri il mese prossimo, "
