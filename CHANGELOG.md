@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.39.3
+
+### Added
+
+- **Il lavoro in corso sempre in vista** (Francesco, 28 novembre: "dovrebbe
+  uscire una finestra ... che ti segue anche quando scrolli finquando non
+  termina con la scritta terminato"). Mentre un lavoro gira o è in coda, un
+  riquadro fisso in basso a destra dice cosa sta facendo («In corso: Video
+  per i social: «titolo»» con il passo del momento e quanti altri aspettano),
+  su qualunque pagina e in qualunque punto la si scorra; un clic porta ad
+  Attività. Alla fine la pagina si ricarica come prima e il riquadro dice
+  «Terminato» con il pulsante per vedere il risultato (per esempio «Scarica
+  il video»), poi sparisce dopo 20 secondi. Se il servizio dei lavori è
+  fermo lo dice. Si chiude con ×.
+
 ## 0.39.2
 
 ### Changed
