@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, bindparam, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
-from . import connect, evergreen, menus, opportunity as oppo, queue, ratelimit, readers, rubrics
+from . import connect, evergreen, menus, montage, opportunity as oppo, queue, ratelimit, readers, rubrics
 from .seo import slugify as seo_slug
 from . import activity as act, accounts, auth, autopilot, billing, credits, delivery, drafts, evening, i18n, jobs, manage, models as m, news_base, profile as prof, proposals as props, images, publishing, quotas, repo, tenant_data, translate as tr, trends, trials, usage, vault, searchconsole, videos as vids, weekly
 from .i18n import N_, t
@@ -288,12 +288,12 @@ def register(app, ctx) -> None:
         maker = getattr(ctx, "videomaker", None)
         return maker.seconds if maker is not None else 10
 
-    def video_choices(s) -> list[dict]:
-        """The lengths a person can pick for a video, with their price in credits."""
+    def video_choices(s, scenes: int = 1) -> list[dict]:
+        """The lengths a person can pick for a video in `scenes` scenes, with their price in credits."""
         maker = getattr(ctx, "videomaker", None)
         if maker is None:
             return []
-        return [{"seconds": x, "price": vids.price_or_none(s, x, maker)} for x in maker.choices()]
+        return [{"seconds": x, "price": vids.price_or_none(s, x, maker, scenes)} for x in maker.choices(scenes)]
 
     def video_state(s) -> dict:
         """The social videos: whether they can be made, what one costs, and
@@ -301,7 +301,17 @@ def register(app, ctx) -> None:
         j = m.jobs.c
         active = s.execute(select(j.kind, j.subject, j.args).where(
             j.kind.in_(("video", "video_ideas")), j.status.in_(("queued", "running")))).all()
+        cache: dict[int, list] = {}
+
+        def choices_for(n: int = 1) -> list[dict]:
+            """The lengths and prices for an idea of `n` scenes (one clip without ffmpeg)."""
+            n = max(1, min(vids.MAX_SCENES, int(n or 1))) if montage.available() else 1
+            if n not in cache:
+                cache[n] = video_choices(s, n)
+            return cache[n]
+
         return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
+                "choices_for": choices_for, "montage": montage.available(), "max_scenes": vids.MAX_SCENES,
                 "price": vids.price_or_none(s, video_seconds(), getattr(ctx, "videomaker", None)),
                 "choices": video_choices(s), "languages": VIDEO_LANGUAGES,
                 "credits": credits.state(s), "allowance": vids.allowance(s),
@@ -2326,19 +2336,23 @@ def register(app, ctx) -> None:
             body = prof.approved_profile(s, site.id) if site else None
             per_day = vids.per_day(body.body if body else None, site.kind) if site else 0
             seconds = vids.seconds_of(body.body if body else None, video_seconds())
+            scenes = vids.scenes_of(body.body if body else None, seconds)
             language = vids.language_of(body.body if body else None)
             return render(request, "videos.html.j2", c, s, "videos", _sites=(sites, site), videos=rows,
-                          per_day=per_day, seconds=seconds, language=language, has_profile=body is not None, allowance=vids.allowance(s),
+                          per_day=per_day, seconds=seconds, scenes=scenes, language=language, has_profile=body is not None, allowance=vids.allowance(s),
                           vstate=vstate, ideas_busy=bool(site) and any(
                               x.endswith(f" site {site.id}") for x in vstate["ideas"]))
 
     @app.post("/ui/sites/{site_id}/videos-per-day")
     def ui_videos_per_day(site_id: int, n: int = Form(...), seconds: int | None = Form(None),
-                          language: str = Form(""), c: auth.Caller = Depends(ctx.need("owner"))):
+                          language: str = Form(""), scenes: int | None = Form(None),
+                          c: auth.Caller = Depends(ctx.need("owner"))):
         n = max(0, min(vids.MAX_PER_DAY, n))
         more = {}
         if seconds:
             more["videos_seconds"] = max(4, min(vids.MAX_SECONDS, seconds))
+        if scenes:
+            more["videos_scenes"] = max(1, min(vids.MAX_SCENES, scenes))
         if language in VIDEO_LANGUAGES:
             more["videos_language"] = language
         with db.tenant(c.tenant_id) as s:
@@ -2383,14 +2397,17 @@ def register(app, ctx) -> None:
         if maker is None:
             return done(back, t("Video non configurati: serve una chiave di OpenRouter in Amministrazione › Impostazioni."))
         with db.tenant(c.tenant_id) as s:
-            row = s.execute(select(m.videos.c.site_id, m.videos.c.seconds).where(m.videos.c.id == video_id)).first()
+            row = s.execute(select(m.videos.c.site_id, m.videos.c.seconds, m.videos.c.scene, m.videos.c.voiceover,
+                                   m.videos.c.scenes).where(m.videos.c.id == video_id)).first()
             if row is None:
                 raise HTTPException(404, "video not found")
             site_id = row.site_id
             # The length the person picked (Francesco, 2026-11-27: "farei decidere al cliente quanti secondi
-            # vuole"), as the model makes it; else the idea's.
-            seconds = maker.fit_seconds(max(4, min(vids.MAX_SECONDS, seconds or row.seconds or maker.seconds)))
-            cost, left = vids.price_or_none(s, seconds, maker), credits.state(s).get("left", 0)
+            # vuole"), as the model makes it in the idea's scenes; else the idea's.
+            n = vids.scene_count(row, maker)
+            seconds = max(4, min(vids.MAX_SECONDS, seconds or row.seconds or maker.seconds))
+            seconds = maker.scene_seconds(seconds, n) * n
+            cost, left = vids.price_or_none(s, seconds, maker, n), credits.state(s).get("left", 0)
         try:
             vids.ask(db, c.tenant_id, video_id, c.name, seconds, maker)
         except credits.NoCredits:

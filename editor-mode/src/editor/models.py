@@ -534,6 +534,8 @@ videos = Table(
     Column("gain", REAL),  # Hype points it gained in the last hours: rising before it is everywhere
     Column("auto", Boolean, nullable=False, default=False),  # proposed by the morning round
     Column("social", JSONB),  # what Bluesky and YouTube said about the trend (social.py)
+    Column("scenes", JSONB),  # [{shot, text, voice}]: the scenes of the idea (videos.py, 0.39.5)
+    Column("parts", JSONB),  # [{ref, seconds}]: the video model's job of each scene, to wait for it again
 )
 
 feeds = Table(

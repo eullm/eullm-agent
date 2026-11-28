@@ -3075,5 +3075,18 @@
  "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "Le service des travaux redémarre pour utiliser les nouveaux réglages : il repart tout seul et reprend les travaux en attente.",
  "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "Le service des travaux ne répond pas : le serveur le redémarre tout seul en quelques minutes et les travaux en attente repartent. Rien à faire.",
  "I tuoi video": "Vos vidéos",
- "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Une vidéo échouée ou interrompue ne coûte aucun crédit : refaites-la depuis sa fiche ci-dessous."
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Une vidéo échouée ou interrompue ne coûte aucun crédit : refaites-la depuis sa fiche ci-dessous.",
+ "{n} scene": "{n} scènes",
+ "Inquadratura per il modello video": "Plan pour le modèle vidéo",
+ "Su questo server manca ffmpeg: il video esce in una sola clip, senza scritte.": "Ce serveur n'a pas ffmpeg : la vidéo sort en un seul clip, sans texte à l'écran.",
+ "Scene per video": "Scènes par vidéo",
+ "Ogni scena è una clip a sé con la sua scritta in sovraimpressione e la sua parte di voce: più scene costano meno di una clip lunga (il modello fa pagare di più oltre i 15 secondi) e il video ha più ritmo. Per esempio 30 secondi in 3 scene sono 3 clip da 10 secondi.": "Chaque scène est un clip à part avec son texte à l'écran et sa partie de voix : plusieurs scènes coûtent moins cher qu'un long clip (le modèle facture davantage au-delà de 15 secondes) et la vidéo a plus de rythme. Par exemple, 30 secondes en 3 scènes font 3 clips de 10 secondes.",
+ "Modello della voce (facoltativo)": "Modèle de voix (facultatif)",
+ "Voce (facoltativa)": "Voix (facultative)",
+ "La voce narrante dei video a scene, la stessa in tutte le scene. Vuoto: elevenlabs/eleven-multilingual-v2, circa 3 centesimi di dollaro per 30 secondi di voce.": "La voix off des vidéos en scènes, la même dans toutes les scènes. Vide : elevenlabs/eleven-multilingual-v2, environ 3 cents de dollar pour 30 secondes de voix.",
+ "Il nome di una voce del modello, per esempio george, brian, daniel, sarah, alice, laura. Vuota: george.": "Le nom d'une voix du modèle, par exemple george, brian, daniel, sarah, alice, laura. Vide : george.",
+ "Voce dei video social": "Voix des vidéos sociales",
+ "La voce legge il testo delle scene": "La voix lit le texte des scènes",
+ "Monto le scene con le scritte": "Je monte les scènes avec les textes",
+ "Il modello video gira la scena {n} di {total}": "Le modèle vidéo tourne la scène {n} sur {total}"
 }

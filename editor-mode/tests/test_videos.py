@@ -3,13 +3,14 @@ when a person asks, a vertical clip with audio from OpenRouter's video API,
 paid in credits only when it is made, downloaded from the dashboard."""
 
 import json
+import subprocess
 
 import httpx
 import pytest
 import respx
 from sqlalchemy import select, text
 
-from editor import credits, models as m, videos
+from editor import credits, models as m, montage, videos
 from editor.config import Settings
 from editor.core_client import CoreClient
 
@@ -24,7 +25,7 @@ MP4 = b"\x00\x00\x00\x20ftypisom" + b"\x00" * 64
 IDEAS = {"ideas": [
     {"title": "La fibra arriva a Bari", "hook": "Un tombino si apre e ne esce la luce",
      "scene": "Vertical 9:16 shot, a street in Bari at dawn, a technician seen from behind opens a manhole",
-     "voiceover": "A Bari la fibra arriva in ogni quartiere. Leggi tutto sul sito.",
+     "voiceover": "A Bari la fibra arriva in ogni quartiere.",
      "caption": "La fibra ottica a Bari: cosa cambia.", "hashtags": ["#Bari", "fibra ottica", "internet"]},
     {"title": "Cantieri di notte", "hook": "Luci arancioni nel buio", "scene": "Night works, vertical framing",
      "voiceover": "Di notte i cantieri posano i cavi.", "caption": "Di notte si posa la fibra.",
@@ -356,3 +357,163 @@ def test_the_morning_round_writes_one_idea_per_topic(db, tenant, monkeypatch):
     assert not videos.round_due(body | {"settings": {"videos_per_day": 2, "videos_last": "2026-11-25"}}, "web",
                                 datetime(2026, 11, 25, 9), 8)
     assert not videos.round_due(body, "web", datetime(2026, 11, 25, 7), 8)
+
+
+# --- videos in scenes (0.39.5) ----------------------------------------------------------------
+
+SCENES = {"ideas": [{
+    "title": "La fibra arriva a Bari", "hook": "Un tombino si apre e ne esce la luce",
+    "scenes": [{"shot": f"Vertical 9:16 shot {i}, a street in Bari", "text": f"Scritta {i}",
+                "voice": f"Parte {i} della voce."} for i in range(1, 4)],
+    "caption": "La fibra ottica a Bari: cosa cambia. Su eullm.eu", "hashtags": ["fibra"]}]}
+needs_ffmpeg = pytest.mark.skipif(not montage.available(), reason="ffmpeg is not installed")
+
+
+@pytest.fixture(scope="module")
+def clip_bytes(tmp_path_factory):
+    if not montage.available():
+        return b""
+    out = tmp_path_factory.mktemp("clips") / "c.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=240x426:rate=24", "-f", "lavfi",
+                    "-i", "sine=f=440", "-t", "2", "-c:v", "libx264", "-c:a", "aac", "-shortest", str(out)], check=True)
+    return out.read_bytes()
+
+
+@pytest.fixture(scope="module")
+def voice_bytes(tmp_path_factory):
+    if not montage.available():
+        return b""
+    out = tmp_path_factory.mktemp("voice") / "v.mp3"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=220", "-t", "1", str(out)], check=True)
+    return out.read_bytes()
+
+
+def scene_ideas(db, tenant, n=3):
+    did, _ = approved_draft(db, tenant)
+    with respx.mock(assert_all_called=False) as router:
+        llm = router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps(SCENES)))
+        ids = videos.ideas(db, tenant, CoreClient("http://core.test", "tok"), draft_id=did, n=1, seconds=30,
+                           scenes=n)
+    return ids, json.loads(llm.calls[0].request.content)["messages"][0]["content"]
+
+
+def scene_service(router, clip, voice, fail_voice=False):
+    jobs = iter(f"job{i}" for i in range(10))
+    submit = router.post(f"{OR}/videos").mock(side_effect=lambda req: httpx.Response(202, json={"id": next(jobs)}))
+    router.get(url__regex=rf"{OR}/videos/job\d+$").mock(side_effect=lambda req: httpx.Response(200, json={
+        "id": req.url.path.rsplit("/", 1)[1], "status": "completed", "usage": {"cost": 0.2}}))
+    router.get(url__regex=rf"{OR}/videos/job\d+/content").mock(return_value=httpx.Response(200, content=clip))
+    router.get(f"{OR}/audio/speech/models").mock(return_value=httpx.Response(200, json={"data": [{
+        "id": videos.VOICE_MODEL, "output_modalities": [{"supported_parameters": {"voice": {"values": ["george"]}}}]}]}))
+    router.get(f"{OR}/models").mock(return_value=httpx.Response(200, json={"data": [{
+        "id": videos.VOICE_MODEL, "pricing": {"prompt": "0.00008"}}]}))
+    speech = router.post(f"{OR}/audio/speech").mock(
+        return_value=httpx.Response(400, json={"error": "no voice"}) if fail_voice else httpx.Response(200, content=voice))
+    return submit, speech
+
+
+def heygen():
+    return maker(model="heygen/heygen-video-1", seconds=30, resolution="480p")
+
+
+def heygen_catalog(router):
+    catalog(router, model="heygen/heygen-video-1", durations=tuple(range(5, 31)), sizes=("480p", "768p"),
+            audio=False, skus=HEYGEN_SKUS)
+
+
+def test_ideas_come_in_scenes_and_never_send_people_away(db, tenant):
+    ids, system = scene_ideas(db, tenant)
+    assert "3 scene(s) of about 10 seconds" in system and "never invite them" in system
+    assert "invitation to read" not in system
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == ids[0])).first()
+    assert [x["text"] for x in row.scenes] == ["Scritta 1", "Scritta 2", "Scritta 3"]
+    assert row.voiceover == "Parte 1 della voce. Parte 2 della voce. Parte 3 della voce." and "shot 2" in row.scene
+    check = videos._validator(1, 2)
+    bad = {"ideas": [{"title": "x", "scenes": [{"shot": "a", "text": "b", "voice": "Leggi tutto su eullm.eu"}]}]}
+    with pytest.raises(ValueError):
+        check(bad)
+    assert videos.scenes_of({"settings": {"videos_scenes": 9}}) == 5 and videos.scenes_of(None, 30) == 3
+
+
+def test_scenes_keep_each_clip_in_the_cheap_tier(db, tenant):
+    set_plan(db, tenant, credits_month=1000, max_videos_month=0)
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        mk = heygen()
+        with db.tenant(tenant) as s:  # 30 s: one clip 1.35 $, three clips of 10 s 0.60 $
+            assert videos.price(s, 30, mk) == 675 and videos.price(s, 30, mk, 3) == 300
+        assert mk.choices(3) == [15, 21, 30] and mk.scene_seconds(30, 3) == 10
+
+
+@needs_ffmpeg
+def test_a_video_in_scenes_is_one_clip_each_with_voice_and_texts(db, tenant, clip_bytes, voice_bytes):
+    ids, _ = scene_ideas(db, tenant)
+    set_plan(db, tenant, credits_month=1000, max_videos_month=0)
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        submit, speech = scene_service(router, clip_bytes, voice_bytes)
+        videos.ask(db, tenant, ids[0], "redattore", 30, heygen())
+        out = videos.make(db, tenant, ids[0], heygen())
+    assert out["ready"] and submit.call_count == 3 and speech.call_count == 3
+    bodies = [json.loads(c.request.content) for c in submit.calls]
+    assert all(b["duration"] == 10 and "no narrator" in b["prompt"] for b in bodies)
+    assert json.loads(speech.calls[0].request.content) == {"model": videos.VOICE_MODEL, "input": "Parte 1 della voce.",
+                                                            "voice": "george", "response_format": "mp3"}
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == ids[0])).first()
+        assert credits.state(s)["month_used"] == 300
+        voice = s.execute(text("SELECT cost FROM editor.llm_usage WHERE purpose = 'video_voice'")).scalar()
+    assert row.status == "ready" and row.credits == 300 and row.seconds == 30 and len(row.parts) == 3
+    assert abs(row.cost - (0.6 + voice)) < 1e-9 and 0 < voice < 0.01
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", "-"],
+                           input=bytes(row.content), capture_output=True, check=True)
+    assert 29 < float(probe.stdout) < 31
+
+
+@needs_ffmpeg
+def test_a_restart_in_the_middle_never_pays_a_scene_twice(db, tenant, clip_bytes, voice_bytes):
+    ids, _ = scene_ideas(db, tenant)
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        scene_service(router, clip_bytes, voice_bytes)
+        router.get(url__regex=rf"{OR}/videos/job\d+$").mock(side_effect=httpx.ConnectError("worker lost the network"))
+        with pytest.raises(httpx.ConnectError):
+            videos.make(db, tenant, ids[0], heygen())
+    with db.tenant(tenant) as s:
+        parts = s.execute(select(m.videos.c.parts).where(m.videos.c.id == ids[0])).scalar()
+    assert [p["ref"] for p in parts] == ["job0", "job1", "job2"]
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        submit, _ = scene_service(router, clip_bytes, voice_bytes)
+        assert videos.make(db, tenant, ids[0], heygen())["ready"]
+    assert not submit.called
+
+
+@needs_ffmpeg
+def test_without_the_voice_the_paid_clips_still_make_the_video(db, tenant, clip_bytes, voice_bytes):
+    ids, _ = scene_ideas(db, tenant, n=2)
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        scene_service(router, clip_bytes, voice_bytes, fail_voice=True)
+        assert videos.make(db, tenant, ids[0], heygen())["ready"]
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos.c.status, m.videos.c.error).where(m.videos.c.id == ids[0])).first()
+    assert row.status == "ready" and "voice" in row.error
+
+
+def test_the_idea_card_shows_its_scenes_and_the_site_form_the_number(db, tenant):
+    scene_ideas(db, tenant)
+    c = logged_in(db, tenant, "owner")
+    page = c.get("/videos").text
+    assert "Scritta 2" in page and "Parte 3 della voce." in page and "Inquadratura per il modello video" in page
+    if montage.available():
+        assert 'name="scenes"' in page and "3 scene" in page
+    with db.tenant(tenant) as s:
+        site_id = s.execute(select(m.sites.c.id)).scalar()
+    assert c.post(f"/ui/sites/{site_id}/videos-per-day", data={"n": 2, "scenes": 4},
+                  follow_redirects=False).status_code == 303
+    with db.tenant(tenant) as s:
+        body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id,
+                                                                    m.editorial_profiles.c.status == "approved")).scalar()
+    assert body["settings"]["videos_scenes"] == 4

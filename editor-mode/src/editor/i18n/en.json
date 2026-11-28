@@ -3075,5 +3075,18 @@
  "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "The work service is restarting to use the new settings: it comes back by itself and resumes the queued work.",
  "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "The work service is not answering: the server restarts it by itself within a few minutes and the queued work starts again. Nothing to do.",
  "I tuoi video": "Your videos",
- "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "A failed or interrupted video costs no credits: make it again from its card below."
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "A failed or interrupted video costs no credits: make it again from its card below.",
+ "{n} scene": "{n} scenes",
+ "Inquadratura per il modello video": "Shot for the video model",
+ "Su questo server manca ffmpeg: il video esce in una sola clip, senza scritte.": "This server has no ffmpeg: the video comes out as a single clip, without on-screen text.",
+ "Scene per video": "Scenes per video",
+ "Ogni scena è una clip a sé con la sua scritta in sovraimpressione e la sua parte di voce: più scene costano meno di una clip lunga (il modello fa pagare di più oltre i 15 secondi) e il video ha più ritmo. Per esempio 30 secondi in 3 scene sono 3 clip da 10 secondi.": "Each scene is a clip of its own with its on-screen text and its part of the voice: several scenes cost less than one long clip (the model charges more over 15 seconds) and the video has more rhythm. For example, 30 seconds in 3 scenes are 3 clips of 10 seconds.",
+ "Modello della voce (facoltativo)": "Voice model (optional)",
+ "Voce (facoltativa)": "Voice (optional)",
+ "La voce narrante dei video a scene, la stessa in tutte le scene. Vuoto: elevenlabs/eleven-multilingual-v2, circa 3 centesimi di dollaro per 30 secondi di voce.": "The narrator of the videos in scenes, the same in every scene. Empty: elevenlabs/eleven-multilingual-v2, about 3 dollar cents for 30 seconds of voice.",
+ "Il nome di una voce del modello, per esempio george, brian, daniel, sarah, alice, laura. Vuota: george.": "The name of one of the model's voices, for example george, brian, daniel, sarah, alice, laura. Empty: george.",
+ "Voce dei video social": "Voice of the social videos",
+ "La voce legge il testo delle scene": "The voice reads the text of the scenes",
+ "Monto le scene con le scritte": "Editing the scenes with the on-screen text",
+ "Il modello video gira la scena {n} di {total}": "The video model is shooting scene {n} of {total}"
 }

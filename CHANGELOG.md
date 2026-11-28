@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.39.5
+
+### Added
+
+- **Video a scene** (Francesco, 28 novembre: "decidere i secondi e quante
+  scene così lo script crea le scene richieste"). In Video social › Idee
+  ogni mattina si sceglie anche **Scene per video** (da 1 a 5; di base una
+  ogni 10 secondi). Ogni idea è scritta scena per scena: l'inquadratura per
+  il modello video, la scritta in sovraimpressione e la parte di voce,
+  tutte visibili sulla scheda dell'idea.
+- **Scritte in sovraimpressione**: in ogni scena una frase breve e d'impatto
+  (da 2 a 6 parole, il fatto o il numero più forte), disegnata in alto su un
+  fondo scuro che si legge su qualsiasi immagine.
+- **Una sola voce per tutto il video**: le clip hanno solo i suoni del
+  luogo, la voce narrante è una sintesi vocale di OpenRouter
+  (`elevenlabs/eleven-multilingual-v2`, voce `george`, circa 3 centesimi di
+  dollaro per 30 secondi), la stessa in tutte le scene; modello e voce si
+  cambiano in Amministrazione › Impostazioni › Video social. Se la voce non
+  riesce, il video esce lo stesso con il suono delle clip già pagate.
+- Il montaggio (scene, scritte, voce) lo fa ffmpeg, ora incluso
+  nell'immagine Docker dell'editor.
+
+### Changed
+
+- **Costo più basso**: ogni scena è una clip a sé, quindi resta nella
+  fascia di prezzo bassa del modello. Con HeyGen Video a 480p, 30 secondi
+  in una clip costavano 1,35 $ (oltre 15 secondi costa più del doppio al
+  secondo); in 3 scene da 10 secondi costano 0,60 $ più 3 centesimi di
+  voce. Il prezzo in crediti segue: 300 crediti invece di 675.
+- **Niente più «leggi su …»** nella voce e nelle scritte (Francesco: "non
+  va bene, lasciamo che restino sul video"): il video tiene le persone sul
+  video, e un'idea che le manda altrove viene riscritta. Solo il testo del
+  post può dire dove leggere di più.
+- Ogni clip chiesta al modello video viene salvata subito: dopo un riavvio
+  si aspettano le stesse clip, senza pagarle due volte.
+- «Rifai in questa lingua» riscrive anche scritte e voce di ogni scena.
+
 ## 0.39.4
 
 ### Fixed

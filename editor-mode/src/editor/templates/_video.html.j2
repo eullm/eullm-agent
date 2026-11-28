@@ -1,5 +1,7 @@
 {# One social video: its idea and, once made, the clip. Needs `v`, `vstate` and `back`. #}
 {% set busy = v.id in vstate.making %}
+{% set scs = v.scenes or [] %}
+{% set chs = vstate.choices_for(scs|length if scs else 1) %}
 <div class="video-idea" id="video-{{ v.id }}">
   <div class="row" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
     <strong>{{ v.title }}</strong>
@@ -20,10 +22,18 @@
   {% elif v.status == 'ready' %}
   <p class="hint">{{ _('Il file è stato cancellato dopo 30 giorni: restano i testi del post.') }}</p>
   {% endif %}
-  <p class="hint" style="margin: 2px 0;">{{ _(vstate.languages.get((v.language or 'it')[:2], v.language or '')) }}{% if v.seconds %} · {{ _('voce scritta per {n} secondi', n=v.seconds) }}{% endif %}</p>
+  <p class="hint" style="margin: 2px 0;">{{ _(vstate.languages.get((v.language or 'it')[:2], v.language or '')) }}{% if v.seconds %} · {{ _('voce scritta per {n} secondi', n=v.seconds) }}{% endif %}{% if scs|length > 1 %} · {{ _('{n} scene', n=scs|length) }}{% endif %}</p>
   {% if v.hook %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Primo secondo') }}</span> {{ v.hook }}</p>{% endif %}
+  {% if scs %}
+  <ol class="video-scenes" style="margin: 4px 0; padding-left: 20px;">
+    {% for sc in scs %}<li style="margin: 4px 0;">{% if sc.text %}<span class="chip">{{ sc.text }}</span> {% endif %}{% if sc.voice %}«{{ sc.voice }}»{% endif %}
+      <details class="mini"><summary>{{ _('Inquadratura per il modello video') }}</summary><p class="hint" lang="en">{{ sc.shot }}</p></details></li>{% endfor %}
+  </ol>
+  {% if not vstate.montage %}<p class="hint">{{ _('Su questo server manca ffmpeg: il video esce in una sola clip, senza scritte.') }}</p>{% endif %}
+  {% else %}
   {% if v.voiceover %}<p style="margin: 4px 0;"><span class="kicker">{{ _('Voce') }}</span> «{{ v.voiceover }}»</p>{% endif %}
   <details class="mini"><summary>{{ _('Scena per il modello video') }}</summary><p class="hint" lang="en">{{ v.scene }}</p></details>
+  {% endif %}
   {% set post = v|video_post %}
   <p style="margin: 4px 0; white-space: pre-line;"><span class="kicker">{{ _('Testo del post') }}</span> {{ post }}</p>
   <textarea id="post-{{ v.id }}" hidden readonly>{{ post }}</textarea>
@@ -34,12 +44,12 @@
     {% if caller.can('editor') and not busy %}
       {% if v.status in ('idea', 'failed', 'queued', 'making') and vstate.on %}
       <form class="inline row" style="gap: 6px;" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}">
-        {% if vstate.choices %}<label class="sr" for="sec-{{ v.id }}">{{ _('Durata') }}</label>
+        {% if chs %}<label class="sr" for="sec-{{ v.id }}">{{ _('Durata') }}</label>
         <select id="sec-{{ v.id }}" name="seconds" class="sm" title="{{ _('Durata del video e prezzo') }}">
-          {% set want = v.seconds or vstate.choices[0].seconds %}
-          {% for ch in vstate.choices %}<option value="{{ ch.seconds }}"{% if ch.seconds == want or (loop.last and want > ch.seconds) %} selected{% endif %}>{{ _('{n} secondi', n=ch.seconds) }}{% if ch.price %} · {{ _('{n} crediti', n=ch.price) }}{% endif %}</option>{% endfor %}
+          {% set want = v.seconds or chs[0].seconds %}
+          {% for ch in chs %}<option value="{{ ch.seconds }}"{% if ch.seconds == want or (loop.last and want > ch.seconds) %} selected{% endif %}>{{ _('{n} secondi', n=ch.seconds) }}{% if ch.price %} · {{ _('{n} crediti', n=ch.price) }}{% endif %}</option>{% endfor %}
         </select>{% endif %}
-        <button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price and not vstate.choices %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
+        <button class="btn sm{% if v.status == 'idea' %} pri{% endif %}" type="submit">{% if v.status == 'idea' %}{{ _('Genera il video') }}{% else %}{{ _('Riprova') }}{% endif %}{% if vstate.price and not chs %} · {{ _('{n} crediti', n=vstate.price) }}{% endif %}</button></form>
       {% endif %}
       {% if v.status == 'idea' and vstate.can_ideas %}
       <form class="inline row" style="gap: 6px;" method="post" action="/ui/videos/{{ v.id }}/language"><input type="hidden" name="back" value="{{ back }}">

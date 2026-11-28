@@ -3075,5 +3075,18 @@
  "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "El servicio de trabajos se está reiniciando para usar los nuevos ajustes: vuelve solo y retoma los trabajos en cola.",
  "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "El servicio de trabajos no responde: el servidor lo reinicia solo en pocos minutos y los trabajos en cola vuelven a empezar. No hace falta hacer nada.",
  "I tuoi video": "Tus vídeos",
- "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Un vídeo fallido o interrumpido no cuesta créditos: vuelve a generarlo desde su ficha aquí abajo."
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Un vídeo fallido o interrumpido no cuesta créditos: vuelve a generarlo desde su ficha aquí abajo.",
+ "{n} scene": "{n} escenas",
+ "Inquadratura per il modello video": "Plano para el modelo de vídeo",
+ "Su questo server manca ffmpeg: il video esce in una sola clip, senza scritte.": "Este servidor no tiene ffmpeg: el vídeo sale en un solo clip, sin textos en pantalla.",
+ "Scene per video": "Escenas por vídeo",
+ "Ogni scena è una clip a sé con la sua scritta in sovraimpressione e la sua parte di voce: più scene costano meno di una clip lunga (il modello fa pagare di più oltre i 15 secondi) e il video ha più ritmo. Per esempio 30 secondi in 3 scene sono 3 clip da 10 secondi.": "Cada escena es un clip propio con su texto en pantalla y su parte de la voz: varias escenas cuestan menos que un clip largo (el modelo cobra más por encima de 15 segundos) y el vídeo tiene más ritmo. Por ejemplo, 30 segundos en 3 escenas son 3 clips de 10 segundos.",
+ "Modello della voce (facoltativo)": "Modelo de voz (opcional)",
+ "Voce (facoltativa)": "Voz (opcional)",
+ "La voce narrante dei video a scene, la stessa in tutte le scene. Vuoto: elevenlabs/eleven-multilingual-v2, circa 3 centesimi di dollaro per 30 secondi di voce.": "La voz en off de los vídeos por escenas, la misma en todas las escenas. Vacío: elevenlabs/eleven-multilingual-v2, unos 3 céntimos de dólar por 30 segundos de voz.",
+ "Il nome di una voce del modello, per esempio george, brian, daniel, sarah, alice, laura. Vuota: george.": "El nombre de una voz del modelo, por ejemplo george, brian, daniel, sarah, alice, laura. Vacío: george.",
+ "Voce dei video social": "Voz de los vídeos sociales",
+ "La voce legge il testo delle scene": "La voz lee el texto de las escenas",
+ "Monto le scene con le scritte": "Monto las escenas con los textos",
+ "Il modello video gira la scena {n} di {total}": "El modelo de vídeo graba la escena {n} de {total}"
 }
