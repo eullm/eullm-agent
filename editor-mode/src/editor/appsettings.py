@@ -113,6 +113,13 @@ FIELDS = (
     Field("EDITOR_VIDEO_SECONDS", "video", N_("Durata in secondi"), kind="number", default="10",
           hint=N_("Da 4 a 30: il modello usa la durata più vicina che sa fare (Grok fino a 15, HeyGen Video e Wan "
                   "fino a 30). Il prezzo in crediti vale ogni 10 secondi.")),
+    Field("EDITOR_VIDEO_VOICE_MODEL", "video", N_("Modello della voce (facoltativo)"),
+          placeholder="elevenlabs/eleven-multilingual-v2",
+          hint=N_("La voce narrante dei video a scene, la stessa in tutte le scene. Vuoto: "
+                  "elevenlabs/eleven-multilingual-v2, circa 3 centesimi di dollaro per 30 secondi di voce.")),
+    Field("EDITOR_VIDEO_VOICE", "video", N_("Voce (facoltativa)"), placeholder="george",
+          hint=N_("Il nome di una voce del modello, per esempio george, brian, daniel, sarah, alice, laura. Vuota: "
+                  "george.")),
     Field("EDITOR_YOUTUBE_API_KEY", "video", N_("Chiave YouTube Data API (facoltativa)"), secret=True,
           hint=N_("Gratuita da Google Cloud (YouTube Data API v3): a ogni istantanea dei temi cerca gli Short "
                   "delle ultime 48 ore sugli 8 temi in cima. Vuota: si usa solo Bluesky, che non chiede chiavi.")),
@@ -266,7 +273,7 @@ def _check(f: Field, value: str) -> str:
         raise Invalid(N_("{label}: da 4 a 30 secondi."))
     if f.name == "EDITOR_VIDEO_API_KEY" and not value.startswith("sk-or-"):
         raise Invalid(N_("{label}: la chiave di OpenRouter inizia con sk-or-."))
-    if f.name == "EDITOR_VIDEO_MODEL" and "/" not in value:
+    if f.name in ("EDITOR_VIDEO_MODEL", "EDITOR_VIDEO_VOICE_MODEL") and "/" not in value:
         raise Invalid(N_("{label}: il nome di un modello di OpenRouter, per esempio x-ai/grok-imagine-video-1.5-lite."))
     if f.name == "EDITOR_MOLLIE_API_KEY" and not value.startswith(("test_", "live_")):
         raise Invalid(N_("{label}: la chiave di Mollie inizia con test_ o live_."))

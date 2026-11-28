@@ -58,6 +58,8 @@ class Settings:
     video_model: str = ""
     video_resolution: str = "720p"
     video_seconds: int = 10
+    video_voice_model: str = ""  # the narrator of the videos in scenes (videos.VOICE_MODEL)
+    video_voice: str = ""
     youtube_api_key: str = ""
     # A folder shared with the host for updates from the console (updates.py,
     # deploy/server/update.sh); empty: the console only says how to update.
@@ -102,6 +104,8 @@ class Settings:
             video_model=env.get("EDITOR_VIDEO_MODEL", "").strip(),
             video_resolution=get("EDITOR_VIDEO_RESOLUTION", cls.video_resolution).lower(),
             video_seconds=int(get("EDITOR_VIDEO_SECONDS", cls.video_seconds)),
+            video_voice_model=env.get("EDITOR_VIDEO_VOICE_MODEL", "").strip(),
+            video_voice=env.get("EDITOR_VIDEO_VOICE", "").strip().lower(),
             youtube_api_key=env.get("EDITOR_YOUTUBE_API_KEY", "").strip(),
             updates_dir=env.get("EDITOR_UPDATES_DIR", "").strip(),
         )

@@ -44,6 +44,7 @@ PURPOSES = {
     "video_ideas": N_("Idee per i video social"),
     "social_match": N_("Temi sui social"),
     "video": N_("Video social"),
+    "video_voice": N_("Voce dei video social"),
     "profile": N_("Profilo dal contesto"),
     "editor_check": N_("Caporedattore AI"),
     "primary_source": N_("Ricerca delle fonti primarie"),

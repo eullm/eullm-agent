@@ -238,6 +238,14 @@ ends without a payment. Its data stay, and its owner can still sign in to
   last 48 hours on the top 8 topics of every trend snapshot (about 6,400
   of the 10,000 free daily units). HeyGen Video
   (`heygen/heygen-video-1`) works too: 768p is used for 720p.
+  Videos in scenes (Video social › Scene per video, 1 to 5): one clip per
+  scene with only the sound of the place, so each clip stays in the
+  model's cheaper tier (HeyGen: 30 seconds in three clips 0.60 $, in one
+  clip 1.35 $), one narrator voice through OpenRouter's text-to-speech
+  (`EDITOR_VIDEO_VOICE_MODEL`, default `elevenlabs/eleven-multilingual-v2`,
+  and `EDITOR_VIDEO_VOICE`, default `george`; about 0.03 $ for 30 seconds)
+  and a short text on screen in each scene, edited by ffmpeg in the editor
+  image.
 - **What happens by itself** (every hour, in the worker): an email to the
   owner two days before the trial ends; the hold when the trial ends, or
   three days after a paid period ends without a renewal.

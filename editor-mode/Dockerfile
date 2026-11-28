@@ -3,6 +3,9 @@
 FROM ghcr.io/astral-sh/uv:0.13.1-python3.13-trixie-slim
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
+# ffmpeg and the DejaVu font edit the social videos in scenes (montage.py).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
