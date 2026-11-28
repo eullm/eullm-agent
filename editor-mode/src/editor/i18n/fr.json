@@ -3088,5 +3088,13 @@
  "Voce dei video social": "Voix des vidéos sociales",
  "La voce legge il testo delle scene": "La voix lit le texte des scènes",
  "Monto le scene con le scritte": "Je monte les scènes avec les textes",
- "Il modello video gira la scena {n} di {total}": "Le modèle vidéo tourne la scène {n} sur {total}"
+ "Il modello video gira la scena {n} di {total}": "Le modèle vidéo tourne la scène {n} sur {total}",
+ "Durata e scene": "Durée et scènes",
+ "Durata, numero di scene e prezzo": "Durée, nombre de scènes et prix",
+ "una clip": "un clip",
+ "finiti": "épuisés",
+ "compreso": "inclus",
+ "In questa redazione i video sono senza limite e non consumano crediti: il limite si imposta in Amministrazione › Redazioni › Video social al mese (0: solo a crediti). Il costo reale di ogni video resta nei consumi del modello.": "Dans cette rédaction, les vidéos sont illimitées et ne consomment pas de crédits : la limite se règle dans Administration › Rédactions › Vidéos sociales par mois (0 : uniquement en crédits). Le coût réel de chaque vidéo reste dans la consommation du modèle.",
+ "Prima di girare scegli durata e scene: ogni scena è una clip a sé con la sua scritta e la sua parte di voce; se cambi il numero di scene il modello riscrive il copione (gratis). Più scene brevi costano meno di una clip lunga.": "Avant de tourner, choisissez la durée et les scènes : chaque scène est un clip à part avec son texte et sa partie de voix ; si vous changez le nombre de scènes, le modèle réécrit le script (gratuit). Plusieurs scènes courtes coûtent moins qu'un long clip.",
+ "Il modello divide il video in {n} scene": "Le modèle découpe la vidéo en {n} scènes"
 }

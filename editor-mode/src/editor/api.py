@@ -251,8 +251,9 @@ def create_app(db, core=None, admin=None, mail=None, public_url: str = "", gatew
         queue.enqueue(db, tenant, "video_ideas", subject,
                       {"site_id": site_id, "draft_id": draft_id, "topic_id": topic_id})
 
-    def run_video(tenant: str, site_id: int, video_id: int):
-        queue.enqueue(db, tenant, "video", f"video {video_id}", {"site_id": site_id, "video_id": video_id})
+    def run_video(tenant: str, site_id: int, video_id: int, scenes: int | None = None):
+        queue.enqueue(db, tenant, "video", f"video {video_id}",
+                      {"site_id": site_id, "video_id": video_id, **({"scenes": scenes} if scenes else {})})
 
     def run_video_language(tenant: str, site_id: int, video_id: int, language: str):
         queue.enqueue(db, tenant, "video_language", f"video {video_id} {language}",
