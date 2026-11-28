@@ -7,7 +7,13 @@
     <span class="hint">{% if activity.active %}{{ _('si aggiorna da sola') }}{% elif activity.full %}{{ _('ultime 24 ore') }}{% else %}{{ _('appena finite') }}{% endif %}{% if activity.compact %} · <a href="/activity">{{ _('Tutte ({n})', n=activity.total) if activity.full else _('Tutte') }}</a>{% endif %}</span>
   </div>
   {% if activity.stalled %}
+  {% if activity.stall == 'restarting' %}
+  <p class="note" style="margin: 12px 20px 0;">{{ _("Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.") }}</p>
+  {% elif activity.stall == 'watched' %}
+  <p class="note warn" style="margin: 12px 20px 0;">{{ _("Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.") }}</p>
+  {% else %}
   <p class="note warn" style="margin: 12px 20px 0;">{{ _("Ci sono lavori in coda da più di tre minuti e nessuno sta girando: il servizio che esegue i lavori (editor-worker) sembra fermo. Sul server: docker compose ps, poi docker compose up -d.") }}</p>
+  {% endif %}
   {% endif %}
   {% for x in activity['items'] %}
   <div class="item" data-status="{{ x.status }}" data-label="{{ x.what }}{% if x.title %}: «{{ x.title }}»{% endif %}" data-step="{{ x.step or '' }}" data-href="{{ x.href or '' }}" data-link="{{ x.link or '' }}">

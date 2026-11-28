@@ -6,7 +6,8 @@
 # a fallback, takes the request, backs up (backup.sh), pulls the images of
 # that version, writes it in .env, restarts and checks that the dashboard
 # answers. How it went, with a percentage, goes to updates/status.json and
-# updates/update.log, which the console shows. After an update it replaces
+# updates/update.log, which the console shows. Every minute it also starts
+# again the worker when it stopped or went silent (watchdog below). After an update it replaces
 # itself with the script of the installed version. Guide: README.md,
 # "Updating from the console".
 #
@@ -190,6 +191,29 @@ backups() {
 }
 # A backup that goes wrong never stops an update.
 backups || true
+
+# ---------------------------------------------------------------- watchdog
+# The worker writes updates/worker.json every minute. A worker that is not
+# running, or silent for more than 5 minutes, is started again: nobody has
+# to log in to restart it (Francesco, 2026-11-28). A worker that never wrote
+# one (an older version) is left alone.
+watchdog() {
+  [ -f "$dir/worker.json" ] || return 0
+  [ -f "$dir/request.json" ] && return 0   # an update is about to restart everything
+  wlog=$work/watchdog.log
+  if ! docker compose ps --status running --services 2>/dev/null | grep -qx editor-worker; then
+    echo "$(date -u) editor-worker not running: started again" >> "$wlog"
+    docker compose up -d editor-worker >> "$wlog" 2>&1 || true
+  elif [ -n "$(find "$dir/worker.json" -mmin +5 2>/dev/null)" ]; then
+    echo "$(date -u) editor-worker silent for 5 minutes: restarted" >> "$wlog"
+    docker compose restart editor-worker >> "$wlog" 2>&1 || true
+  else
+    return 0
+  fi
+  tail -n 200 "$wlog" > "$wlog.cut" && mv -f "$wlog.cut" "$wlog"
+  publish watchdog.log
+}
+watchdog || true
 
 # ---------------------------------------------------------------- updates
 req=$dir/request.json

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.39.4
+
+### Fixed
+
+- **Il servizio dei lavori riparte da solo** (Francesco, 28 novembre:
+  "mica posso ogni volta loggarmi per riavviare"). Il worker scrive ogni
+  minuto `updates/worker.json`; `update.sh`, che il server già lancia ogni
+  minuto, lo riavvia se non è in esecuzione o tace da più di 5 minuti
+  (`updates/watchdog.log`). Il riquadro Attività non chiede più di entrare
+  nel server: dice che si sta riavviando per le nuove impostazioni, o che il
+  server lo riavvia da solo. Lo script si rinnova da solo con questo
+  aggiornamento dalla console (/admin › Aggiornamenti).
+- **Un video in attesa non blocca il riavvio** per nuove impostazioni:
+  torna subito in coda e, ripartito il worker, aspetta lo stesso lavoro del
+  servizio video, senza pagarlo due volte (prima il riavvio aspettava fino a
+  15 minuti e i lavori nuovi restavano in coda).
+
+### Added
+
+- **I tuoi video** in cima a Video social: gli ultimi video chiesti con il
+  loro stato (pronto con «Scarica il video», in preparazione, non riuscito,
+  interrotto) e il link alla scheda, così si sa sempre che fine hanno fatto.
+
 ## 0.39.3
 
 ### Added

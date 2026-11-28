@@ -160,3 +160,42 @@ def test_a_draining_worker_finishes_its_job_then_exits(db, monkeypatch):
     finish.set()
     th.join(5)
     assert not th.is_alive() and calls == ["done"]
+
+
+def test_a_draining_worker_does_not_wait_for_a_video(db, monkeypatch):
+    """A social video waits minutes for the video service: on new settings it
+    goes back in the queue at once and takes up the same job after the restart."""
+    started, released, beats = threading.Event(), [], []
+    monkeypatch.setattr(queue, "claim", lambda *_: None if started.is_set() else
+                        queue.Job(1, "t", "video", "video 1", {"video_id": 1}, 1))
+    monkeypatch.setattr(queue, "run", lambda d, job, h: (started.set(), threading.Event().wait(30)))
+    monkeypatch.setattr(queue, "release", lambda d, job: released.append(job.kind))
+    monkeypatch.setattr(queue, "requeue_stale", lambda *a, **k: 0)
+    monkeypatch.setattr(queue, "enqueue_ticks", lambda *a, **k: 0)
+    monkeypatch.setattr(queue.signal, "signal", lambda *a: None)
+    monkeypatch.setattr(queue, "STOP_GRACE_SECONDS", 0.2)
+    monkeypatch.setattr(queue.os, "_exit", lambda code: None)
+    w = queue.Worker(db, {}, concurrency=1, beat=beats.append)
+    th = threading.Thread(target=w.run, daemon=True)
+    th.start()
+    assert started.wait(5)
+    w.drain()
+    th.join(5)
+    assert not th.is_alive() and released == ["video"]
+    assert beats[0] == "running" and "draining" in beats and beats[-1] == "stopping"
+
+
+def test_the_heartbeat_tells_a_restart_from_a_stopped_worker(tmp_path, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from editor import activity, updates
+
+    monkeypatch.setenv("EDITOR_UPDATES_DIR", str(tmp_path))
+    assert activity.stall_kind() == "unknown"  # no heartbeat yet: an older worker
+    updates.heartbeat(tmp_path, "draining", now=datetime.now(UTC))
+    assert activity.stall_kind() == "restarting"
+    updates.heartbeat(tmp_path, "running", now=datetime.now(UTC) - timedelta(minutes=8))
+    assert activity.stall_kind() == "watched"
+    ws = updates.worker_state(tmp_path, now=datetime.now(UTC) + timedelta(minutes=30))
+    assert ws["silent"] and ws["state"] == "running"
+    assert updates.worker_state(None) is None

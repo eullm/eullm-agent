@@ -93,6 +93,39 @@ def folder(path: str) -> Path | None:
     return p if p.is_dir() and os.access(p, os.W_OK) else None
 
 
+WORKER = "worker.json"
+WORKER_STALE = timedelta(minutes=5)  # update.sh restarts a worker silent for longer (with work queued)
+
+
+def heartbeat(where: Path | None, state: str = "running", now: datetime | None = None) -> None:
+    """The worker says it is alive (every minute) and whether it is restarting
+    for new settings: update.sh, run by the host every minute, restarts a
+    worker that stopped or went silent, and the Attività box tells the two
+    apart (Francesco, 2026-11-28: "mica posso ogni volta loggarmi per riavviare")."""
+    if where is None:
+        return
+    try:
+        _write(where / WORKER, {"at": (now or datetime.now(UTC)).isoformat(timespec="seconds"), "state": state,
+                                "pid": os.getpid()})
+    except OSError:
+        pass
+
+
+def worker_state(where: Path | None, now: datetime | None = None) -> dict | None:
+    """The worker's last heartbeat: state, age; None without the shared folder or a heartbeat."""
+    if where is None:
+        return None
+    data = _read(where / WORKER)
+    if not data:
+        return None
+    try:
+        at = datetime.fromisoformat(data["at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    age = (now or datetime.now(UTC)) - at
+    return {"state": data.get("state") or "running", "age": age, "silent": age > WORKER_STALE}
+
+
 def newer(a: str, b: str) -> bool:
     """Is version a newer than b?"""
     try:

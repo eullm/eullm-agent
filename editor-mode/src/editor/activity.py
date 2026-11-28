@@ -369,8 +369,24 @@ def recent(s, tz, humanize: Callable[[str], str], full: bool = False, now: datet
         # The Desk keeps what is running and the latest ones; the rest is a click away.
         items = items[:max(SHORT, sum(x["status"] in ("running", "queued") for x in items))]
     return {"items": items, "active": any(x["status"] in ("running", "queued") for x in items),
-            "stalled": stalled, "full": full, "compact": compact, "total": total,
+            "stalled": stalled, "stall": stall_kind() if stalled else None, "full": full, "compact": compact, "total": total,
             "mode": ("desk" if compact else "page") if full else "recent"}
+
+
+def stall_kind() -> str:
+    """Why the queue waits, from the worker's heartbeat (updates.heartbeat):
+    "restarting" for new settings, "watched" when the host's watchdog brings
+    it back by itself, "unknown" without a heartbeat (no shared folder)."""
+    import os
+
+    from . import updates
+
+    ws = updates.worker_state(updates.folder(os.environ.get("EDITOR_UPDATES_DIR", "").strip()))
+    if ws is None:
+        return "unknown"
+    if ws["state"] in ("draining", "stopping") and not ws["silent"]:
+        return "restarting"
+    return "watched"
 
 
 def _aware(value: datetime | None, now: datetime) -> datetime:
