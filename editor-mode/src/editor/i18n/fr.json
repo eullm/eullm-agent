@@ -3071,5 +3071,9 @@
  "Lingua dei video": "Langue des vidéos",
  "Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.": "Les idées sont écrites dans la langue et pour la durée choisies ici : la voix dure autant que la vidéo. Sur chaque idée vous pouvez quand même choisir une autre durée avant de la générer, ou la refaire dans une autre langue.",
  "Terminato": "Terminé",
- "Lavoro fermo: vedi Attività in cima alla pagina": "Travail bloqué : voir Activité en haut de la page"
+ "Lavoro fermo: vedi Attività in cima alla pagina": "Travail bloqué : voir Activité en haut de la page",
+ "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "Le service des travaux redémarre pour utiliser les nouveaux réglages : il repart tout seul et reprend les travaux en attente.",
+ "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "Le service des travaux ne répond pas : le serveur le redémarre tout seul en quelques minutes et les travaux en attente repartent. Rien à faire.",
+ "I tuoi video": "Vos vidéos",
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Une vidéo échouée ou interrompue ne coûte aucun crédit : refaites-la depuis sa fiche ci-dessous."
 }

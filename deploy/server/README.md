@@ -333,6 +333,15 @@ in the console with a progress bar (the download's percentage comes from
 installs what that one needs to start. It never goes back on its own: if the new
 version does not answer, the backup made just before is in `backup/`.
 
+The same script, every minute, also watches the worker: `editor worker`
+writes `updates/worker.json` every minute (and says when it is restarting
+for new settings of /admin › Impostazioni). A worker that is not running,
+or silent for more than 5 minutes, is started again
+(`docker compose up -d editor-worker` or `restart`), with a line in
+`updates/watchdog.log`; the Attività box says it restarts by itself. A
+social video waiting for the video service does not hold a restart: it
+goes back in the queue and waits for the same job, not paid twice.
+
 Once, as root, in the installation folder (`server-init` writes
 `update.sh`; an older installation downloads it first):
 

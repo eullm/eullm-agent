@@ -29,6 +29,26 @@
   {% endif %}
 </section>
 {% endif %}
+{% set made = videos|selectattr('status', 'in', ['queued', 'making', 'ready', 'failed'])|list %}
+{% if made %}
+{# What happened to the videos asked (Francesco, 2026-11-28: "non so che fine abbia fatto il video"). #}
+<section class="card pad" aria-labelledby="h-videos-made">
+  <h2 id="h-videos-made">{{ _('I tuoi video') }}</h2>
+  {% for v in made[:10] %}
+  <div class="row" style="justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line);">
+    <a href="#video-{{ v.id }}">{{ v.title }}</a>
+    <span class="row" style="gap: 8px;">
+      {% if v.seconds %}<span class="hint">{{ _('{n} secondi', n=v.seconds) }}</span>{% endif %}
+      {% if v.status == 'ready' %}<span class="chip green">{{ _('Pronto') }}</span>{% if v.has_file %}<a class="btn sm pri" href="/videos/{{ v.id }}/file?download=1" download>{{ _('Scarica il video') }}</a>{% endif %}
+      {% elif v.id in vstate.making %}<span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('In preparazione') }}</span>
+      {% elif v.status == 'failed' %}<span class="chip amber" title="{{ (v.error or '')[:200] }}">{{ _('Non riuscito') }}</span>
+      {% else %}<span class="chip amber">{{ _('Interrotto') }}</span>{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+  <p class="hint">{{ _('Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.') }}</p>
+</section>
+{% endif %}
 <section class="card pad" aria-labelledby="h-videos">
   <h2 id="h-videos">{{ _('Idee e video') }}</h2>
   {% if ideas_busy %}<p><span class="chip teal"><span class="spin" aria-hidden="true"></span>{{ _('Idee in scrittura') }}</span></p>{% endif %}

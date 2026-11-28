@@ -3071,5 +3071,9 @@
  "Lingua dei video": "Video language",
  "Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.": "Ideas are written in the language and for the length chosen here: the voice-over lasts as long as the video. On each idea you can still pick another length before making it, or redo it in another language.",
  "Terminato": "Done",
- "Lavoro fermo: vedi Attività in cima alla pagina": "Work stuck: see Activity at the top of the page"
+ "Lavoro fermo: vedi Attività in cima alla pagina": "Work stuck: see Activity at the top of the page",
+ "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "The work service is restarting to use the new settings: it comes back by itself and resumes the queued work.",
+ "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "The work service is not answering: the server restarts it by itself within a few minutes and the queued work starts again. Nothing to do.",
+ "I tuoi video": "Your videos",
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "A failed or interrupted video costs no credits: make it again from its card below."
 }

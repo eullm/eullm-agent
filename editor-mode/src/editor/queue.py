@@ -46,6 +46,10 @@ STALE_SECONDS = 300  # no heartbeat for this long: the worker is gone
 POLL_SECONDS = 2.0
 STOP_GRACE_SECONDS = 20  # on stop, how long the running jobs may take before they go back in the queue
 DRAIN_MAX_SECONDS = 900  # on a restart for new settings, how long the running jobs may take
+# Jobs that take up again where they were when queued again: a social video
+# keeps the video service's job id (videos.make), so a restart for new
+# settings does not wait for it and it is not paid twice.
+RESUMABLE = {"video"}
 # A job stopped by a model provider that is down runs again after 10, 20,
 # 30... minutes, up to this many attempts (about 4 hours in all).
 RETRY_AFTER = timedelta(minutes=10)
@@ -250,8 +254,10 @@ class Worker:
     update) takes seconds, not minutes. A job cut short by a hard kill is
     queued again by requeue_stale."""
 
-    def __init__(self, db, handlers: Handlers, concurrency: int = 1, name: str | None = None, hourly=None):
+    def __init__(self, db, handlers: Handlers, concurrency: int = 1, name: str | None = None, hourly=None,
+                 beat=None):
         self.db = db
+        self.beat = beat  # beat(state): "alive" every minute, for the host's watchdog (updates.heartbeat)
         self.hourly = hourly  # also run at the start of each hour (billing.lifecycle)
         self.handlers = handlers
         self.concurrency = max(1, concurrency)
@@ -267,6 +273,7 @@ class Worker:
         if not self.draining.is_set():
             log.info("restart asked: no new jobs, exiting when the running ones finish")
         self.draining.set()
+        self._beat()
 
     def stop(self, *_):
         if not self.stopping.is_set():
@@ -290,9 +297,18 @@ class Worker:
             if not busy:
                 self.stopping.wait(POLL_SECONDS)
 
+    def _beat(self):
+        if self.beat is None:
+            return
+        try:
+            self.beat("stopping" if self.stopping.is_set() else "draining" if self.draining.is_set() else "running")
+        except Exception:
+            log.exception("heartbeat not written")
+
     def _clock(self):
         last_hour = None
         while not self.stopping.is_set():
+            self._beat()
             try:
                 requeue_stale(self.db)
                 hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
@@ -324,8 +340,11 @@ class Worker:
         while not self.stopping.wait(1):
             if self.draining.is_set():
                 drain_since = drain_since or time.monotonic()
-                if not any(t.is_alive() for t in workers) or time.monotonic() - drain_since > DRAIN_MAX_SECONDS:
+                left = list(self.running.values())
+                if not any(t.is_alive() for t in workers) or time.monotonic() - drain_since > DRAIN_MAX_SECONDS \
+                        or (left and all(j.kind in RESUMABLE for j in left)):
                     self.stop()
+        self._beat()
         deadline = time.monotonic() + STOP_GRACE_SECONDS
         for t in workers:
             t.join(max(0, deadline - time.monotonic()))

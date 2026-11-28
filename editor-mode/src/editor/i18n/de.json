@@ -3071,5 +3071,9 @@
  "Lingua dei video": "Videosprache",
  "Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.": "Die Ideen werden in der hier gewählten Sprache und Dauer geschrieben: Der Sprechertext dauert so lange wie das Video. Bei jeder Idee können Sie vor dem Erstellen trotzdem eine andere Dauer wählen oder sie in einer anderen Sprache neu machen.",
  "Terminato": "Fertig",
- "Lavoro fermo: vedi Attività in cima alla pagina": "Arbeit steht still: siehe Aktivität oben auf der Seite"
+ "Lavoro fermo: vedi Attività in cima alla pagina": "Arbeit steht still: siehe Aktivität oben auf der Seite",
+ "Il servizio dei lavori si sta riavviando per usare le nuove impostazioni: riparte da solo e riprende i lavori in coda.": "Der Arbeitsdienst startet neu, um die neuen Einstellungen zu verwenden: Er läuft von selbst wieder an und setzt die Arbeiten in der Warteschlange fort.",
+ "Il servizio dei lavori non risponde: il server lo riavvia da solo entro qualche minuto e i lavori in coda ripartono. Non serve fare nulla.": "Der Arbeitsdienst antwortet nicht: Der Server startet ihn innerhalb weniger Minuten von selbst neu, und die wartenden Arbeiten laufen wieder an. Sie müssen nichts tun.",
+ "I tuoi video": "Ihre Videos",
+ "Un video non riuscito o interrotto non costa crediti: lo rifai dalla sua scheda qui sotto.": "Ein fehlgeschlagenes oder unterbrochenes Video kostet keine Credits: Erstellen Sie es über seine Karte unten erneut."
 }

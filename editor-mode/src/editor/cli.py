@@ -309,7 +309,9 @@ def cmd_worker(a):
         updates.check(updates.folder(st.updates_dir), installed=metadata.version("eullm-editor-mode"),
                       iid=updates.this_install())
     from . import appsettings
-    worker = queue.Worker(db, handlers(), concurrency=slots, hourly=hourly)
+    shared = updates.folder(st.updates_dir)
+    worker = queue.Worker(db, handlers(), concurrency=slots, hourly=hourly,
+                          beat=lambda state: updates.heartbeat(shared, state))
     # A change in /admin › Impostazioni: the running jobs end, then the worker
     # exits and Docker starts it again with the new values.
     appsettings.watch(admin_database(), worker.drain)
