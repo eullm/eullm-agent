@@ -3069,5 +3069,7 @@
  "Un video di {s} secondi costa {n} crediti, solo se riesce (te ne restano {left}); il prezzo di ogni durata è accanto a «Genera il video».": "Ein Video von {s} Sekunden kostet {n} Credits, nur wenn es gelingt (Ihnen bleiben {left}); der Preis jeder Dauer steht neben „Video erstellen“.",
  "Durata dei video": "Videodauer",
  "Lingua dei video": "Videosprache",
- "Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.": "Die Ideen werden in der hier gewählten Sprache und Dauer geschrieben: Der Sprechertext dauert so lange wie das Video. Bei jeder Idee können Sie vor dem Erstellen trotzdem eine andere Dauer wählen oder sie in einer anderen Sprache neu machen."
+ "Le idee sono scritte nella lingua e per la durata scelte qui: la voce dura quanto il video. Su ogni idea puoi comunque scegliere un'altra durata prima di girarla, o rifarla in un'altra lingua.": "Die Ideen werden in der hier gewählten Sprache und Dauer geschrieben: Der Sprechertext dauert so lange wie das Video. Bei jeder Idee können Sie vor dem Erstellen trotzdem eine andere Dauer wählen oder sie in einer anderen Sprache neu machen.",
+ "Terminato": "Fertig",
+ "Lavoro fermo: vedi Attività in cima alla pagina": "Arbeit steht still: siehe Aktivität oben auf der Seite"
 }

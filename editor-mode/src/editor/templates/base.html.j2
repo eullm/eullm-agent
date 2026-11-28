@@ -80,14 +80,84 @@
 </main>
 </div>
 {% if activity %}
+{# The work in progress, always in sight (Francesco, 2026-11-28: "una finestra ... che ti segue anche quando
+   scrolli finquando non termina con la scritta terminato"): filled by the script below from the Attività box. #}
+<div id="work-float" class="work-float" role="status" aria-live="polite" hidden
+     data-run="{{ _('In corso') }}" data-queue="{{ _('In coda') }}" data-done="{{ _('Terminato') }}"
+     data-stalled="{{ _('Lavoro fermo: vedi Attività in cima alla pagina') }}">
+  <span class="wf-icon" aria-hidden="true"></span>
+  <a class="wf-text" href="#activity"></a>
+  <a class="btn sm pri wf-link" hidden></a>
+  <button type="button" class="wf-close" aria-label="{{ _('Chiudi') }}">×</button>
+</div>
+<style>
+.work-float { position: fixed; right: 24px; bottom: 24px; z-index: 60; display: flex; align-items: center; gap: 10px;
+  max-width: min(460px, calc(100vw - 32px)); padding: 10px 12px 10px 14px; border-radius: 12px; background: var(--surface);
+  border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 14px; }
+.work-float[hidden] { display: none; }
+.work-float .wf-text { color: inherit; text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.work-float .wf-text b { font-weight: 600; }
+.work-float .wf-icon { width: 16px; height: 16px; flex: none; border-radius: 50%; }
+.work-float.run .wf-icon { border: 2px solid var(--line); border-top-color: var(--accent); animation: wf-spin 0.9s linear infinite; }
+.work-float.done .wf-icon { background: var(--green, #2e7d4f); }
+.work-float.done { border-color: var(--green, #2e7d4f); }
+.work-float.stalled .wf-icon { background: var(--amber, #b7791f); }
+.work-float .wf-close { border: 0; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 0 2px; }
+@keyframes wf-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .work-float.run .wf-icon { animation: none; border-top-color: var(--line); background: var(--accent); } }
+@media (max-width: 640px) { .work-float { left: 16px; right: 16px; bottom: 16px; } }
+{% if held %}.work-float { bottom: 96px; }{% endif %}
+</style>
 <script>
 /* Follows the work while it runs: the Attività box is fetched again every
    few seconds, and the page reloads when the last job ends, so what the
-   work produced shows at once. */
+   work produced shows at once. The floating box says what is running
+   wherever the page is scrolled, then «Terminato» after the reload. */
 (function () {
   var box = document.getElementById('activity');
+  var fl = document.getElementById('work-float');
   if (!box) return;
   var was = box.dataset.active === '1';
+  var closed = false;
+  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function show(kind, label, detail, href, link) {
+    if (!fl || closed) return;
+    fl.className = 'work-float ' + kind;
+    fl.querySelector('.wf-text').innerHTML = '<b>' + esc(label) + '</b>' + (detail ? ' · ' + esc(detail) : '');
+    var a = fl.querySelector('.wf-link');
+    if (href) { a.href = href; a.textContent = link || href; a.hidden = false; } else { a.hidden = true; }
+    fl.hidden = false;
+  }
+  function follow() {
+    if (!fl) return;
+    var items = box.querySelectorAll('.item[data-status]');
+    var now = null, queued = 0;
+    items.forEach(function (it) {
+      var st = it.dataset.status;
+      if (st === 'running' && !now) now = it;
+      if (st === 'queued') { queued += 1; if (!now) now = it; }
+    });
+    if (box.dataset.active !== '1' || !now) return;
+    if (box.dataset.stalled === '1') { show('stalled', fl.dataset.stalled, now.dataset.label); return; }
+    var st = now.dataset.status === 'running' ? fl.dataset.run : fl.dataset.queue;
+    show('run', st + ': ' + now.dataset.label, now.dataset.step + (queued > 1 ? ' (+' + (queued - 1) + ')' : ''));
+    try { sessionStorage.setItem('work-float', now.dataset.label); } catch (e) {}
+  }
+  function finished() {
+    /* After the reload: the job that was followed, now done. */
+    var label = null;
+    try { label = sessionStorage.getItem('work-float'); sessionStorage.removeItem('work-float'); } catch (e) {}
+    if (!label || box.dataset.active === '1') return;
+    var it = Array.prototype.find.call(box.querySelectorAll('.item[data-status]'), function (x) { return x.dataset.label === label; });
+    var ok = !it || it.dataset.status === 'done' || it.dataset.status === 'partial';
+    show(ok ? 'done' : 'stalled', fl.dataset.done + ': ' + label, it && !ok ? it.querySelector('.chip').textContent : '',
+         it ? it.dataset.href : '', it ? it.dataset.link : '');
+    setTimeout(function () { if (fl) fl.hidden = true; }, 20000);
+  }
+  if (fl) fl.querySelector('.wf-close').addEventListener('click', function () { closed = true; fl.hidden = true; });
+  follow();
+  finished();
   function busy() {
     var a = document.activeElement;
     return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
@@ -102,8 +172,9 @@
           var fresh = tmp.firstElementChild;
           if (fresh) { box.replaceWith(fresh); box = fresh; }
         }
+        follow();
         var now = box.dataset.active === '1';
-        if (was && !now && !busy()) { location.reload(); return; }
+        if (was && !now) { if (!busy()) { location.reload(); return; } finished(); }
         was = now;
         setTimeout(poll, now ? 3000 : 20000);
       })

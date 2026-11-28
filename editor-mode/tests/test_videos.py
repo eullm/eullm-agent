@@ -276,7 +276,10 @@ def test_make_queues_the_job_with_a_video_service(db, tenant):
             job = s.execute(select(m.jobs.c.kind, m.jobs.c.args).where(m.jobs.c.kind == "video")).first()
             row = s.execute(select(m.videos.c.status, m.videos.c.seconds).where(m.videos.c.id == ids[0])).first()
         assert job.args["video_id"] == ids[0] and row.status == "queued" and row.seconds == 20
-        assert "Genera il video" not in c.get("/videos").text.split(f'id="video-{ids[0]}"')[1].split('class="video-idea"')[0]
+        page = c.get("/videos").text
+        assert "Genera il video" not in page.split(f'id="video-{ids[0]}"')[1].split('class="video-idea"')[0]
+        # the floating box follows the job wherever the page is scrolled
+        assert 'id="work-float"' in page and 'data-status="queued"' in page and "Terminato" in page
         r = c.post(f"/ui/videos/{ids[1]}/language", data={"language": "en"}, follow_redirects=False)
         assert r.status_code == 303  # no model in this app: a message
 
