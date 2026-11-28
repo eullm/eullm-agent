@@ -512,6 +512,60 @@ def relanguage(db, tenant_id: str, video_id: int, core, language: str) -> dict:
     return {"video_id": vid, "site_id": row.site_id, "language": language, "title": found["title"]}
 
 
+RESCENE = (
+    "You split the script of a short vertical video (9:16, {seconds} seconds) for the social networks into exactly "
+    "{scenes} scene(s) of about {each} seconds; an AI video model makes each scene from its own prompt, a narrator "
+    "voice speaks over them and a short text appears on screen. Keep the idea, the facts and the language of the "
+    "texts ({language}). Never invite people to read, visit or click anything, never name the site in the voice "
+    "or the texts. Each scene has:\n"
+    "- shot: the prompt for the video model, in English, 40 to 90 words: vertical 9:16, one continuous shot, the "
+    "camera movement, the subject, the place, the light, realistic documentary look, the sounds of the place; the "
+    "scenes look like one film but show different things. Never ask for text, captions, letters, numbers, logos, "
+    "brand marks, recognisable or famous real people, or children;\n"
+    "- text: the words on screen, in {language}, 2 to 6 words, punchy;\n"
+    "- voice: what the narrator says during the scene, in {language}, at most {words} words.\n"
+    'Reply with JSON only: {{"scenes": [{{"shot": "...", "text": "...", "voice": "..."}}]}}')
+
+
+def rescene(db, tenant_id: str, video_id: int, core, scenes: int) -> bool:
+    """The idea's script in `scenes` scenes (Francesco, 2026-11-28: "non si
+    possono scegliere le scene da fare?"), written again by the model when
+    the person picks another number of scenes before making the video. The
+    ideas of before 0.39.5 get their scenes this way. False when nothing had
+    to change (or the clips are already asked)."""
+    scenes = max(1, min(MAX_SCENES, int(scenes)))
+    with db.tenant(tenant_id) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == video_id)).first()
+    if row is None:
+        raise LookupError(video_id)
+    if row.parts or row.job_ref or row.status == "ready" or (row.scenes and len(row.scenes) == scenes):
+        return False
+    if core is None:
+        raise CoreError("a model is needed to write the scenes")
+    seconds = row.seconds or 10
+    each = max(1, round(seconds / scenes))
+    language = LANGUAGES.get((row.language or "it")[:2], row.language or "Italian")
+    system = RESCENE.format(seconds=seconds, scenes=scenes, each=each, language=language,
+                            words=max(4, int(each * WORDS_PER_SECOND)))
+    user = json.dumps({"title": row.title, "hook": row.hook, "voiceover": row.voiceover,
+                       "scenes": row.scenes or [{"shot": row.scene, "voice": row.voiceover}]}, ensure_ascii=False)
+
+    def check(value):
+        sc = _scenes(value.get("scenes") if isinstance(value, dict) else value, scenes)
+        if len(sc) != scenes or not all(x["voice"] for x in sc):
+            raise ValueError(f"exactly {scenes} scenes, each with its shot and its voice")
+        if any(INVITE.search(y["voice"]) or INVITE.search(y["text"]) for y in sc):
+            raise ValueError("the voice and the texts on screen never invite to read or visit anything")
+        return sc
+
+    step(N_("Il modello divide il video in {n} scene"), n=scenes)
+    with usage.tagged(db, tenant_id, "video_ideas", site_id=row.site_id, ref=f"video:{video_id}"):
+        found, _calls = core.chat_json(system, user, check)
+    with db.tenant(tenant_id) as s:
+        s.execute(update(m.videos).where(m.videos.c.id == video_id).values(scenes=found, **joined(found)))
+    return True
+
+
 def scenes_of_row(row) -> list[dict]:
     """The scenes of an idea; one scene for the ideas written before 0.39.5."""
     sc = [x for x in (getattr(row, "scenes", None) or []) if isinstance(x, dict) and x.get("shot")]
@@ -694,15 +748,32 @@ def price_or_none(s, seconds: int | None = None, maker: OpenRouterVideo | None =
         return None
 
 
+def plans(maker: OpenRouterVideo, can_rewrite: bool = True) -> list[tuple[int, int]]:
+    """The (seconds, scenes) a person can pick before making a video: each
+    scene from 5 to 15 seconds (the model's cheaper tier), or one clip of any
+    length; only one clip when the server cannot edit scenes (no ffmpeg)."""
+    out: list[tuple[int, int]] = []
+    most = MAX_SCENES if montage.available() and can_rewrite else 1
+    for n in range(1, most + 1):
+        for total in CHOICES:
+            each = maker.scene_seconds(total, n)
+            if n > 1 and not 5 <= each <= LONG_SECONDS:
+                continue
+            x = (each * n, n)
+            if x[0] <= MAX_SECONDS and x not in out:
+                out.append(x)
+    return sorted(out)
+
+
 def ask(db, tenant_id: str, video_id: int, by: str, seconds: int | None = None,
-        maker: OpenRouterVideo | None = None) -> None:
+        maker: OpenRouterVideo | None = None, scenes: int | None = None) -> None:
     """A person wants the video: check the credits and mark it queued."""
     with db.tenant(tenant_id) as s:
         row = s.execute(select(m.videos.c.status, m.videos.c.scene, m.videos.c.voiceover, m.videos.c.scenes)
                         .where(m.videos.c.id == video_id)).first()
         if row is None:
             raise LookupError(video_id)
-        credits.need(s, price(s, seconds, maker, scene_count(row, maker)))
+        credits.need(s, price(s, seconds, maker, scenes or scene_count(row, maker)))
         if row.status in ("idea", "failed"):
             s.execute(update(m.videos).where(m.videos.c.id == video_id).values(
                 status="queued", error=None, made_by=by[:200] if by else None,

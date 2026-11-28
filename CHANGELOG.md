@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.39.6
+
+### Added
+
+- **Durata e scene si scelgono su ogni idea** prima di «Genera il video»
+  (Francesco, 28 novembre: "non si possono scegliere le scene da fare?"):
+  un solo menu con secondi, scene e prezzo, per esempio «30 secondi · 3
+  scene · 300 crediti» accanto a «30 secondi · una clip · 675 crediti».
+  Ogni scena dura da 5 a 15 secondi, la fascia economica del modello. Se
+  il numero di scene cambia, il modello riscrive il copione dell'idea in
+  quelle scene (gratis, come le idee) e poi gira le clip. Vale anche per
+  le idee scritte prima della 0.39.5, che così hanno anche scritte e voce.
+
+### Fixed
+
+- **Video senza limite spiegati**: in una redazione senza un numero di
+  video al mese (campo vuoto in Amministrazione › Redazioni › Video social
+  al mese) i video non consumano crediti; ora la pagina lo dice, il menu
+  scrive «compreso» invece di non mostrare nulla, e ricorda che 0 vuol dire
+  solo a crediti. Il costo reale resta nei consumi del modello.
+
 ## 0.39.5
 
 ### Added

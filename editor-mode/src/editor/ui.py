@@ -310,8 +310,11 @@ def register(app, ctx) -> None:
                 cache[n] = video_choices(s, n)
             return cache[n]
 
-        return {"on": getattr(ctx, "videomaker", None) is not None, "can_ideas": ctx.core is not None,
-                "choices_for": choices_for, "montage": montage.available(), "max_scenes": vids.MAX_SCENES,
+        maker = getattr(ctx, "videomaker", None)
+        plan_list = [{"seconds": x, "scenes": n, "price": vids.price_or_none(s, x, maker, n)}
+                     for x, n in (vids.plans(maker, ctx.core is not None) if maker is not None else [])]
+        return {"on": maker is not None, "can_ideas": ctx.core is not None,
+                "choices_for": choices_for, "plans": plan_list, "montage": montage.available(), "max_scenes": vids.MAX_SCENES,
                 "price": vids.price_or_none(s, video_seconds(), getattr(ctx, "videomaker", None)),
                 "choices": video_choices(s), "languages": VIDEO_LANGUAGES,
                 "credits": credits.state(s), "allowance": vids.allowance(s),
@@ -2391,7 +2394,7 @@ def register(app, ctx) -> None:
 
     @app.post("/ui/videos/{video_id}/make")
     def ui_video_make(video_id: int, back: str = Form("/videos"), seconds: int | None = Form(None),
-                      c: auth.Caller = Depends(ctx.need("editor"))):
+                      plan: str = Form(""), c: auth.Caller = Depends(ctx.need("editor"))):
         back = video_back(back)
         maker = getattr(ctx, "videomaker", None)
         if maker is None:
@@ -2405,18 +2408,26 @@ def register(app, ctx) -> None:
             # The length the person picked (Francesco, 2026-11-27: "farei decidere al cliente quanti secondi
             # vuole"), as the model makes it in the idea's scenes; else the idea's.
             n = vids.scene_count(row, maker)
+            # Seconds and scenes picked together ("30x3"; Francesco, 2026-11-28: "non si possono scegliere le
+            # scene da fare?"): another number of scenes has the script rewritten first (free, like the ideas).
+            want, _, k = plan.partition("x")
+            rewrite = None
+            if want.isdigit() and k.isdigit():
+                seconds, k = int(want), max(1, min(vids.MAX_SCENES, int(k)))
+                if montage.available() and ctx.core is not None and (k != n or not row.scenes):
+                    n = rewrite = k
             seconds = max(4, min(vids.MAX_SECONDS, seconds or row.seconds or maker.seconds))
             seconds = maker.scene_seconds(seconds, n) * n
             cost, left = vids.price_or_none(s, seconds, maker, n), credits.state(s).get("left", 0)
         try:
-            vids.ask(db, c.tenant_id, video_id, c.name, seconds, maker)
+            vids.ask(db, c.tenant_id, video_id, c.name, seconds, maker, n)
         except credits.NoCredits:
             if cost is None:
                 return done(back, t("I video del piano di questo mese sono finiti: ne arrivano altri il mese prossimo, "
                                     "oppure scegli un piano con più video in Il mio piano."))
             return done(back, t("Crediti insufficienti: un video costa {n} crediti e ne restano {left}. Puoi "
                                 "aggiungerne in Il mio piano.", n=cost, left=left))
-        ctx.run_video(c.tenant_id, site_id, video_id)
+        ctx.run_video(c.tenant_id, site_id, video_id, rewrite)
         return done(back, t("Video in preparazione: ci vogliono di solito da uno a cinque minuti. Lo segui nel "
                             "riquadro Attività."))
 

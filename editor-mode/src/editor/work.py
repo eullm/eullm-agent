@@ -268,7 +268,10 @@ def handlers(db, http_factory=None, core=None, publisher=None, runner=None, imag
                                  args["language"])
 
     def video(tenant: str, subject: str, args: dict) -> dict:
-        return videos.make(db, tenant, args["video_id"], need(videomaker, "video service (EDITOR_VIDEO_API_KEY)"))
+        maker = need(videomaker, "video service (EDITOR_VIDEO_API_KEY)")
+        if args.get("scenes"):  # the person picked another number of scenes: the script is rewritten first
+            videos.rescene(db, tenant, args["video_id"], core_for(tenant), args["scenes"])
+        return videos.make(db, tenant, args["video_id"], maker)
 
     def translation(tenant: str, subject: str, args: dict) -> dict:
         did = tr.translate(db, tenant, args["draft_id"], args["language"], need(core_for(tenant), "model (Core)"),

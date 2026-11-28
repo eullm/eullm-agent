@@ -517,3 +517,48 @@ def test_the_idea_card_shows_its_scenes_and_the_site_form_the_number(db, tenant)
         body = s.execute(select(m.editorial_profiles.c.body).where(m.editorial_profiles.c.site_id == site_id,
                                                                     m.editorial_profiles.c.status == "approved")).scalar()
     assert body["settings"]["videos_scenes"] == 4
+
+
+def test_the_person_picks_seconds_and_scenes_before_making(db, tenant):
+    from fastapi.testclient import TestClient
+
+    from editor import auth
+    from editor.api import create_app
+
+    _, ids = with_ideas(db, tenant)  # ideas of before the scenes
+    set_plan(db, tenant, credits_month=1000, max_videos_month=0)
+    token = auth.create_token(db, tenant, "editor-user", "editor")
+    with respx.mock(assert_all_called=False) as router:
+        heygen_catalog(router)
+        mk = heygen()
+        plans = videos.plans(mk)
+        if montage.available():
+            assert (30, 3) in plans and (30, 1) in plans and (30, 2) in plans and (21, 3) in plans
+            assert all(n == 1 or 5 <= s // n <= 15 for s, n in plans)
+        c = TestClient(create_app(db, core=CoreClient("http://core.test", "tok"), videomaker=mk))
+        c.post("/login", data={"token": token})
+        page = c.get("/videos").text
+        if not montage.available():
+            return
+        assert 'value="30x3"' in page and "30 secondi · 3 scene · 300 crediti" in page
+        assert "30 secondi · una clip · 675 crediti" in page
+        c.post(f"/ui/videos/{ids[0]}/make", data={"plan": "30x3"}, follow_redirects=False)
+    with db.tenant(tenant) as s:
+        job = s.execute(select(m.jobs.c.args).where(m.jobs.c.kind == "video")).scalar()
+        row = s.execute(select(m.videos.c.status, m.videos.c.seconds).where(m.videos.c.id == ids[0])).first()
+    assert job["scenes"] == 3 and row.status == "queued" and row.seconds == 30
+    split = {"scenes": [{"shot": f"shot {i}", "text": f"Testo {i}", "voice": f"Voce {i}."} for i in range(3)]}
+    with respx.mock(assert_all_called=False) as router:
+        llm = router.post("http://core.test/v1/llm/chat").mock(return_value=chat(json.dumps(split)))
+        assert videos.rescene(db, tenant, ids[0], CoreClient("http://core.test", "tok"), 3)
+        assert not videos.rescene(db, tenant, ids[0], CoreClient("http://core.test", "tok"), 3)  # already done
+    assert llm.call_count == 1
+    with db.tenant(tenant) as s:
+        row = s.execute(select(m.videos).where(m.videos.c.id == ids[0])).first()
+    assert [x["text"] for x in row.scenes] == ["Testo 0", "Testo 1", "Testo 2"] and row.voiceover == "Voce 0. Voce 1. Voce 2."
+
+
+def test_unlimited_videos_say_so(db, tenant):
+    with_ideas(db, tenant)
+    set_plan(db, tenant, max_videos_month=None)
+    assert "senza limite e non consumano crediti" in logged_in(db, tenant, "editor").get("/videos").text

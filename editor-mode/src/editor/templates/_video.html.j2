@@ -44,7 +44,15 @@
     {% if caller.can('editor') and not busy %}
       {% if v.status in ('idea', 'failed', 'queued', 'making') and vstate.on %}
       <form class="inline row" style="gap: 6px;" method="post" action="/ui/videos/{{ v.id }}/make"><input type="hidden" name="back" value="{{ back }}">
-        {% if chs %}<label class="sr" for="sec-{{ v.id }}">{{ _('Durata') }}</label>
+        {% set plans = vstate.plans if (vstate.plans and vstate.can_ideas) else [] %}
+        {% if plans %}<label class="sr" for="plan-{{ v.id }}">{{ _('Durata e scene') }}</label>
+        {% set ws = v.seconds or 10 %}{% set wn = scs|length if scs else ((ws + 9) // 10) %}
+        {% set best = namespace(i=0, d=999) %}
+        {% for ch in plans %}{% set d = (ch.seconds - ws)|abs * 10 + (ch.scenes - wn)|abs %}{% if d < best.d %}{% set best.i = loop.index0 %}{% set best.d = d %}{% endif %}{% endfor %}
+        <select id="plan-{{ v.id }}" name="plan" class="sm" title="{{ _('Durata, numero di scene e prezzo') }}">
+          {% for ch in plans %}<option value="{{ ch.seconds }}x{{ ch.scenes }}"{% if loop.index0 == best.i %} selected{% endif %}>{{ _('{n} secondi', n=ch.seconds) }} · {% if ch.scenes == 1 %}{{ _('una clip') }}{% else %}{{ _('{n} scene', n=ch.scenes) }}{% endif %} · {% if ch.price %}{{ _('{n} crediti', n=ch.price) }}{% elif ch.price is none %}{{ _('finiti') }}{% else %}{{ _('compreso') }}{% endif %}</option>{% endfor %}
+        </select>
+        {% elif chs %}<label class="sr" for="sec-{{ v.id }}">{{ _('Durata') }}</label>
         <select id="sec-{{ v.id }}" name="seconds" class="sm" title="{{ _('Durata del video e prezzo') }}">
           {% set want = v.seconds or chs[0].seconds %}
           {% for ch in chs %}<option value="{{ ch.seconds }}"{% if ch.seconds == want or (loop.last and want > ch.seconds) %} selected{% endif %}>{{ _('{n} secondi', n=ch.seconds) }}{% if ch.price %} · {{ _('{n} crediti', n=ch.price) }}{% endif %}</option>{% endfor %}
